@@ -81,3 +81,17 @@ def test_clear_logs(tmp_path):
     assert len(repo.list_logs(limit=10)) == 1
     assert repo.clear_logs() == 1
     assert repo.list_logs(limit=10) == []
+
+
+def test_delete_snapshots_before(tmp_path):
+    repo = make_repo(tmp_path)
+    repo.upsert_video(VideoInfo(bvid="BV1xx411c7mD"))
+    repo.insert_snapshot(VideoStats(bvid="BV1xx411c7mD", view_count=1), "2026-01-01T10:00:00+08:00")
+    repo.insert_snapshot(VideoStats(bvid="BV1xx411c7mD", view_count=2), "2026-01-02T10:00:00+08:00")
+
+    deleted = repo.delete_snapshots_before("BV1xx411c7mD", "2026-01-02T00:00:00+08:00")
+    rows = repo.list_snapshots("BV1xx411c7mD")
+
+    assert deleted == 1
+    assert len(rows) == 1
+    assert rows[0]["view_count"] == 2

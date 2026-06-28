@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import os
+from datetime import datetime
 from pathlib import Path
 import socket
+import threading
+import time
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
-from app.config import settings
+from app.config import load_settings, settings
 from app.config_writer import save_lan_settings
 from app.logger import clear_log_file
 from app.models import AppError
@@ -45,6 +49,21 @@ def _local_ip() -> str:
             return socket.gethostbyname(socket.gethostname())
         except OSError:
             return "无法检测"
+
+
+def _request_shutdown() -> None:
+    def stop_process() -> None:
+        time.sleep(1)
+        os._exit(0)
+
+    threading.Thread(target=stop_process, daemon=True).start()
+
+
+def _datetime_local_to_iso(value: str) -> str:
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.astimezone()
+    return parsed.isoformat()
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -196,6 +215,23 @@ async def clear_video_logs(request: Request, bvid: str):
     return _flash_redirect(f"/videos/{bvid}", f"已清理该视频日志：{count} 条")
 
 
+@router.post("/videos/{bvid}/snapshots/delete-before")
+async def delete_snapshots_before(
+    request: Request,
+    bvid: str,
+    before_time: str = Form(...),
+):
+    if not before_time.strip():
+        return _flash_redirect(f"/videos/{bvid}", "必须填写删除截止时间", "error")
+    try:
+        cutoff = _datetime_local_to_iso(before_time.strip())
+    except ValueError:
+        return _flash_redirect(f"/videos/{bvid}", "删除截止时间格式不正确", "error")
+    count = request.app.state.repository.delete_snapshots_before(bvid, cutoff)
+    request.app.state.repository.add_log("WARNING", f"删除历史快照：{count} 条，早于 {cutoff}", bvid=bvid)
+    return _flash_redirect(f"/videos/{bvid}", f"已删除早于 {cutoff} 的图表数据：{count} 条")
+
+
 @router.post("/videos/{bvid}/report")
 async def generate_report(request: Request, bvid: str):
     try:
@@ -216,15 +252,23 @@ async def download_report(filename: str):
 
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, message: str | None = None, level: str = "info"):
+    current_settings = load_settings()
+    local_ip = _local_ip()
+    lan_active = current_settings.lan.enabled and current_settings.lan.password_hash == settings.lan.password_hash
     return templates.TemplateResponse(
         request,
         "settings.html",
         {
-            "settings": settings,
+            "settings": current_settings,
             "message": message,
             "level": level,
-            "local_ip": _local_ip(),
-            "lan_url": f"http://{_local_ip()}:{settings.app.port}",
+            "runtime_lan_enabled": settings.lan.enabled,
+            "lan_active": lan_active,
+            "local_ip": local_ip,
+            "local_url": f"http://127.0.0.1:{current_settings.app.port}",
+            "lan_url": f"http://{local_ip}:{current_settings.app.port}",
+            "restart_required": current_settings.lan.enabled != settings.lan.enabled
+            or current_settings.lan.password_hash != settings.lan.password_hash,
         },
     )
 
@@ -253,3 +297,13 @@ async def clear_logs(request: Request):
     file_ok = clear_log_file()
     suffix = "，日志文件已清空" if file_ok else "，日志文件可能被占用"
     return _flash_redirect("/settings", f"已清理页面日志：{count} 条{suffix}")
+
+
+@router.post("/shutdown")
+async def shutdown_app(request: Request):
+    _request_shutdown()
+    return templates.TemplateResponse(
+        request,
+        "shutdown.html",
+        {"message": "程序正在退出，可以关闭这个浏览器页面。"},
+    )

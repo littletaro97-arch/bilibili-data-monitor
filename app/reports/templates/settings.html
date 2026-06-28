@@ -20,7 +20,15 @@
 
 <section>
   <h2>第三版：局域网访问</h2>
-  <p class="muted">默认关闭。启用后程序重启时监听 <code>0.0.0.0</code>，手机可访问 <code>{{ lan_url }}</code>。非本机访问必须输入访问密码。</p>
+  <div class="grid">
+    <div class="metric"><span>本机电脑打开</span><strong>{{ local_url }}</strong></div>
+    <div class="metric"><span>其它设备打开</span><strong>{{ lan_url }}</strong></div>
+    <div class="metric"><span>当前运行状态</span><strong>{{ "局域网已启用" if runtime_lan_enabled else "仅本机访问" }}</strong></div>
+  </div>
+  <p class="muted">其它设备必须和这台电脑连接到同一个 Wi-Fi 或局域网。启用后，手机或平板在浏览器地址栏输入“其它设备打开”的完整地址。非本机访问必须输入访问密码。</p>
+  {% if restart_required %}
+    <p class="message error">配置已保存但尚未生效。请点击下方“退出程序”，然后重新运行 run.bat。</p>
+  {% endif %}
   <form method="post" action="/settings/lan">
     <div class="row">
       <label><input type="checkbox" name="enabled" {% if settings.lan.enabled %}checked{% endif %}> 启用局域网访问</label>
@@ -39,5 +47,11 @@
   <p class="muted">raw_json 只用于本地排错，默认关闭。日志清理会删除页面日志，并尝试清空 <code>logs/app.log</code>。</p>
   <form method="post" action="/maintenance/clear-raw-json"><button class="secondary" type="submit">清理 raw_json</button></form>
   <form method="post" action="/maintenance/clear-logs" style="margin-top: 10px;"><button class="danger" type="submit">清理全部日志</button></form>
+</section>
+
+<section>
+  <h2>退出程序</h2>
+  <p class="muted">点击后会关闭本地服务。再次使用时重新运行 <code>run.bat</code>。</p>
+  <form method="post" action="/shutdown"><button class="danger" type="submit">退出程序</button></form>
 </section>
 {% endblock %}

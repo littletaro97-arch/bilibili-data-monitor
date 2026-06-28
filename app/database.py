@@ -389,6 +389,17 @@ class Repository:
                 (bvid,),
             ).fetchone()
 
+    def delete_snapshots_before(self, bvid: str, before_time: str) -> int:
+        with self.database.connect() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM video_stats_snapshot
+                WHERE bvid=? AND captured_at < ?
+                """,
+                (bvid, before_time),
+            )
+            return int(cursor.rowcount)
+
     def add_log(self, level: str, message: str, bvid: str | None = None, detail: str | None = None) -> None:
         with self.database.connect() as conn:
             conn.execute(

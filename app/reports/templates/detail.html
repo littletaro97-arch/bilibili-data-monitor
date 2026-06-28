@@ -40,6 +40,15 @@
     <h3>{{ chart.title }}</h3>
     {{ chart.html }}
   {% endfor %}
+  <h3>删除历史图表数据</h3>
+  <p class="muted">会删除该视频在指定时间点以前的快照，趋势图和报告将不再使用这些数据。建议先确认不再需要旧数据。</p>
+  <form method="post" action="/videos/{{ video.bvid }}/snapshots/delete-before" class="row">
+    <div>
+      <label for="before_time">删除早于此时间的快照</label>
+      <input id="before_time" name="before_time" type="datetime-local" required>
+    </div>
+    <button class="danger" type="submit">删除旧快照</button>
+  </form>
 </section>
 
 <section>

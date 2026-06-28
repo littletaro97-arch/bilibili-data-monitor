@@ -11,3 +11,4 @@ reports/output/
 
 .env
 *.local
+config.toml
