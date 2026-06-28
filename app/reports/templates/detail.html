@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}{{ video.title if video else "视频详情" }} - B站本地分析{% endblock %}
+{% block content %}
+<section>
+  <h2>{{ video.title if video else "视频详情" }}</h2>
+  {% if video %}
+    <div class="grid">
+      <div class="metric"><span>BV 号</span><strong>{{ video.bvid }}</strong></div>
+      <div class="metric"><span>UP 主</span><strong>{{ video.owner_name or "未知" }}</strong></div>
+      <div class="metric"><span>发布时间</span><strong>{{ video.pubdate or "未知" }}</strong></div>
+      <div class="metric"><span>任务状态</span><strong>{{ task.status if task else "无任务" }}</strong></div>
+    </div>
+  {% endif %}
+  <p class="muted">本工具只保存公开统计字段；raw_json 默认关闭，报告不包含完整原始响应。</p>
+  <form class="inline" method="post" action="/videos/{{ video.bvid }}/report"><button type="submit">生成 HTML 报告</button></form>
+</section>
+
+<section>
+  <h2>最新数据</h2>
+  {% if latest %}
+    <div class="grid">
+      <div class="metric"><span>播放</span><strong>{{ latest.view_count }}</strong></div>
+      <div class="metric"><span>点赞</span><strong>{{ latest.like_count }}</strong></div>
+      <div class="metric"><span>投币</span><strong>{{ latest.coin_count }}</strong></div>
+      <div class="metric"><span>收藏</span><strong>{{ latest.favorite_count }}</strong></div>
+      <div class="metric"><span>评论</span><strong>{{ latest.reply_count }}</strong></div>
+      <div class="metric"><span>弹幕</span><strong>{{ latest.danmaku_count }}</strong></div>
+      <div class="metric"><span>分享</span><strong>{{ latest.share_count }}</strong></div>
+      <div class="metric"><span>采集时间</span><strong>{{ latest.captured_at }}</strong></div>
+    </div>
+  {% else %}
+    <p class="empty">暂无快照，请先立即采集或等待调度。</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>趋势图表</h2>
+  <p>{{ summary }}</p>
+  {% for chart in charts %}
+    <h3>{{ chart.title }}</h3>
+    {{ chart.html }}
+  {% endfor %}
+</section>
+
+<section>
+  <h2>第二版：评论与弹幕</h2>
+  <p class="muted">第二版内容只支持手动低频采集，不加入默认定时任务。评论真实采集需要明确、稳定的公开数据源后才能启用。</p>
+  <div class="actions">
+    <form class="inline" method="post" action="/videos/{{ video.bvid }}/comments/collect"><button class="secondary" type="submit">手动采集评论</button></form>
+    <form class="inline" method="post" action="/videos/{{ video.bvid }}/danmaku/collect"><button class="secondary" type="submit">手动采集弹幕</button></form>
+  </div>
+
+  <h3>近期评论</h3>
+  {% if comments %}
+    <table>
+      <thead><tr><th>时间</th><th>用户</th><th>内容</th><th>点赞</th><th>回复</th></tr></thead>
+      <tbody>
+        {% for item in comments %}
+          <tr>
+            <td>{{ item.captured_at }}</td>
+            <td>{{ item.user_name or item.user_mid or "-" }}</td>
+            <td>{{ item.message }}</td>
+            <td>{{ item.like_count if item.like_count is not none else "-" }}</td>
+            <td>{{ item.reply_count if item.reply_count is not none else "-" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">暂无评论数据。</p>
+  {% endif %}
+
+  <h3>近期弹幕</h3>
+  {% if danmaku %}
+    <table>
+      <thead><tr><th>采集时间</th><th>视频内时间</th><th>发送时间</th><th>内容</th></tr></thead>
+      <tbody>
+        {% for item in danmaku %}
+          <tr>
+            <td>{{ item.captured_at }}</td>
+            <td>{{ item.progress_sec if item.progress_sec is not none else "-" }}</td>
+            <td>{{ item.send_time if item.send_time is not none else "-" }}</td>
+            <td>{{ item.text }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">暂无弹幕数据。</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>采集日志</h2>
+  <form class="inline" method="post" action="/videos/{{ video.bvid }}/logs/clear"><button class="secondary" type="submit">清理该视频日志</button></form>
+  {% if logs %}
+    <table>
+      <thead><tr><th>时间</th><th>级别</th><th>消息</th></tr></thead>
+      <tbody data-log-body data-bvid="{{ video.bvid }}" data-limit="30" data-show-bvid="0">
+        {% for log in logs %}
+          <tr><td>{{ log.created_at }}</td><td>{{ log.level }}</td><td>{{ log.message }}{% if log.detail %}<br><span class="muted">{{ log.detail }}</span>{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">暂无日志。</p>
+  {% endif %}
+</section>
+{% endblock %}

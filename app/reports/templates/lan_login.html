@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}局域网访问登录 - B站本地分析{% endblock %}
+{% block content %}
+<section>
+  <h2>局域网访问登录</h2>
+  <form method="post" action="/lan/login" class="row">
+    <div>
+      <label for="password">访问密码</label>
+      <input id="password" name="password" type="password" required>
+    </div>
+    <button type="submit">登录</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}设置 - B站本地分析{% endblock %}
+{% block content %}
+<section>
+  <h2>运行设置</h2>
+  <table>
+    <tbody>
+      <tr><th>本机监听地址</th><td><code>{{ settings.app.host }}</code></td></tr>
+      <tr><th>端口</th><td>{{ settings.app.port }}</td></tr>
+      <tr><th>默认采集间隔</th><td>{{ settings.crawl.default_interval }} 秒</td></tr>
+      <tr><th>最低采集间隔</th><td>{{ settings.crawl.min_interval }} 秒</td></tr>
+      <tr><th>全局最小请求间隔</th><td>{{ settings.crawl.global_min_request_interval }} 秒</td></tr>
+      <tr><th>最大 running 任务数</th><td>{{ settings.crawl.max_active_tasks }}</td></tr>
+      <tr><th>数据库</th><td><code>{{ settings.database.path }}</code></td></tr>
+      <tr><th>报告目录</th><td><code>{{ settings.report.output_dir }}</code></td></tr>
+      <tr><th>raw_json</th><td>{{ "开启" if settings.crawl.save_raw_json else "关闭" }}</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>第三版：局域网访问</h2>
+  <p class="muted">默认关闭。启用后程序重启时监听 <code>0.0.0.0</code>，手机可访问 <code>{{ lan_url }}</code>。非本机访问必须输入访问密码。</p>
+  <form method="post" action="/settings/lan">
+    <div class="row">
+      <label><input type="checkbox" name="enabled" {% if settings.lan.enabled %}checked{% endif %}> 启用局域网访问</label>
+      <div>
+        <label for="password">访问密码，留空表示不修改</label>
+        <input id="password" name="password" type="password" placeholder="启用前必须设置">
+      </div>
+      <button type="submit">保存局域网设置</button>
+    </div>
+  </form>
+  <p class="muted">当前本机局域网 IP：{{ local_ip }}。保存后需要关闭并重新运行 <code>run.bat</code> 才能改变监听地址。</p>
+</section>
+
+<section>
+  <h2>维护</h2>
+  <p class="muted">raw_json 只用于本地排错，默认关闭。日志清理会删除页面日志，并尝试清空 <code>logs/app.log</code>。</p>
+  <form method="post" action="/maintenance/clear-raw-json"><button class="secondary" type="submit">清理 raw_json</button></form>
+  <form method="post" action="/maintenance/clear-logs" style="margin-top: 10px;"><button class="danger" type="submit">清理全部日志</button></form>
+</section>
+{% endblock %}
