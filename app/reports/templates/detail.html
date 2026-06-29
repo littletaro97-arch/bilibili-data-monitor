@@ -38,7 +38,7 @@
   <p>{{ summary }}</p>
   {% for chart in charts %}
     <h3>{{ chart.title }}</h3>
-    {{ chart.html }}
+    <div class="chart-block">{{ chart.html }}</div>
   {% endfor %}
   <h3>删除历史图表数据</h3>
   <p class="muted">会删除该视频在指定时间点以前的快照，趋势图和报告将不再使用这些数据。建议先确认不再需要旧数据。</p>

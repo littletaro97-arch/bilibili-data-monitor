@@ -19,7 +19,7 @@ METRICS = [
 ]
 
 
-def build_chart_blocks(snapshots: Iterable, include_plotlyjs: bool | str = True) -> list[dict[str, object]]:
+def build_chart_blocks(snapshots: Iterable, include_plotlyjs: bool | str = False) -> list[dict[str, object]]:
     rows = [dict(row) for row in snapshots]
     if len(rows) < 2:
         return [{"title": "趋势图", "html": Markup("<p class=\"empty\">数据不足，继续采集中</p>")}]
@@ -51,6 +51,8 @@ def build_chart_blocks(snapshots: Iterable, include_plotlyjs: bool | str = True)
                         fig,
                         include_plotlyjs=include_plotlyjs if first_chart else False,
                         full_html=False,
+                        default_width="100%",
+                        config={"responsive": True, "displaylogo": False},
                     )
                 ),
             }
@@ -71,7 +73,15 @@ def build_chart_blocks(snapshots: Iterable, include_plotlyjs: bool | str = True)
         blocks.append(
             {
                 "title": title,
-                "html": Markup(pio.to_html(fig, include_plotlyjs=False, full_html=False)),
+                "html": Markup(
+                    pio.to_html(
+                        fig,
+                        include_plotlyjs=False,
+                        full_html=False,
+                        default_width="100%",
+                        config={"responsive": True, "displaylogo": False},
+                    )
+                ),
             }
         )
     return blocks

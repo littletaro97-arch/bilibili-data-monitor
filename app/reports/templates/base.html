@@ -83,6 +83,8 @@
     .metric { border: 1px solid var(--line); border-radius: 6px; padding: 12px; background: #fbfcfd; }
     .metric span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
     .metric strong { font-size: 20px; }
+    .chart-block { width: 100%; overflow-x: auto; }
+    .chart-block .plotly-graph-div { width: 100% !important; max-width: 100%; }
     code { background: #eef1f5; padding: 2px 4px; border-radius: 3px; }
     @media (max-width: 760px) {
       main { padding: 14px; }
@@ -92,6 +94,9 @@
       table { font-size: 13px; }
     }
   </style>
+  {% if needs_plotly %}
+    <script src="/assets/plotly.min.js"></script>
+  {% endif %}
 </head>
 <body>
   <header>
@@ -140,6 +145,13 @@
 
     if (document.querySelector("[data-log-body]")) {
       window.setInterval(refreshLogs, 5000);
+    }
+
+    for (const toggle of document.querySelectorAll("[data-toggle-password]")) {
+      toggle.addEventListener("change", () => {
+        const target = document.getElementById(toggle.dataset.togglePassword);
+        if (target) target.type = toggle.checked ? "text" : "password";
+      });
     }
   </script>
 </body>

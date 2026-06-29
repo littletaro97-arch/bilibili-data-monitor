@@ -24,8 +24,10 @@
     <div class="metric"><span>本机电脑打开</span><strong>{{ local_url }}</strong></div>
     <div class="metric"><span>其它设备打开</span><strong>{{ lan_url }}</strong></div>
     <div class="metric"><span>当前运行状态</span><strong>{{ "局域网已启用" if runtime_lan_enabled else "仅本机访问" }}</strong></div>
+    <div class="metric"><span>访问密码</span><strong>{{ "已设置" if lan_password_set else "未设置" }}</strong></div>
   </div>
   <p class="muted">其它设备必须和这台电脑连接到同一个 Wi-Fi 或局域网。启用后，手机或平板在浏览器地址栏输入“其它设备打开”的完整地址。非本机访问必须输入访问密码。</p>
+  <p class="muted">已保存的访问密码不会以明文显示。忘记密码时，在本机电脑输入新密码并保存即可重置。</p>
   {% if restart_required %}
     <p class="message error">配置已保存但尚未生效。请点击下方“退出程序”，然后重新运行 run.bat。</p>
   {% endif %}
@@ -34,7 +36,8 @@
       <label><input type="checkbox" name="enabled" {% if settings.lan.enabled %}checked{% endif %}> 启用局域网访问</label>
       <div>
         <label for="password">访问密码，留空表示不修改</label>
-        <input id="password" name="password" type="password" placeholder="启用前必须设置">
+        <input id="password" name="password" type="password" placeholder="启用前必须设置；忘记时输入新密码重置">
+        <label><input type="checkbox" data-toggle-password="password"> 显示正在输入的密码</label>
       </div>
       <button type="submit">保存局域网设置</button>
     </div>

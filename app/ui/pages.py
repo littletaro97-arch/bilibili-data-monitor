@@ -8,7 +8,8 @@ import threading
 import time
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from plotly.offline import get_plotlyjs
 
 from app.config import load_settings, settings
 from app.config_writer import save_lan_settings
@@ -88,6 +89,11 @@ async def api_logs(request: Request, bvid: str | None = None, limit: int = 30):
     limit = max(1, min(limit, 100))
     rows = request.app.state.repository.list_logs(bvid=bvid, limit=limit)
     return {"logs": _log_payload(rows)}
+
+
+@router.get("/assets/plotly.min.js")
+async def plotly_asset():
+    return Response(get_plotlyjs(), media_type="application/javascript")
 
 
 @router.get("/lan/login", response_class=HTMLResponse)
@@ -178,13 +184,14 @@ async def video_detail(request: Request, bvid: str, message: str | None = None, 
             "task": task,
             "snapshots": snapshots,
             "latest": snapshots[-1] if snapshots else None,
-            "charts": build_chart_blocks(snapshots, include_plotlyjs=True),
+            "charts": build_chart_blocks(snapshots, include_plotlyjs=False),
             "summary": build_summary(snapshots),
             "logs": repo.list_logs(bvid=bvid, limit=30),
             "comments": repo.list_comments(bvid, limit=30),
             "danmaku": repo.list_danmaku(bvid, limit=50),
             "message": message,
             "level": level,
+            "needs_plotly": True,
         },
     )
 
@@ -267,6 +274,7 @@ async def settings_page(request: Request, message: str | None = None, level: str
             "local_ip": local_ip,
             "local_url": f"http://127.0.0.1:{current_settings.app.port}",
             "lan_url": f"http://{local_ip}:{current_settings.app.port}",
+            "lan_password_set": bool(current_settings.lan.password_hash),
             "restart_required": current_settings.lan.enabled != settings.lan.enabled
             or current_settings.lan.password_hash != settings.lan.password_hash,
         },
