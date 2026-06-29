@@ -16,7 +16,14 @@ from app.config_writer import save_lan_settings
 from app.logger import clear_log_file
 from app.models import AppError
 from app.security import session_token, verify_password
-from app.services.analysis_service import build_chart_blocks, build_danmaku_density_chart, build_summary, top_words
+from app.services.analysis_service import (
+    METRICS,
+    build_chart_blocks,
+    build_danmaku_density_chart,
+    build_dual_axis_chart,
+    build_summary,
+    top_words,
+)
 from app.ui.dashboard import templates
 
 
@@ -171,13 +178,25 @@ async def collect_now(request: Request, task_id: int):
 
 
 @router.get("/videos/{bvid}", response_class=HTMLResponse)
-async def video_detail(request: Request, bvid: str, message: str | None = None, level: str = "info"):
+async def video_detail(
+    request: Request,
+    bvid: str,
+    message: str | None = None,
+    level: str = "info",
+    left_metric: str = "view_count",
+    right_metric: str = "like_count",
+):
     repo = request.app.state.repository
     video = repo.get_video(bvid)
     task = repo.get_task_by_bvid(bvid)
     snapshots = repo.list_snapshots(bvid)
     comments = repo.list_comments(bvid, limit=200)
     danmaku = repo.list_danmaku(bvid, limit=500)
+    metric_fields = {field for field, _title in METRICS}
+    if left_metric not in metric_fields:
+        left_metric = "view_count"
+    if right_metric not in metric_fields:
+        right_metric = "like_count"
     return templates.TemplateResponse(
         request,
         "detail.html",
@@ -187,6 +206,10 @@ async def video_detail(request: Request, bvid: str, message: str | None = None, 
             "snapshots": snapshots,
             "latest": snapshots[-1] if snapshots else None,
             "charts": build_chart_blocks(snapshots, include_plotlyjs=False),
+            "dual_axis_chart": build_dual_axis_chart(snapshots, left_metric, right_metric),
+            "metric_options": METRICS,
+            "left_metric": left_metric,
+            "right_metric": right_metric,
             "summary": build_summary(snapshots),
             "logs": repo.list_logs(bvid=bvid, limit=30),
             "comments": comments[:30],

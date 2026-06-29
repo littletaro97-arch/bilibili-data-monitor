@@ -36,19 +36,51 @@
 <section>
   <h2>趋势图表</h2>
   <p>{{ summary }}</p>
-  {% for chart in charts %}
-    <h3>{{ chart.title }}</h3>
-    <div class="chart-block">{{ chart.html }}</div>
-  {% endfor %}
-  <h3>删除历史图表数据</h3>
-  <p class="muted">会删除该视频在指定时间点以前的快照，趋势图和报告将不再使用这些数据。建议先确认不再需要旧数据。</p>
-  <form method="post" action="/videos/{{ video.bvid }}/snapshots/delete-before" class="row">
-    <div>
-      <label for="before_time">删除早于此时间的快照</label>
-      <input id="before_time" name="before_time" type="datetime-local" required>
-    </div>
-    <button class="danger" type="submit">删除旧快照</button>
-  </form>
+  <details class="chart-panel" open>
+    <summary>双轴对比图</summary>
+    <form method="get" action="/videos/{{ video.bvid }}" class="row compare-form">
+      <div>
+        <label for="left_metric">左轴数据</label>
+        <select id="left_metric" name="left_metric">
+          {% for field, title in metric_options %}
+            <option value="{{ field }}" {% if field == left_metric %}selected{% endif %}>{{ title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="right_metric">右轴数据</label>
+        <select id="right_metric" name="right_metric">
+          {% for field, title in metric_options %}
+            <option value="{{ field }}" {% if field == right_metric %}selected{% endif %}>{{ title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="secondary" type="submit">更新对比</button>
+    </form>
+    <div class="chart-block">{{ dual_axis_chart }}</div>
+  </details>
+
+  <details class="chart-panel">
+    <summary>单项趋势图</summary>
+    {% for chart in charts %}
+      <details class="nested-panel">
+        <summary>{{ chart.title }}</summary>
+        <div class="chart-block">{{ chart.html }}</div>
+      </details>
+    {% endfor %}
+  </details>
+
+  <details class="chart-panel">
+    <summary>删除历史图表数据</summary>
+    <p class="muted">会删除该视频在指定时间点以前的快照，趋势图和报告将不再使用这些数据。建议先确认不再需要旧数据。</p>
+    <form method="post" action="/videos/{{ video.bvid }}/snapshots/delete-before" class="row">
+      <div>
+        <label for="before_time">删除早于此时间的快照</label>
+        <input id="before_time" name="before_time" type="datetime-local" required>
+      </div>
+      <button class="danger" type="submit">删除旧快照</button>
+    </form>
+  </details>
 </section>
 
 <section>

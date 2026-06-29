@@ -19,6 +19,8 @@ METRICS = [
     ("danmaku_count", "弹幕数"),
 ]
 
+METRIC_LABELS = dict(METRICS)
+
 STOPWORDS = {
     "的",
     "了",
@@ -122,6 +124,64 @@ def build_chart_blocks(snapshots: Iterable, include_plotlyjs: bool | str = False
             }
         )
     return blocks
+
+
+def build_dual_axis_chart(
+    snapshots: Iterable,
+    left_field: str = "view_count",
+    right_field: str = "like_count",
+    include_plotlyjs: bool | str = False,
+) -> Markup:
+    rows = [dict(row) for row in snapshots]
+    if len(rows) < 2:
+        return Markup("<p class=\"empty\">数据不足，至少需要 2 条快照才能生成对比图</p>")
+
+    if left_field not in METRIC_LABELS:
+        left_field = "view_count"
+    if right_field not in METRIC_LABELS:
+        right_field = "like_count"
+
+    left_label = METRIC_LABELS[left_field]
+    right_label = METRIC_LABELS[right_field]
+    x_values = [row["captured_at"] for row in rows]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=x_values,
+            y=[row.get(left_field) for row in rows],
+            mode="lines+markers",
+            name=left_label,
+            yaxis="y",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=x_values,
+            y=[row.get(right_field) for row in rows],
+            mode="lines+markers",
+            name=right_label,
+            yaxis="y2",
+        )
+    )
+    fig.update_layout(
+        title=f"{left_label} / {right_label} 对比",
+        xaxis_title="采集时间",
+        yaxis=dict(title=left_label),
+        yaxis2=dict(title=right_label, overlaying="y", side="right"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        margin=dict(l=48, r=56, t=58, b=44),
+        height=380,
+    )
+    return Markup(
+        pio.to_html(
+            fig,
+            include_plotlyjs=include_plotlyjs,
+            full_html=False,
+            default_width="100%",
+            config={"responsive": True, "displaylogo": False},
+        )
+    )
 
 
 def build_summary(snapshots: Iterable) -> str:

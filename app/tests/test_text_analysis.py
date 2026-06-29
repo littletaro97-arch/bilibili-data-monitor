@@ -1,4 +1,4 @@
-from app.services.analysis_service import build_danmaku_density_chart, top_words
+from app.services.analysis_service import build_danmaku_density_chart, build_dual_axis_chart, top_words
 
 
 class Row(dict):
@@ -35,3 +35,22 @@ def test_danmaku_density_chart_builds_plotly_bar():
     assert "Plotly.newPlot" in html
     assert "00:00" in html
     assert "00:30" in html
+
+
+def test_dual_axis_chart_handles_empty_rows():
+    html = str(build_dual_axis_chart([]))
+    assert "至少需要 2 条快照" in html
+
+
+def test_dual_axis_chart_builds_plotly_lines():
+    rows = [
+        Row(captured_at="2026-06-29T10:00:00+08:00", view_count=100, like_count=5),
+        Row(captured_at="2026-06-29T11:00:00+08:00", view_count=160, like_count=9),
+    ]
+
+    html = str(build_dual_axis_chart(rows, "view_count", "like_count"))
+
+    assert "Plotly.newPlot" in html
+    assert "\\u64ad\\u653e\\u91cf" in html
+    assert "\\u70b9\\u8d5e\\u6570" in html
+    assert "y2" in html
