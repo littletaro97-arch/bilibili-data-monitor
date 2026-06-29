@@ -221,6 +221,24 @@ async def collect_danmaku(request: Request, bvid: str):
         return _flash_redirect(f"/videos/{bvid}", str(exc), "error")
 
 
+@router.post("/videos/{bvid}/phase2/demo")
+async def seed_phase2_demo_data(request: Request, bvid: str):
+    comment_count, danmaku_count = request.app.state.phase2_service.seed_demo_data(bvid)
+    return _flash_redirect(f"/videos/{bvid}", f"已生成演示数据：评论 {comment_count} 条，弹幕 {danmaku_count} 条")
+
+
+@router.post("/videos/{bvid}/comments/import")
+async def import_comments(request: Request, bvid: str, comments_text: str = Form(...)):
+    count = request.app.state.phase2_service.import_comments_text(bvid, comments_text)
+    return _flash_redirect(f"/videos/{bvid}", f"已导入评论：{count} 条")
+
+
+@router.post("/videos/{bvid}/danmaku/import")
+async def import_danmaku(request: Request, bvid: str, danmaku_text: str = Form(...)):
+    count = request.app.state.phase2_service.import_danmaku_text(bvid, danmaku_text)
+    return _flash_redirect(f"/videos/{bvid}", f"已导入弹幕：{count} 条")
+
+
 @router.post("/videos/{bvid}/logs/clear")
 async def clear_video_logs(request: Request, bvid: str):
     count = request.app.state.repository.clear_logs(bvid=bvid)

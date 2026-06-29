@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.collectors.provider import VideoDataProvider
 from app.database import Repository
-from app.models import ProviderError
+from app.models import DanmakuItem, ProviderError, VideoComment
 
 
 class Phase2Service:
@@ -46,3 +46,74 @@ class Phase2Service:
         count = self.repository.insert_danmaku(items)
         self.repository.add_log("INFO", f"弹幕采集完成：{count} 条", bvid=bvid)
         return count
+
+    def import_comments_text(self, bvid: str, text: str) -> int:
+        lines = _non_empty_lines(text)
+        comments = [
+            VideoComment(
+                bvid=bvid,
+                rpid=f"local-comment-{index + 1}",
+                user_name="本地导入",
+                message=line,
+                like_count=0,
+                reply_count=0,
+            )
+            for index, line in enumerate(lines)
+        ]
+        count = self.repository.insert_comments(comments)
+        self.repository.add_log("INFO", f"本地导入评论：{count} 条", bvid=bvid)
+        return count
+
+    def import_danmaku_text(self, bvid: str, text: str) -> int:
+        video = self.repository.get_video(bvid)
+        cid = int(video["cid"]) if video and video["cid"] is not None else None
+        items: list[DanmakuItem] = []
+        for index, line in enumerate(_non_empty_lines(text)):
+            progress_sec, content = _parse_danmaku_line(line, fallback_seconds=index * 5.0)
+            items.append(
+                DanmakuItem(
+                    bvid=bvid,
+                    cid=cid,
+                    progress_sec=progress_sec,
+                    text=content,
+                    send_time=None,
+                    raw_text=line,
+                )
+            )
+        count = self.repository.insert_danmaku(items)
+        self.repository.add_log("INFO", f"本地导入弹幕：{count} 条", bvid=bvid)
+        return count
+
+    def seed_demo_data(self, bvid: str) -> tuple[int, int]:
+        comments = [
+            "这个视频节奏很好，讲解很清楚",
+            "数据分析部分很有用，希望继续更新",
+            "这个工具适合本地观察趋势",
+            "讲解清楚，案例很好",
+            "希望增加更多本地分析功能",
+        ]
+        danmaku = [
+            "1.5,开头来了",
+            "8.0,这个地方很好",
+            "15.0,讲解清楚",
+            "22.0,数据分析有用",
+            "35.0,这里弹幕很密集",
+            "38.0,这里弹幕很密集",
+            "42.0,继续更新",
+        ]
+        return self.import_comments_text(bvid, "\n".join(comments)), self.import_danmaku_text(bvid, "\n".join(danmaku))
+
+
+def _non_empty_lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def _parse_danmaku_line(line: str, fallback_seconds: float) -> tuple[float, str]:
+    for separator in [",", "，", "\t"]:
+        if separator in line:
+            left, right = line.split(separator, 1)
+            try:
+                return max(0.0, float(left.strip())), right.strip()
+            except ValueError:
+                break
+    return fallback_seconds, line

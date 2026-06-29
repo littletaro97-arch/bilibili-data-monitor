@@ -53,10 +53,25 @@
 
 <section>
   <h2>第二版：评论与弹幕</h2>
-  <p class="muted">第二版内容只支持手动低频采集，不加入默认定时任务。评论真实采集需要明确、稳定的公开数据源后才能启用。</p>
+  <p class="muted">第二版内容只支持手动低频采集，不加入默认定时任务。弹幕可通过公开 XML 自动采集；评论真实采集需要明确、稳定的公开数据源后才能启用。你也可以导入本地文本或生成演示数据来测试分析功能。</p>
   <div class="actions">
     <form class="inline" method="post" action="/videos/{{ video.bvid }}/comments/collect"><button class="secondary" type="submit">手动采集评论</button></form>
-    <form class="inline" method="post" action="/videos/{{ video.bvid }}/danmaku/collect"><button class="secondary" type="submit">手动采集弹幕</button></form>
+    <form class="inline" method="post" action="/videos/{{ video.bvid }}/danmaku/collect"><button class="secondary" type="submit">自动采集弹幕</button></form>
+    <form class="inline" method="post" action="/videos/{{ video.bvid }}/phase2/demo"><button type="submit">生成演示数据</button></form>
+  </div>
+
+  <h3>本地导入</h3>
+  <div class="grid">
+    <form method="post" action="/videos/{{ video.bvid }}/comments/import">
+      <label for="comments_text">评论文本，每行一条</label>
+      <textarea id="comments_text" name="comments_text" rows="6" placeholder="这个视频讲解清楚&#10;数据分析很有用" required></textarea>
+      <button class="secondary" type="submit">导入评论文本</button>
+    </form>
+    <form method="post" action="/videos/{{ video.bvid }}/danmaku/import">
+      <label for="danmaku_text">弹幕文本，每行一条；可用“秒数,内容”格式</label>
+      <textarea id="danmaku_text" name="danmaku_text" rows="6" placeholder="12.5,这里弹幕很密集&#10;30,讲解清楚" required></textarea>
+      <button class="secondary" type="submit">导入弹幕文本</button>
+    </form>
   </div>
 
   <h3>近期评论</h3>
