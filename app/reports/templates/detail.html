@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block title %}{{ video.title if video else "视频详情" }} - B站本地分析{% endblock %}
 {% block content %}
+<div class="page-actions">
+  <a class="button secondary" href="/">返回首页</a>
+  <a class="button secondary" href="/settings">进入设置</a>
+</div>
+
 <section>
   <h2>{{ video.title if video else "视频详情" }}</h2>
   {% if video %}

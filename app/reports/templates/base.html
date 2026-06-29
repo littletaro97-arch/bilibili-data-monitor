@@ -96,6 +96,7 @@
     .message { border-radius: 4px; padding: 10px 12px; margin-bottom: 18px; background: #e8f4f2; }
     .message.error { background: #fde8e7; color: var(--danger); }
     .muted, .empty { color: var(--muted); }
+    .page-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 12px; }
     .metric { border: 1px solid var(--line); border-radius: 6px; padding: 12px; background: #fbfcfd; }
     .metric span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
@@ -120,6 +121,7 @@
       .row > *, .row input, .row select { width: 100%; }
       input[name="video_input"] { min-width: 100%; width: 100%; }
       button, .button { width: 100%; text-align: center; }
+      .page-actions { display: grid; grid-template-columns: 1fr; }
       .actions { min-width: 0; display: grid; grid-template-columns: 1fr; }
       .actions form.inline { display: block; }
       .grid { grid-template-columns: 1fr; }
@@ -135,7 +137,7 @@
   <header>
     <h1>B站公开视频本地分析</h1>
     <nav>
-      <a href="/">任务</a>
+      <a href="/">返回首页</a>
       <a href="/settings">设置</a>
     </nav>
   </header>

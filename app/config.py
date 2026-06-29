@@ -54,6 +54,11 @@ class LanConfig:
 
 
 @dataclass(frozen=True)
+class LauncherConfig:
+    show_console: bool = True
+
+
+@dataclass(frozen=True)
 class Settings:
     app: AppConfig = AppConfig()
     crawl: CrawlConfig = CrawlConfig()
@@ -61,6 +66,7 @@ class Settings:
     database: DatabaseConfig = DatabaseConfig()
     phase2: Phase2Config = Phase2Config()
     lan: LanConfig = LanConfig()
+    launcher: LauncherConfig = LauncherConfig()
 
     @property
     def database_path(self) -> Path:
@@ -91,6 +97,7 @@ def load_settings(path: str | Path | None = None) -> Settings:
         database=DatabaseConfig(**raw.get("database", {})),
         phase2=Phase2Config(**raw.get("phase2", {})),
         lan=LanConfig(**raw.get("lan", {})),
+        launcher=LauncherConfig(**raw.get("launcher", {})),
     )
 
 

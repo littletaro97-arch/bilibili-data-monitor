@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% block title %}设置 - B站本地分析{% endblock %}
 {% block content %}
+<div class="page-actions">
+  <a class="button secondary" href="/">返回首页</a>
+</div>
+
 <section>
   <h2>运行设置</h2>
   <table>
@@ -16,6 +20,16 @@
       <tr><th>raw_json</th><td>{{ "开启" if settings.crawl.save_raw_json else "关闭" }}</td></tr>
     </tbody>
   </table>
+</section>
+
+<section>
+  <h2>启动窗口</h2>
+  <p class="muted">关闭 CMD 窗口后，启动错误不会直接显示在屏幕上；隐藏启动时可查看 <code>logs/launcher.log</code> 和 <code>logs/app.log</code> 排查问题。</p>
+  <form method="post" action="/settings/launcher" class="row">
+    <label><input type="checkbox" name="show_console" {% if launcher_show_console %}checked{% endif %}> 启动程序时显示 CMD 调试窗口</label>
+    <button type="submit">保存启动设置</button>
+  </form>
+  <p class="muted">此设置会在下次运行 <code>run.bat</code> 时生效。当前正在运行的窗口不会被立即隐藏或显示。</p>
 </section>
 
 <section>

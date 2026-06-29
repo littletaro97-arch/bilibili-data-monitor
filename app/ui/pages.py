@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Resp
 from plotly.offline import get_plotlyjs
 
 from app.config import load_settings, settings
-from app.config_writer import save_lan_settings
+from app.config_writer import save_lan_settings, save_launcher_settings
 from app.logger import clear_log_file
 from app.models import AppError
 from app.security import session_token, verify_password
@@ -321,6 +321,7 @@ async def settings_page(request: Request, message: str | None = None, level: str
             "local_url": f"http://127.0.0.1:{current_settings.app.port}",
             "lan_url": f"http://{local_ip}:{current_settings.app.port}",
             "lan_password_set": bool(current_settings.lan.password_hash),
+            "launcher_show_console": current_settings.launcher.show_console,
             "restart_required": current_settings.lan.enabled != settings.lan.enabled
             or current_settings.lan.password_hash != settings.lan.password_hash,
         },
@@ -337,6 +338,12 @@ async def update_lan_settings(
         return _flash_redirect("/settings", "局域网访问设置已保存，重启程序后生效")
     except ValueError as exc:
         return _flash_redirect("/settings", str(exc), "error")
+
+
+@router.post("/settings/launcher")
+async def update_launcher_settings(show_console: str | None = Form(None)):
+    save_launcher_settings(show_console=show_console == "on")
+    return _flash_redirect("/settings", "启动设置已保存，下次运行 run.bat 时生效")
 
 
 @router.post("/maintenance/clear-raw-json")

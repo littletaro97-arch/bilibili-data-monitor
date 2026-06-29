@@ -30,3 +30,6 @@ danmaku_min_interval_seconds = 600
 enabled = false
 password_hash = ""
 session_cookie = "blla_lan_auth"
+
+[launcher]
+show_console = true
