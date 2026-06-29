@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
+import re
 from typing import Iterable
 
 import plotly.graph_objects as go
@@ -17,6 +18,42 @@ METRICS = [
     ("reply_count", "评论数"),
     ("danmaku_count", "弹幕数"),
 ]
+
+STOPWORDS = {
+    "的",
+    "了",
+    "是",
+    "我",
+    "你",
+    "他",
+    "她",
+    "它",
+    "啊",
+    "吗",
+    "呢",
+    "吧",
+    "和",
+    "也",
+    "就",
+    "都",
+    "很",
+    "在",
+    "有",
+    "这",
+    "那",
+    "一个",
+    "这个",
+    "不是",
+    "没有",
+    "哈哈",
+    "哈哈哈",
+    "the",
+    "and",
+    "for",
+    "you",
+    "that",
+    "this",
+}
 
 
 def build_chart_blocks(snapshots: Iterable, include_plotlyjs: bool | str = False) -> list[dict[str, object]]:
@@ -103,6 +140,45 @@ def build_summary(snapshots: Iterable) -> str:
     )
 
 
+def top_words(rows: Iterable, field: str = "message", limit: int = 20) -> list[dict[str, int | str]]:
+    counter: Counter[str] = Counter()
+    for row in rows:
+        text = (dict(row).get(field) or "").strip()
+        counter.update(_tokenize(text))
+    return [{"word": word, "count": count} for word, count in counter.most_common(limit)]
+
+
+def build_danmaku_density_chart(danmaku_rows: Iterable, bucket_seconds: int = 30) -> Markup:
+    rows = [dict(row) for row in danmaku_rows]
+    points = [row.get("progress_sec") for row in rows if row.get("progress_sec") is not None]
+    if not points:
+        return Markup("<p class=\"empty\">暂无足够弹幕时间数据</p>")
+
+    buckets: dict[str, int] = defaultdict(int)
+    for value in points:
+        bucket_start = int(float(value) // bucket_seconds) * bucket_seconds
+        buckets[_format_duration(bucket_start)] += 1
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=list(buckets.keys()), y=list(buckets.values()), name="弹幕数量"))
+    fig.update_layout(
+        title="弹幕密度时间轴",
+        xaxis_title="视频内时间",
+        yaxis_title="弹幕数量",
+        margin=dict(l=40, r=20, t=45, b=40),
+        height=360,
+    )
+    return Markup(
+        pio.to_html(
+            fig,
+            include_plotlyjs=False,
+            full_html=False,
+            default_width="100%",
+            config={"responsive": True, "displaylogo": False},
+        )
+    )
+
+
 def _delta(start: int | None, end: int | None) -> int | str:
     if start is None or end is None:
         return "未知"
@@ -137,3 +213,25 @@ def _format_hour(value: str) -> str:
         return dt.strftime("%Y-%m-%d %H:00")
     except ValueError:
         return value[:13]
+
+
+def _tokenize(text: str) -> list[str]:
+    words: list[str] = []
+    for chinese in re.findall(r"[\u4e00-\u9fff]{2,}", text):
+        if len(chinese) == 2:
+            candidates = [chinese]
+        else:
+            candidates = [chinese[index : index + 2] for index in range(len(chinese) - 1)]
+        for token in candidates:
+            if token not in STOPWORDS:
+                words.append(token)
+    for token in re.findall(r"[A-Za-z0-9_]{2,}", text.lower()):
+        if token in STOPWORDS:
+            continue
+        words.append(token)
+    return words
+
+
+def _format_duration(seconds: int) -> str:
+    minutes, sec = divmod(seconds, 60)
+    return f"{minutes:02d}:{sec:02d}"

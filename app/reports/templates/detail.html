@@ -60,6 +60,14 @@
   </div>
 
   <h3>近期评论</h3>
+  {% if comment_top_words %}
+    <h4>评论高频词</h4>
+    <div class="word-list">
+      {% for item in comment_top_words %}
+        <span class="word-chip">{{ item.word }} <strong>{{ item.count }}</strong></span>
+      {% endfor %}
+    </div>
+  {% endif %}
   {% if comments %}
     <table>
       <thead><tr><th>时间</th><th>用户</th><th>内容</th><th>点赞</th><th>回复</th></tr></thead>
@@ -80,6 +88,16 @@
   {% endif %}
 
   <h3>近期弹幕</h3>
+  {% if danmaku_top_words %}
+    <h4>弹幕高频词</h4>
+    <div class="word-list">
+      {% for item in danmaku_top_words %}
+        <span class="word-chip">{{ item.word }} <strong>{{ item.count }}</strong></span>
+      {% endfor %}
+    </div>
+  {% endif %}
+  <h4>弹幕密度时间轴</h4>
+  <div class="chart-block">{{ danmaku_density_chart }}</div>
   {% if danmaku %}
     <table>
       <thead><tr><th>采集时间</th><th>视频内时间</th><th>发送时间</th><th>内容</th></tr></thead>

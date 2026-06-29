@@ -16,7 +16,7 @@ from app.config_writer import save_lan_settings
 from app.logger import clear_log_file
 from app.models import AppError
 from app.security import session_token, verify_password
-from app.services.analysis_service import build_chart_blocks, build_summary
+from app.services.analysis_service import build_chart_blocks, build_danmaku_density_chart, build_summary, top_words
 from app.ui.dashboard import templates
 
 
@@ -176,6 +176,8 @@ async def video_detail(request: Request, bvid: str, message: str | None = None, 
     video = repo.get_video(bvid)
     task = repo.get_task_by_bvid(bvid)
     snapshots = repo.list_snapshots(bvid)
+    comments = repo.list_comments(bvid, limit=200)
+    danmaku = repo.list_danmaku(bvid, limit=500)
     return templates.TemplateResponse(
         request,
         "detail.html",
@@ -187,8 +189,11 @@ async def video_detail(request: Request, bvid: str, message: str | None = None, 
             "charts": build_chart_blocks(snapshots, include_plotlyjs=False),
             "summary": build_summary(snapshots),
             "logs": repo.list_logs(bvid=bvid, limit=30),
-            "comments": repo.list_comments(bvid, limit=30),
-            "danmaku": repo.list_danmaku(bvid, limit=50),
+            "comments": comments[:30],
+            "danmaku": danmaku[:50],
+            "comment_top_words": top_words(comments, field="message", limit=20),
+            "danmaku_top_words": top_words(danmaku, field="text", limit=20),
+            "danmaku_density_chart": build_danmaku_density_chart(danmaku),
             "message": message,
             "level": level,
             "needs_plotly": True,
