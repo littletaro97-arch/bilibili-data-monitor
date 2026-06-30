@@ -18,6 +18,7 @@ def test_parse_history_csv_accepts_metric_columns():
             "favorite_count": None,
             "like_count": 5,
             "online_count": None,
+            "online_text": None,
             "reply_count": None,
             "share_count": None,
             "view_count": 100,

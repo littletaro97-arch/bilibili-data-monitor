@@ -37,7 +37,7 @@
       <tr><th>播放</th><td>{{ latest.view_count }}</td><th>点赞</th><td>{{ latest.like_count }}</td></tr>
       <tr><th>投币</th><td>{{ latest.coin_count }}</td><th>收藏</th><td>{{ latest.favorite_count }}</td></tr>
       <tr><th>评论</th><td>{{ latest.reply_count }}</td><th>弹幕</th><td>{{ latest.danmaku_count }}</td></tr>
-      <tr><th>分享</th><td>{{ latest.share_count }}</td><th>当前观看人数</th><td>{{ latest.online_count if latest.online_count is not none else "暂无" }}</td></tr>
+      <tr><th>分享</th><td>{{ latest.share_count }}</td><th>当前观看人数</th><td>{{ latest.online_text or latest.online_count or "暂无" }}</td></tr>
       <tr><th>数据来源</th><td>{{ "历史导入" if latest.source_type == "imported" else "自动采集" }}</td><th>采集时间</th><td>{{ latest.captured_at }}</td></tr>
     </table>
   {% else %}

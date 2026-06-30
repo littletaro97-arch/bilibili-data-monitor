@@ -14,6 +14,9 @@
       --accent: #0f766e;
       --danger: #b42318;
       --warning: #a15c00;
+      --motion-fast: 120ms;
+      --motion-normal: 180ms;
+      --motion-ease: cubic-bezier(.2, 0, .2, 1);
     }
     * { box-sizing: border-box; }
     body {
@@ -85,6 +88,7 @@
     }
     button.secondary, .button.secondary { background: white; color: var(--accent); }
     button.danger { background: var(--danger); border-color: var(--danger); }
+    button, .button, section, .metric, details { transition: border-color var(--motion-normal) var(--motion-ease), background-color var(--motion-normal) var(--motion-ease), color var(--motion-normal) var(--motion-ease), box-shadow var(--motion-normal) var(--motion-ease); }
     table { width: 100%; min-width: 680px; border-collapse: collapse; font-size: 14px; }
     th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
     th { color: var(--muted); font-weight: 600; background: #fbfcfd; }
@@ -116,6 +120,9 @@
     .word-chip { border: 1px solid var(--line); background: #fbfcfd; border-radius: 999px; padding: 5px 9px; font-size: 13px; }
     .word-chip strong { color: var(--accent); margin-left: 4px; }
     code { background: #eef1f5; padding: 2px 4px; border-radius: 3px; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+    }
     @media (max-width: 760px) {
       main { padding: 14px; }
       section { padding: 14px; }
@@ -275,8 +282,16 @@
 
     restoreChartControls();
     restoreDetailsState();
-    if (document.querySelector("[data-latest-field]")) {
-      window.setInterval(refreshLatestVideoData, 5000);
+    const latestRefreshRoot = document.querySelector("[data-latest-refresh-seconds]");
+    if (latestRefreshRoot && document.querySelector("[data-latest-field]")) {
+      const refreshSeconds = Math.max(30, Number(latestRefreshRoot.dataset.latestRefreshSeconds || "60"));
+      window.setInterval(refreshLatestVideoData, refreshSeconds * 1000);
+    }
+
+    for (const form of document.querySelectorAll("form[data-confirm]")) {
+      form.addEventListener("submit", (event) => {
+        if (!window.confirm(form.dataset.confirm || "确认继续？")) event.preventDefault();
+      });
     }
 
     for (const toggle of document.querySelectorAll("[data-toggle-password]")) {

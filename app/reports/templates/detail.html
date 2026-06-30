@@ -17,10 +17,29 @@
     </div>
   {% endif %}
   <p class="muted">本工具只保存公开统计字段；raw_json 默认关闭，报告不包含完整原始响应。</p>
-  <form class="inline" method="post" action="/videos/{{ video.bvid }}/report"><button type="submit">生成 HTML 报告</button></form>
+  <div class="actions">
+    {% if video.bvid %}
+      <a class="button secondary" href="https://www.bilibili.com/video/{{ video.bvid }}/" target="_blank" rel="noreferrer">打开 B 站视频</a>
+    {% endif %}
+    <form class="inline" method="post" action="/videos/{{ video.bvid }}/report"><button type="submit">生成 HTML 报告</button></form>
+  </div>
+  <p class="muted">报告保存目录：<code>{{ report_output_dir }}</code>。生成后可在下方“最近报告”直接打开。</p>
+  {% if reports %}
+    <details class="chart-panel" data-chart-panel="reports">
+      <summary>最近报告</summary>
+      <table>
+        <thead><tr><th>文件</th><th>操作</th></tr></thead>
+        <tbody>
+          {% for report in reports %}
+            <tr><td>{{ report.name }}</td><td><a class="button secondary" href="{{ report.url }}" target="_blank" rel="noreferrer">打开报告</a></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+  {% endif %}
 </section>
 
-<section>
+<section data-latest-refresh-seconds="{{ latest_refresh_seconds }}">
   <h2>最新数据</h2>
   {% if latest %}
     <div class="grid">
@@ -31,7 +50,7 @@
       <div class="metric"><span>评论</span><strong data-latest-field="reply_count">{{ latest.reply_count }}</strong></div>
       <div class="metric"><span>弹幕</span><strong data-latest-field="danmaku_count">{{ latest.danmaku_count }}</strong></div>
       <div class="metric"><span>分享</span><strong data-latest-field="share_count">{{ latest.share_count }}</strong></div>
-      <div class="metric"><span>当前观看人数</span><strong data-latest-field="online_count">{{ latest.online_count if latest.online_count is not none else "暂无" }}</strong></div>
+      <div class="metric"><span>当前观看人数</span><strong data-latest-field="online_text">{{ latest.online_text or latest.online_count or "暂无" }}</strong></div>
       <div class="metric"><span>采集时间</span><strong data-latest-field="captured_at">{{ latest.captured_at }}</strong></div>
       <div class="metric"><span>数据来源</span><strong data-latest-field="source_type">{{ "历史导入" if latest.source_type == "imported" else "自动采集" }}</strong></div>
     </div>
@@ -127,7 +146,7 @@
       <label for="source_note">来源说明</label>
       <input id="source_note" name="source_note" placeholder="例如：手动整理的旧数据">
       <label for="history_csv">历史记录 CSV</label>
-      <textarea id="history_csv" name="history_csv" rows="8" required placeholder="captured_at,view_count,like_count,coin_count,favorite_count,reply_count,danmaku_count,share_count,online_count&#10;2026-06-01T10:00:00+08:00,1000,50,3,20,4,80,1,12&#10;2026-06-01T11:00:00+08:00,1200,70,5,25,6,92,2,15"></textarea>
+      <textarea id="history_csv" name="history_csv" rows="8" required placeholder="captured_at,view_count,like_count,coin_count,favorite_count,reply_count,danmaku_count,share_count,online_count,online_text&#10;2026-06-01T10:00:00+08:00,1000,50,3,20,4,80,1,3000,3000+&#10;2026-06-01T11:00:00+08:00,1200,70,5,25,6,92,2,3200,3200+"></textarea>
       <button class="secondary" type="submit">导入历史记录</button>
     </form>
   </details>

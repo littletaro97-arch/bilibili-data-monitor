@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from app.collectors.provider import MockVideoDataProvider, _map_info, _map_stats
+from app.collectors.provider import BilibiliWebProvider, MockVideoDataProvider, _map_info, _map_stats
 from app.models import ProviderError
 
 
@@ -16,6 +16,7 @@ async def test_mock_provider_maps_video_info_and_stats():
     assert stats.view_count == 12000
     assert stats.like_count == 800
     assert stats.online_count == 42
+    assert stats.online_text == "42"
 
 
 def test_code_not_zero_raises():
@@ -35,9 +36,31 @@ def test_online_count_can_be_mapped_from_fixed_payload():
     payload = {"code": 0, "data": {"title": "t", "owner": {}, "online": 12, "stat": {"view": 1}}}
     stats = _map_stats("BV1xx411c7mD", payload)
     assert stats.online_count == 12
+    assert stats.online_text == "12"
 
 
 def test_save_raw_json_is_optional():
     payload = {"code": 0, "data": {"title": "t", "owner": {}, "stat": {"view": 1}}}
     info = _map_info("BV1xx411c7mD", payload, save_raw_json=True)
     assert json.loads(info.raw_json)["code"] == 0
+
+
+@pytest.mark.asyncio
+async def test_web_provider_maps_online_total_endpoint():
+    class Client:
+        async def get_json(self, url, params=None):
+            if "online/total" in url:
+                return {"code": 0, "data": {"total": "3000+", "count": "43"}}
+            return {
+                "code": 0,
+                "data": {
+                    "aid": 1,
+                    "cid": 2,
+                    "stat": {"view": 100, "like": 5},
+                },
+            }
+
+    stats = await BilibiliWebProvider(Client()).fetch_video_stats("BV1xx411c7mD")
+
+    assert stats.online_text == "3000+"
+    assert stats.online_count == 3000

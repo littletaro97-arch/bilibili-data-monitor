@@ -12,6 +12,7 @@ from app.config import BASE_DIR, settings
 from app.database import Database, Repository
 from app.logger import logger
 from app.services.crawl_service import CrawlService
+from app.services.export_service import ExportService
 from app.services.report_service import ReportService
 from app.services.phase2_service import Phase2Service
 from app.services.task_service import TaskScheduler
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
         max_root_comments=settings.phase2.max_root_comments,
         max_child_comments=settings.phase2.max_child_comments,
     )
+    export_service = ExportService(repository, BASE_DIR / "data" / "exports")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -75,6 +77,7 @@ def create_app() -> FastAPI:
     app.state.crawl_service = crawl_service
     app.state.report_service = report_service
     app.state.phase2_service = phase2_service
+    app.state.export_service = export_service
     app.state.scheduler = scheduler
 
     @app.middleware("http")

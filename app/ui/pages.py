@@ -60,6 +60,7 @@ def _latest_payload(row, task) -> dict[str, object | None]:
         "danmaku_count",
         "share_count",
         "online_count",
+        "online_text",
         "captured_at",
         "source_type",
     ]
@@ -68,6 +69,20 @@ def _latest_payload(row, task) -> dict[str, object | None]:
         "latest": latest,
         "task": {"status": task["status"] if task else None},
     }
+
+
+def _recent_reports(bvid: str, limit: int = 5) -> list[dict[str, str]]:
+    if not settings.report_output_dir.exists():
+        return []
+    files = sorted(settings.report_output_dir.glob(f"{bvid}_*.html"), key=lambda path: path.stat().st_mtime, reverse=True)
+    return [
+        {
+            "name": path.name,
+            "url": f"/reports/{path.name}",
+            "folder": settings.report_output_dir.as_posix(),
+        }
+        for path in files[:limit]
+    ]
 
 
 def _local_ip() -> str:
@@ -256,6 +271,9 @@ async def video_detail(
             "ratio_denominator": ratio_denominator,
             "imported_snapshot_count": count_imported_snapshots(snapshots),
             "summary": build_summary(snapshots),
+            "latest_refresh_seconds": settings.crawl.min_interval,
+            "report_output_dir": settings.report_output_dir,
+            "reports": _recent_reports(bvid),
             "comments": comments[:30],
             "danmaku": danmaku[:50],
             "comment_top_words": top_words(comments, field="message", limit=20),
@@ -353,7 +371,7 @@ async def delete_snapshots_before(
 async def generate_report(request: Request, bvid: str):
     try:
         path = request.app.state.report_service.generate(bvid)
-        return _flash_redirect(f"/videos/{bvid}", f"报告已生成：{path.name}")
+        return _flash_redirect(f"/videos/{bvid}", f"报告已生成：{path.name}；保存位置：{path.parent}")
     except Exception as exc:
         request.app.state.repository.add_log("ERROR", "报告生成失败", bvid=bvid, detail=str(exc))
         return _flash_redirect(f"/videos/{bvid}", "报告生成失败，请查看日志", "error")
@@ -388,6 +406,7 @@ async def settings_page(request: Request, message: str | None = None, level: str
             "lan_password_set": bool(current_settings.lan.password_hash),
             "launcher_show_console": current_settings.launcher.show_console,
             "logs": repo.list_logs(limit=100),
+            "export_output_dir": settings.database_path.parent / "exports",
             "restart_required": current_settings.lan.enabled != settings.lan.enabled
             or current_settings.lan.password_hash != settings.lan.password_hash,
         },
@@ -424,6 +443,12 @@ async def clear_logs(request: Request):
     file_ok = clear_log_file()
     suffix = "，日志文件已清空" if file_ok else "，日志文件可能被占用"
     return _flash_redirect("/settings", f"已清理页面日志：{count} 条{suffix}")
+
+
+@router.post("/maintenance/export-data")
+async def export_data(request: Request):
+    path = request.app.state.export_service.export_all()
+    return _flash_redirect("/settings", f"全部数据已导出：{path}")
 
 
 @router.post("/shutdown")

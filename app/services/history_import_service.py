@@ -17,6 +17,7 @@ METRIC_FIELDS = {
     "like_count",
     "online_count",
 }
+TEXT_FIELDS = {"online_text"}
 
 
 def parse_history_csv(text: str) -> list[dict[str, int | str | None]]:
@@ -42,6 +43,9 @@ def parse_history_csv(text: str) -> list[dict[str, int | str | None]]:
             except ValueError as exc:
                 raise AppError(f"第 {index} 行的 {field} 必须是整数") from exc
             has_metric = True
+        for field in TEXT_FIELDS:
+            value = (raw.get(field) or "").strip()
+            parsed[field] = value or None
         if not has_metric:
             raise AppError(f"第 {index} 行至少需要填写一个指标")
         rows.append(parsed)
