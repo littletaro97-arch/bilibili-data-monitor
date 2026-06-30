@@ -96,6 +96,7 @@
     .message { border-radius: 4px; padding: 10px 12px; margin-bottom: 18px; background: #e8f4f2; }
     .message.error { background: #fde8e7; color: var(--danger); }
     .muted, .empty { color: var(--muted); }
+    .summary-highlight { color: var(--accent); font-weight: 750; }
     .page-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
     .compact-section { padding: 12px 14px; }
     .compact-lan { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
@@ -185,6 +186,97 @@
 
     if (document.querySelector("[data-log-body]")) {
       window.setInterval(refreshLogs, 5000);
+    }
+
+    function pageStorageKey(name) {
+      return `blla:${window.location.pathname}:${name}`;
+    }
+
+    function optionExists(select, value) {
+      return Array.from(select.options).some((option) => option.value === value);
+    }
+
+    function restoreChartControls() {
+      const selects = Array.from(document.querySelectorAll("[data-persist-select]"));
+      if (!selects.length) return;
+
+      const url = new URL(window.location.href);
+      let shouldRedirect = false;
+      for (const select of selects) {
+        const name = select.name;
+        const key = pageStorageKey(`select:${name}`);
+        if (url.searchParams.has(name)) {
+          const value = url.searchParams.get(name);
+          if (value && optionExists(select, value)) {
+            select.value = value;
+            localStorage.setItem(key, value);
+          }
+          continue;
+        }
+        const stored = localStorage.getItem(key);
+        if (stored && optionExists(select, stored)) {
+          select.value = stored;
+          url.searchParams.set(name, stored);
+          shouldRedirect = true;
+        }
+      }
+      if (shouldRedirect) {
+        window.location.replace(url.toString());
+      }
+
+      for (const form of document.querySelectorAll("form")) {
+        form.addEventListener("submit", () => {
+          for (const select of form.querySelectorAll("[data-persist-select]")) {
+            localStorage.setItem(pageStorageKey(`select:${select.name}`), select.value);
+          }
+        });
+      }
+      for (const select of selects) {
+        select.addEventListener("change", () => {
+          localStorage.setItem(pageStorageKey(`select:${select.name}`), select.value);
+        });
+      }
+    }
+
+    function restoreDetailsState() {
+      for (const detail of document.querySelectorAll("details[data-chart-panel]")) {
+        const key = pageStorageKey(`details:${detail.dataset.chartPanel}`);
+        const stored = localStorage.getItem(key);
+        if (stored !== null) detail.open = stored === "1";
+        detail.addEventListener("toggle", () => {
+          localStorage.setItem(key, detail.open ? "1" : "0");
+        });
+      }
+    }
+
+    function formatLatestValue(field, value) {
+      if (value === null || value === undefined || value === "") return "暂无";
+      if (field === "source_type") return value === "imported" ? "历史导入" : "自动采集";
+      return value;
+    }
+
+    async function refreshLatestVideoData() {
+      const match = window.location.pathname.match(/^\/videos\/([^/]+)/);
+      if (!match) return;
+      try {
+        const response = await fetch(`/api/videos/${encodeURIComponent(match[1])}/latest`, { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json();
+        const latest = data.latest || {};
+        for (const node of document.querySelectorAll("[data-latest-field]")) {
+          const field = node.dataset.latestField;
+          node.textContent = formatLatestValue(field, latest[field]);
+        }
+        const status = document.querySelector("[data-task-status]");
+        if (status && data.task) status.textContent = data.task.status || "无任务";
+      } catch (_) {
+      }
+    }
+
+    restoreChartControls();
+    restoreDetailsState();
+    if (document.querySelector("[data-latest-field]")) {
+      window.setInterval(refreshLatestVideoData, 5000);
     }
 
     for (const toggle of document.querySelectorAll("[data-toggle-password]")) {

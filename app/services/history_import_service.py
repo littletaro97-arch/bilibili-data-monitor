@@ -15,6 +15,7 @@ METRIC_FIELDS = {
     "coin_count",
     "share_count",
     "like_count",
+    "online_count",
 }
 
 

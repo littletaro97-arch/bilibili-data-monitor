@@ -67,6 +67,7 @@ class BilibiliWebProvider(VideoDataProvider):
             coin_count=_as_int(stat.get("coin")),
             share_count=_as_int(stat.get("share")),
             like_count=_as_int(stat.get("like")),
+            online_count=_extract_online_count(data),
             raw_json=json.dumps(payload, ensure_ascii=False) if self.save_raw_json else None,
         )
 
@@ -174,6 +175,7 @@ def _map_stats(bvid: str, payload: dict[str, Any], save_raw_json: bool = False) 
         coin_count=_as_int(stat.get("coin")),
         share_count=_as_int(stat.get("share")),
         like_count=_as_int(stat.get("like")),
+        online_count=_extract_online_count(data),
         raw_json=json.dumps(payload, ensure_ascii=False) if save_raw_json else None,
     )
 
@@ -190,6 +192,16 @@ def _as_int(value: Any) -> int | None:
 def _as_float(value: Any) -> float | None:
     if value is None:
         return None
+
+
+def _extract_online_count(data: dict[str, Any]) -> int | None:
+    stat = data.get("stat") or {}
+    for source in (data, stat):
+        for key in ("online_count", "online", "current_viewers", "now_viewers"):
+            value = _as_int(source.get(key))
+            if value is not None:
+                return value
+    return None
     try:
         return float(value)
     except (TypeError, ValueError):

@@ -50,6 +50,26 @@ def _log_payload(rows) -> list[dict[str, str | None]]:
     ]
 
 
+def _latest_payload(row, task) -> dict[str, object | None]:
+    fields = [
+        "view_count",
+        "like_count",
+        "coin_count",
+        "favorite_count",
+        "reply_count",
+        "danmaku_count",
+        "share_count",
+        "online_count",
+        "captured_at",
+        "source_type",
+    ]
+    latest = {field: row[field] if row and field in row.keys() else None for field in fields}
+    return {
+        "latest": latest,
+        "task": {"status": task["status"] if task else None},
+    }
+
+
 def _local_ip() -> str:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -105,6 +125,12 @@ async def api_logs(request: Request, bvid: str | None = None, limit: int = 30):
     limit = max(1, min(limit, 100))
     rows = request.app.state.repository.list_logs(bvid=bvid, limit=limit)
     return {"logs": _log_payload(rows)}
+
+
+@router.get("/api/videos/{bvid}/latest")
+async def api_video_latest(request: Request, bvid: str):
+    repo = request.app.state.repository
+    return _latest_payload(repo.latest_snapshot(bvid), repo.get_task_by_bvid(bvid))
 
 
 @router.get("/assets/plotly.min.js")

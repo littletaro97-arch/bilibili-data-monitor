@@ -13,7 +13,7 @@
       <div class="metric"><span>BV 号</span><strong>{{ video.bvid }}</strong></div>
       <div class="metric"><span>UP 主</span><strong>{{ video.owner_name or "未知" }}</strong></div>
       <div class="metric"><span>发布时间</span><strong>{{ video.pubdate or "未知" }}</strong></div>
-      <div class="metric"><span>任务状态</span><strong>{{ task.status if task else "无任务" }}</strong></div>
+      <div class="metric"><span>任务状态</span><strong data-task-status>{{ task.status if task else "无任务" }}</strong></div>
     </div>
   {% endif %}
   <p class="muted">本工具只保存公开统计字段；raw_json 默认关闭，报告不包含完整原始响应。</p>
@@ -24,14 +24,16 @@
   <h2>最新数据</h2>
   {% if latest %}
     <div class="grid">
-      <div class="metric"><span>播放</span><strong>{{ latest.view_count }}</strong></div>
-      <div class="metric"><span>点赞</span><strong>{{ latest.like_count }}</strong></div>
-      <div class="metric"><span>投币</span><strong>{{ latest.coin_count }}</strong></div>
-      <div class="metric"><span>收藏</span><strong>{{ latest.favorite_count }}</strong></div>
-      <div class="metric"><span>评论</span><strong>{{ latest.reply_count }}</strong></div>
-      <div class="metric"><span>弹幕</span><strong>{{ latest.danmaku_count }}</strong></div>
-      <div class="metric"><span>分享</span><strong>{{ latest.share_count }}</strong></div>
-      <div class="metric"><span>采集时间</span><strong>{{ latest.captured_at }}</strong></div>
+      <div class="metric"><span>播放</span><strong data-latest-field="view_count">{{ latest.view_count }}</strong></div>
+      <div class="metric"><span>点赞</span><strong data-latest-field="like_count">{{ latest.like_count }}</strong></div>
+      <div class="metric"><span>投币</span><strong data-latest-field="coin_count">{{ latest.coin_count }}</strong></div>
+      <div class="metric"><span>收藏</span><strong data-latest-field="favorite_count">{{ latest.favorite_count }}</strong></div>
+      <div class="metric"><span>评论</span><strong data-latest-field="reply_count">{{ latest.reply_count }}</strong></div>
+      <div class="metric"><span>弹幕</span><strong data-latest-field="danmaku_count">{{ latest.danmaku_count }}</strong></div>
+      <div class="metric"><span>分享</span><strong data-latest-field="share_count">{{ latest.share_count }}</strong></div>
+      <div class="metric"><span>当前观看人数</span><strong data-latest-field="online_count">{{ latest.online_count if latest.online_count is not none else "暂无" }}</strong></div>
+      <div class="metric"><span>采集时间</span><strong data-latest-field="captured_at">{{ latest.captured_at }}</strong></div>
+      <div class="metric"><span>数据来源</span><strong data-latest-field="source_type">{{ "历史导入" if latest.source_type == "imported" else "自动采集" }}</strong></div>
     </div>
   {% else %}
     <p class="empty">暂无快照，请先立即采集或等待调度。</p>
@@ -44,14 +46,14 @@
   {% if imported_snapshot_count %}
     <p class="muted">当前图表包含 {{ imported_snapshot_count }} 条历史导入数据。导入数据会在图表底部标注，和程序自动采集数据区分。</p>
   {% endif %}
-  <details class="chart-panel" open>
+  <details class="chart-panel" data-chart-panel="dual-axis">
     <summary>双轴对比图</summary>
     <form method="get" action="/videos/{{ video.bvid }}" class="row compare-form">
       <input type="hidden" name="ratio_numerator" value="{{ ratio_numerator }}">
       <input type="hidden" name="ratio_denominator" value="{{ ratio_denominator }}">
       <div>
         <label for="left_metric">左轴数据</label>
-        <select id="left_metric" name="left_metric">
+        <select id="left_metric" name="left_metric" data-persist-select="left_metric">
           {% for field, title in metric_options %}
             <option value="{{ field }}" {% if field == left_metric %}selected{% endif %}>{{ title }}</option>
           {% endfor %}
@@ -59,7 +61,7 @@
       </div>
       <div>
         <label for="right_metric">右轴数据</label>
-        <select id="right_metric" name="right_metric">
+        <select id="right_metric" name="right_metric" data-persist-select="right_metric">
           {% for field, title in metric_options %}
             <option value="{{ field }}" {% if field == right_metric %}selected{% endif %}>{{ title }}</option>
           {% endfor %}
@@ -70,14 +72,14 @@
     <div class="chart-block">{{ dual_axis_chart }}</div>
   </details>
 
-  <details class="chart-panel">
+  <details class="chart-panel" data-chart-panel="ratio">
     <summary>比值趋势图</summary>
     <form method="get" action="/videos/{{ video.bvid }}" class="row compare-form">
       <input type="hidden" name="left_metric" value="{{ left_metric }}">
       <input type="hidden" name="right_metric" value="{{ right_metric }}">
       <div>
         <label for="ratio_numerator">分子数据</label>
-        <select id="ratio_numerator" name="ratio_numerator">
+        <select id="ratio_numerator" name="ratio_numerator" data-persist-select="ratio_numerator">
           {% for field, title in metric_options %}
             <option value="{{ field }}" {% if field == ratio_numerator %}selected{% endif %}>{{ title }}</option>
           {% endfor %}
@@ -85,7 +87,7 @@
       </div>
       <div>
         <label for="ratio_denominator">分母数据</label>
-        <select id="ratio_denominator" name="ratio_denominator">
+        <select id="ratio_denominator" name="ratio_denominator" data-persist-select="ratio_denominator">
           {% for field, title in metric_options %}
             <option value="{{ field }}" {% if field == ratio_denominator %}selected{% endif %}>{{ title }}</option>
           {% endfor %}
@@ -96,17 +98,17 @@
     <div class="chart-block">{{ ratio_chart }}</div>
   </details>
 
-  <details class="chart-panel">
+  <details class="chart-panel" data-chart-panel="single">
     <summary>单项趋势图</summary>
     {% for chart in charts %}
-      <details class="nested-panel">
+      <details class="nested-panel" data-chart-panel="single-{{ loop.index }}">
         <summary>{{ chart.title }}</summary>
         <div class="chart-block">{{ chart.html }}</div>
       </details>
     {% endfor %}
   </details>
 
-  <details class="chart-panel">
+  <details class="chart-panel" data-chart-panel="delete-snapshots">
     <summary>删除历史图表数据</summary>
     <p class="muted">会删除该视频在指定时间点以前的快照，趋势图和报告将不再使用这些数据。建议先确认不再需要旧数据。</p>
     <form method="post" action="/videos/{{ video.bvid }}/snapshots/delete-before" class="row">
@@ -118,14 +120,14 @@
     </form>
   </details>
 
-  <details class="chart-panel">
+  <details class="chart-panel" data-chart-panel="history-import">
     <summary>导入历史记录</summary>
     <p class="muted">导入的数据会标记为“历史导入”，用于和程序自动采集的数据区分。CSV 第一行必须是表头，至少包含 <code>captured_at</code> 和一个指标字段。</p>
     <form method="post" action="/videos/{{ video.bvid }}/history/import">
       <label for="source_note">来源说明</label>
       <input id="source_note" name="source_note" placeholder="例如：手动整理的旧数据">
       <label for="history_csv">历史记录 CSV</label>
-      <textarea id="history_csv" name="history_csv" rows="8" required placeholder="captured_at,view_count,like_count,coin_count,favorite_count,reply_count,danmaku_count,share_count&#10;2026-06-01T10:00:00+08:00,1000,50,3,20,4,80,1&#10;2026-06-01T11:00:00+08:00,1200,70,5,25,6,92,2"></textarea>
+      <textarea id="history_csv" name="history_csv" rows="8" required placeholder="captured_at,view_count,like_count,coin_count,favorite_count,reply_count,danmaku_count,share_count,online_count&#10;2026-06-01T10:00:00+08:00,1000,50,3,20,4,80,1,12&#10;2026-06-01T11:00:00+08:00,1200,70,5,25,6,92,2,15"></textarea>
       <button class="secondary" type="submit">导入历史记录</button>
     </form>
   </details>

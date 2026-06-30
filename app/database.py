@@ -92,6 +92,7 @@ class Database:
                     coin_count INTEGER,
                     share_count INTEGER,
                     like_count INTEGER,
+                    online_count INTEGER,
                     source_type TEXT NOT NULL DEFAULT 'collected',
                     source_note TEXT,
                     raw_json TEXT,
@@ -146,6 +147,7 @@ class Database:
             )
             _ensure_column(conn, "video_stats_snapshot", "source_type", "TEXT NOT NULL DEFAULT 'collected'")
             _ensure_column(conn, "video_stats_snapshot", "source_note", "TEXT")
+            _ensure_column(conn, "video_stats_snapshot", "online_count", "INTEGER")
 
 
 class Repository:
@@ -245,7 +247,7 @@ class Repository:
                 SELECT t.*, v.title, v.owner_name,
                        s.captured_at AS latest_captured_at,
                        s.view_count, s.like_count, s.coin_count, s.favorite_count,
-                       s.reply_count, s.danmaku_count, s.share_count
+                       s.reply_count, s.danmaku_count, s.share_count, s.online_count
                 FROM crawl_tasks t
                 JOIN videos v ON v.bvid = t.bvid
                 LEFT JOIN video_stats_snapshot s ON s.id = (
@@ -359,9 +361,9 @@ class Repository:
                 """
                 INSERT INTO video_stats_snapshot (
                     bvid, captured_at, view_count, danmaku_count, reply_count,
-                    favorite_count, coin_count, share_count, like_count,
+                    favorite_count, coin_count, share_count, like_count, online_count,
                     source_type, source_note, raw_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     stats.bvid,
@@ -373,6 +375,7 @@ class Repository:
                     stats.coin_count,
                     stats.share_count,
                     stats.like_count,
+                    stats.online_count,
                     source_type,
                     source_note,
                     stats.raw_json,
@@ -388,9 +391,9 @@ class Repository:
                 """
                 INSERT INTO video_stats_snapshot (
                     bvid, captured_at, view_count, danmaku_count, reply_count,
-                    favorite_count, coin_count, share_count, like_count,
+                    favorite_count, coin_count, share_count, like_count, online_count,
                     source_type, source_note, raw_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'imported', ?, NULL)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'imported', ?, NULL)
                 """,
                 [
                     (
@@ -403,6 +406,7 @@ class Repository:
                         row.get("coin_count"),
                         row.get("share_count"),
                         row.get("like_count"),
+                        row.get("online_count"),
                         source_note,
                     )
                     for row in rows

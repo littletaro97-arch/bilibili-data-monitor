@@ -51,6 +51,7 @@ class VideoStats:
     coin_count: int | None = None
     share_count: int | None = None
     like_count: int | None = None
+    online_count: int | None = None
     raw_json: str | None = None
 
 

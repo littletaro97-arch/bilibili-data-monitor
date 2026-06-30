@@ -59,7 +59,8 @@
             <td>{{ task.interval_seconds }} 秒</td>
             <td>
               播放 {{ task.view_count if task.view_count is not none else "暂无" }}<br>
-              点赞 {{ task.like_count if task.like_count is not none else "暂无" }}
+              点赞 {{ task.like_count if task.like_count is not none else "暂无" }}<br>
+              当前观看 {{ task.online_count if task.online_count is not none else "暂无" }}
             </td>
             <td>{{ task.latest_captured_at or "暂无" }}</td>
             <td>

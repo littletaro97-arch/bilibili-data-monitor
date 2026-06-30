@@ -17,6 +17,7 @@ def test_parse_history_csv_accepts_metric_columns():
             "danmaku_count": None,
             "favorite_count": None,
             "like_count": 5,
+            "online_count": None,
             "reply_count": None,
             "share_count": None,
             "view_count": 100,

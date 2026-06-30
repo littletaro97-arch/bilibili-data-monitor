@@ -14,6 +14,9 @@
 - 视频详情页支持折叠/展开单项趋势图，并提供双轴指标对比图
 - 视频详情页新增比值趋势图：左轴显示两个指标的实际数量，右轴显示两个指标的比值
 - 视频详情页支持导入历史快照 CSV，并在图表底部标注历史导入数据
+- 视频详情页会记忆图表折叠状态和双轴/比值图的指标选择
+- 视频详情页最新数据卡会自动刷新，不需要手动刷新整页
+- 固定数据源返回当前观看人数时，会保存并展示该字段；没有返回时显示为暂无
 - 首页以紧凑方式显示其它设备访问地址，运行日志统一移动到设置页
 - 手机端页面会优先纵向排布控件，宽表格在局部横向滚动
 - 非首页页面提供固定“返回首页”入口，不依赖浏览器历史记录
@@ -117,7 +120,7 @@ data/bilibili_local.db
 支持字段：
 
 ```text
-captured_at,view_count,like_count,coin_count,favorite_count,reply_count,danmaku_count,share_count
+captured_at,view_count,like_count,coin_count,favorite_count,reply_count,danmaku_count,share_count,online_count
 ```
 
 示例：

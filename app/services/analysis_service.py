@@ -17,6 +17,7 @@ METRICS = [
     ("favorite_count", "收藏数"),
     ("reply_count", "评论数"),
     ("danmaku_count", "弹幕数"),
+    ("online_count", "当前观看人数"),
 ]
 
 METRIC_LABELS = dict(METRICS)
@@ -255,7 +256,7 @@ def build_ratio_chart(
     )
 
 
-def build_summary(snapshots: Iterable) -> str:
+def build_summary(snapshots: Iterable) -> str | Markup:
     rows = [dict(row) for row in snapshots]
     if len(rows) < 2:
         return "当前快照少于 2 条，暂不能计算增长趋势。"
@@ -264,10 +265,12 @@ def build_summary(snapshots: Iterable) -> str:
     view_delta = _delta(first.get("view_count"), last.get("view_count"))
     like_delta = _delta(first.get("like_count"), last.get("like_count"))
     fastest_hour = _fastest_hour(rows, "view_count")
-    return (
-        f"在本次采集周期内，该视频播放量从 {first.get('view_count')} 增长至 {last.get('view_count')}，"
-        f"净增长 {view_delta}。点赞数从 {first.get('like_count')} 增长至 {last.get('like_count')}，"
-        f"净增长 {like_delta}。播放量增长最快的小时段为 {fastest_hour}。"
+    return Markup(
+        "在本次采集周期内，该视频播放量从 "
+        f"{_highlight(first.get('view_count'))} 增长至 {_highlight(last.get('view_count'))}，"
+        f"{_highlight(f'净增长 {view_delta}')}。点赞数从 {_highlight(first.get('like_count'))} "
+        f"增长至 {_highlight(last.get('like_count'))}，{_highlight(f'净增长 {like_delta}')}。"
+        f"播放量增长最快的小时段为 {_highlight(fastest_hour)}。"
     )
 
 
@@ -324,6 +327,10 @@ def _safe_ratio(numerator: int | None, denominator: int | None) -> float | None:
     if numerator is None or denominator in (None, 0):
         return None
     return float(numerator) / float(denominator)
+
+
+def _highlight(value: object) -> Markup:
+    return Markup(f"<strong class=\"summary-highlight\">{value}</strong>")
 
 
 def _bottom_margin(rows: list[dict]) -> int:
