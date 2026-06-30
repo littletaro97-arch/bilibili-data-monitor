@@ -1,6 +1,24 @@
 {% extends "base.html" %}
 {% block title %}任务 - B站本地分析{% endblock %}
 {% block content %}
+<section class="compact-section">
+  <div class="compact-lan">
+    <div>
+      <h2>其它设备访问</h2>
+      <p class="muted">
+        {% if runtime_lan_enabled %}
+          局域网访问已运行：<code>{{ lan_url }}</code>
+        {% elif lan_config_enabled %}
+          已保存局域网配置但当前未生效，请重启程序后使用：<code>{{ lan_url }}</code>
+        {% else %}
+          当前仅本机访问：<code>{{ local_url }}</code>
+        {% endif %}
+      </p>
+    </div>
+    <a class="button secondary" href="/settings">访问设置</a>
+  </div>
+</section>
+
 <section>
   <h2>添加采集任务</h2>
   <form method="post" action="/tasks" class="row">
@@ -64,24 +82,4 @@
   {% endif %}
 </section>
 
-<section>
-  <h2>最近日志</h2>
-  {% if logs %}
-    <table>
-      <thead><tr><th>时间</th><th>级别</th><th>BV</th><th>消息</th></tr></thead>
-      <tbody data-log-body data-limit="20" data-show-bvid="1">
-        {% for log in logs %}
-          <tr>
-            <td>{{ log.created_at }}</td>
-            <td>{{ log.level }}</td>
-            <td>{{ log.bvid or "-" }}</td>
-            <td>{{ log.message }}{% if log.detail %}<br><span class="muted">{{ log.detail }}</span>{% endif %}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p class="empty">暂无日志。</p>
-  {% endif %}
-</section>
 {% endblock %}

@@ -92,6 +92,8 @@ class Database:
                     coin_count INTEGER,
                     share_count INTEGER,
                     like_count INTEGER,
+                    source_type TEXT NOT NULL DEFAULT 'collected',
+                    source_note TEXT,
                     raw_json TEXT,
                     FOREIGN KEY (bvid) REFERENCES videos(bvid)
                 );
@@ -142,6 +144,8 @@ class Database:
                 ON danmaku(bvid, captured_at);
                 """
             )
+            _ensure_column(conn, "video_stats_snapshot", "source_type", "TEXT NOT NULL DEFAULT 'collected'")
+            _ensure_column(conn, "video_stats_snapshot", "source_note", "TEXT")
 
 
 class Repository:
@@ -342,15 +346,22 @@ class Repository:
                 (now, now),
             ).fetchall()
 
-    def insert_snapshot(self, stats: VideoStats, captured_at: str | None = None) -> None:
+    def insert_snapshot(
+        self,
+        stats: VideoStats,
+        captured_at: str | None = None,
+        source_type: str = "collected",
+        source_note: str | None = None,
+    ) -> None:
         captured_at = captured_at or iso_now()
         with self.database.connect() as conn:
             conn.execute(
                 """
                 INSERT INTO video_stats_snapshot (
                     bvid, captured_at, view_count, danmaku_count, reply_count,
-                    favorite_count, coin_count, share_count, like_count, raw_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    favorite_count, coin_count, share_count, like_count,
+                    source_type, source_note, raw_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     stats.bvid,
@@ -362,9 +373,42 @@ class Repository:
                     stats.coin_count,
                     stats.share_count,
                     stats.like_count,
+                    source_type,
+                    source_note,
                     stats.raw_json,
                 ),
             )
+
+    def insert_history_snapshots(self, bvid: str, rows: list[dict[str, Any]], source_note: str | None = None) -> int:
+        if not rows:
+            return 0
+        with self.database.connect() as conn:
+            before = conn.total_changes
+            conn.executemany(
+                """
+                INSERT INTO video_stats_snapshot (
+                    bvid, captured_at, view_count, danmaku_count, reply_count,
+                    favorite_count, coin_count, share_count, like_count,
+                    source_type, source_note, raw_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'imported', ?, NULL)
+                """,
+                [
+                    (
+                        bvid,
+                        row["captured_at"],
+                        row.get("view_count"),
+                        row.get("danmaku_count"),
+                        row.get("reply_count"),
+                        row.get("favorite_count"),
+                        row.get("coin_count"),
+                        row.get("share_count"),
+                        row.get("like_count"),
+                        source_note,
+                    )
+                    for row in rows
+                ],
+            )
+            return int(conn.total_changes - before)
 
     def list_snapshots(self, bvid: str) -> list[sqlite3.Row]:
         with self.database.connect() as conn:
@@ -545,3 +589,9 @@ class Repository:
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
     return dict(row) if row else None
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")

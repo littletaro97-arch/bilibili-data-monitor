@@ -21,9 +21,12 @@ from app.services.analysis_service import (
     build_chart_blocks,
     build_danmaku_density_chart,
     build_dual_axis_chart,
+    build_ratio_chart,
     build_summary,
+    count_imported_snapshots,
     top_words,
 )
+from app.services.history_import_service import parse_history_csv
 from app.ui.dashboard import templates
 
 
@@ -77,16 +80,22 @@ def _datetime_local_to_iso(value: str) -> str:
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request, message: str | None = None, level: str = "info"):
     repo = request.app.state.repository
+    current_settings = load_settings()
+    local_ip = _local_ip()
     return templates.TemplateResponse(
         request,
         "index.html",
         {
             "tasks": repo.list_tasks(),
-            "logs": repo.list_logs(limit=20),
             "message": message,
             "level": level,
             "default_interval": settings.crawl.default_interval,
             "min_interval": settings.crawl.min_interval,
+            "runtime_lan_enabled": settings.lan.enabled,
+            "lan_config_enabled": current_settings.lan.enabled,
+            "lan_password_set": bool(current_settings.lan.password_hash),
+            "local_url": f"http://127.0.0.1:{current_settings.app.port}",
+            "lan_url": f"http://{local_ip}:{current_settings.app.port}",
         },
     )
 
@@ -185,6 +194,8 @@ async def video_detail(
     level: str = "info",
     left_metric: str = "view_count",
     right_metric: str = "like_count",
+    ratio_numerator: str = "like_count",
+    ratio_denominator: str = "view_count",
 ):
     repo = request.app.state.repository
     video = repo.get_video(bvid)
@@ -197,6 +208,10 @@ async def video_detail(
         left_metric = "view_count"
     if right_metric not in metric_fields:
         right_metric = "like_count"
+    if ratio_numerator not in metric_fields:
+        ratio_numerator = "like_count"
+    if ratio_denominator not in metric_fields:
+        ratio_denominator = "view_count"
     return templates.TemplateResponse(
         request,
         "detail.html",
@@ -207,11 +222,14 @@ async def video_detail(
             "latest": snapshots[-1] if snapshots else None,
             "charts": build_chart_blocks(snapshots, include_plotlyjs=False),
             "dual_axis_chart": build_dual_axis_chart(snapshots, left_metric, right_metric),
+            "ratio_chart": build_ratio_chart(snapshots, ratio_numerator, ratio_denominator),
             "metric_options": METRICS,
             "left_metric": left_metric,
             "right_metric": right_metric,
+            "ratio_numerator": ratio_numerator,
+            "ratio_denominator": ratio_denominator,
+            "imported_snapshot_count": count_imported_snapshots(snapshots),
             "summary": build_summary(snapshots),
-            "logs": repo.list_logs(bvid=bvid, limit=30),
             "comments": comments[:30],
             "danmaku": danmaku[:50],
             "comment_top_words": top_words(comments, field="message", limit=20),
@@ -262,6 +280,26 @@ async def import_danmaku(request: Request, bvid: str, danmaku_text: str = Form(.
     return _flash_redirect(f"/videos/{bvid}", f"已导入弹幕：{count} 条")
 
 
+@router.post("/videos/{bvid}/history/import")
+async def import_history(
+    request: Request,
+    bvid: str,
+    history_csv: str = Form(...),
+    source_note: str = Form(""),
+):
+    try:
+        rows = parse_history_csv(history_csv)
+        count = request.app.state.repository.insert_history_snapshots(
+            bvid,
+            rows,
+            source_note=source_note.strip() or "手动导入历史记录",
+        )
+        request.app.state.repository.add_log("INFO", f"导入历史快照：{count} 条", bvid=bvid)
+        return _flash_redirect(f"/videos/{bvid}", f"已导入历史记录：{count} 条")
+    except AppError as exc:
+        return _flash_redirect(f"/videos/{bvid}", str(exc), "error")
+
+
 @router.post("/videos/{bvid}/logs/clear")
 async def clear_video_logs(request: Request, bvid: str):
     count = request.app.state.repository.clear_logs(bvid=bvid)
@@ -305,6 +343,7 @@ async def download_report(filename: str):
 
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, message: str | None = None, level: str = "info"):
+    repo = request.app.state.repository
     current_settings = load_settings()
     local_ip = _local_ip()
     lan_active = current_settings.lan.enabled and current_settings.lan.password_hash == settings.lan.password_hash
@@ -322,6 +361,7 @@ async def settings_page(request: Request, message: str | None = None, level: str
             "lan_url": f"http://{local_ip}:{current_settings.app.port}",
             "lan_password_set": bool(current_settings.lan.password_hash),
             "launcher_show_console": current_settings.launcher.show_console,
+            "logs": repo.list_logs(limit=100),
             "restart_required": current_settings.lan.enabled != settings.lan.enabled
             or current_settings.lan.password_hash != settings.lan.password_hash,
         },

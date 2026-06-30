@@ -79,9 +79,10 @@ def build_chart_blocks(snapshots: Iterable, include_plotlyjs: bool | str = False
             title=title,
             xaxis_title="采集时间",
             yaxis_title="数值",
-            margin=dict(l=40, r=20, t=45, b=40),
+            margin=dict(l=40, r=20, t=45, b=_bottom_margin(rows)),
             height=360,
         )
+        _add_source_note(fig, rows)
         blocks.append(
             {
                 "title": title,
@@ -170,9 +171,79 @@ def build_dual_axis_chart(
         yaxis=dict(title=left_label),
         yaxis2=dict(title=right_label, overlaying="y", side="right"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        margin=dict(l=48, r=56, t=58, b=44),
+        margin=dict(l=48, r=56, t=58, b=_bottom_margin(rows)),
         height=380,
     )
+    _add_source_note(fig, rows)
+    return Markup(
+        pio.to_html(
+            fig,
+            include_plotlyjs=include_plotlyjs,
+            full_html=False,
+            default_width="100%",
+            config={"responsive": True, "displaylogo": False},
+        )
+    )
+
+
+def build_ratio_chart(
+    snapshots: Iterable,
+    numerator_field: str = "like_count",
+    denominator_field: str = "view_count",
+    include_plotlyjs: bool | str = False,
+) -> Markup:
+    rows = [dict(row) for row in snapshots]
+    if len(rows) < 2:
+        return Markup("<p class=\"empty\">数据不足，至少需要 2 条快照才能生成比值图</p>")
+
+    if numerator_field not in METRIC_LABELS:
+        numerator_field = "like_count"
+    if denominator_field not in METRIC_LABELS:
+        denominator_field = "view_count"
+
+    numerator_label = METRIC_LABELS[numerator_field]
+    denominator_label = METRIC_LABELS[denominator_field]
+    x_values = [row["captured_at"] for row in rows]
+    ratios = [_safe_ratio(row.get(numerator_field), row.get(denominator_field)) for row in rows]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=x_values,
+            y=[row.get(numerator_field) for row in rows],
+            mode="lines+markers",
+            name=numerator_label,
+            yaxis="y",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=x_values,
+            y=[row.get(denominator_field) for row in rows],
+            mode="lines+markers",
+            name=denominator_label,
+            yaxis="y",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=x_values,
+            y=ratios,
+            mode="lines+markers",
+            name=f"{numerator_label}/{denominator_label}",
+            yaxis="y2",
+        )
+    )
+    fig.update_layout(
+        title=f"{numerator_label} / {denominator_label} 比值",
+        xaxis_title="采集时间",
+        yaxis=dict(title="实际数量"),
+        yaxis2=dict(title="比值", overlaying="y", side="right", tickformat=".2%"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        margin=dict(l=48, r=64, t=58, b=_bottom_margin(rows)),
+        height=390,
+    )
+    _add_source_note(fig, rows)
     return Markup(
         pio.to_html(
             fig,
@@ -239,10 +310,40 @@ def build_danmaku_density_chart(danmaku_rows: Iterable, bucket_seconds: int = 30
     )
 
 
+def count_imported_snapshots(snapshots: Iterable) -> int:
+    return sum(1 for row in snapshots if dict(row).get("source_type") == "imported")
+
+
 def _delta(start: int | None, end: int | None) -> int | str:
     if start is None or end is None:
         return "未知"
     return int(end) - int(start)
+
+
+def _safe_ratio(numerator: int | None, denominator: int | None) -> float | None:
+    if numerator is None or denominator in (None, 0):
+        return None
+    return float(numerator) / float(denominator)
+
+
+def _bottom_margin(rows: list[dict]) -> int:
+    return 72 if count_imported_snapshots(rows) else 44
+
+
+def _add_source_note(fig: go.Figure, rows: list[dict]) -> None:
+    imported_count = count_imported_snapshots(rows)
+    if not imported_count:
+        return
+    fig.add_annotation(
+        text=f"说明：图表包含 {imported_count} 条历史导入数据，来源不同于程序自动采集数据。",
+        xref="paper",
+        yref="paper",
+        x=0,
+        y=-0.24,
+        xanchor="left",
+        showarrow=False,
+        font=dict(size=12, color="#687586"),
+    )
 
 
 def _hourly_increment(rows: list[dict], field: str) -> dict[str, int]:

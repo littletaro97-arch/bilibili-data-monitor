@@ -67,6 +67,27 @@
 </section>
 
 <section>
+  <h2>运行日志</h2>
+  {% if logs %}
+    <table>
+      <thead><tr><th>时间</th><th>级别</th><th>BV</th><th>消息</th></tr></thead>
+      <tbody data-log-body data-limit="100" data-show-bvid="1">
+        {% for log in logs %}
+          <tr>
+            <td>{{ log.created_at }}</td>
+            <td>{{ log.level }}</td>
+            <td>{{ log.bvid or "-" }}</td>
+            <td>{{ log.message }}{% if log.detail %}<br><span class="muted">{{ log.detail }}</span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">暂无日志。</p>
+  {% endif %}
+</section>
+
+<section>
   <h2>退出程序</h2>
   <p class="muted">点击后会关闭本地服务。再次使用时重新运行 <code>run.bat</code>。</p>
   <form method="post" action="/shutdown"><button class="danger" type="submit">退出程序</button></form>

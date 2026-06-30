@@ -42,6 +42,23 @@ def test_failure_cooldown_and_snapshots(tmp_path):
     rows = repo.list_snapshots("BV1xx411c7mD")
     assert len(rows) == 1
     assert rows[0]["view_count"] == 1
+    assert rows[0]["source_type"] == "collected"
+
+
+def test_history_snapshots_are_marked_as_imported(tmp_path):
+    repo = make_repo(tmp_path)
+    repo.upsert_video(VideoInfo(bvid="BV1xx411c7mD"))
+
+    count = repo.insert_history_snapshots(
+        "BV1xx411c7mD",
+        [{"captured_at": "2026-01-01T10:00:00+08:00", "view_count": 10, "like_count": 2}],
+        source_note="old sheet",
+    )
+    rows = repo.list_snapshots("BV1xx411c7mD")
+
+    assert count == 1
+    assert rows[0]["source_type"] == "imported"
+    assert rows[0]["source_note"] == "old sheet"
 
 
 def test_phase2_tables_insert_and_query(tmp_path):

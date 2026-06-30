@@ -1,4 +1,4 @@
-from app.services.analysis_service import build_danmaku_density_chart, build_dual_axis_chart, top_words
+from app.services.analysis_service import build_danmaku_density_chart, build_dual_axis_chart, build_ratio_chart, top_words
 
 
 class Row(dict):
@@ -54,3 +54,17 @@ def test_dual_axis_chart_builds_plotly_lines():
     assert "\\u64ad\\u653e\\u91cf" in html
     assert "\\u70b9\\u8d5e\\u6570" in html
     assert "y2" in html
+
+
+def test_ratio_chart_builds_plotly_lines():
+    rows = [
+        Row(captured_at="2026-06-29T10:00:00+08:00", view_count=100, like_count=5, source_type="collected"),
+        Row(captured_at="2026-06-29T11:00:00+08:00", view_count=200, like_count=20, source_type="imported"),
+    ]
+
+    html = str(build_ratio_chart(rows, "like_count", "view_count"))
+
+    assert "Plotly.newPlot" in html
+    assert "y2" in html
+    assert "0.1" in html
+    assert "\\u5386\\u53f2\\u5bfc\\u5165" in html

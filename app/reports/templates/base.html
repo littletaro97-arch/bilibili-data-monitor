@@ -97,6 +97,10 @@
     .message.error { background: #fde8e7; color: var(--danger); }
     .muted, .empty { color: var(--muted); }
     .page-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .compact-section { padding: 12px 14px; }
+    .compact-lan { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .compact-lan h2 { margin-bottom: 4px; }
+    .compact-lan p { margin: 0; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 12px; }
     .metric { border: 1px solid var(--line); border-radius: 6px; padding: 12px; background: #fbfcfd; }
     .metric span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
@@ -122,6 +126,7 @@
       input[name="video_input"] { min-width: 100%; width: 100%; }
       button, .button { width: 100%; text-align: center; }
       .page-actions { display: grid; grid-template-columns: 1fr; }
+      .compact-lan { display: grid; grid-template-columns: 1fr; }
       .actions { min-width: 0; display: grid; grid-template-columns: 1fr; }
       .actions form.inline { display: block; }
       .grid { grid-template-columns: 1fr; }
