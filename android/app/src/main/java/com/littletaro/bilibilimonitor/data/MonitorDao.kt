@@ -20,6 +20,9 @@ interface MonitorDao {
     @Query("SELECT * FROM videos ORDER BY updatedAt DESC")
     fun observeVideos(): Flow<List<VideoEntity>>
 
+    @Query("SELECT * FROM videos ORDER BY updatedAt DESC")
+    suspend fun videosForRefresh(): List<VideoEntity>
+
     @Query("SELECT * FROM video_snapshots WHERE bvId = :bvId ORDER BY collectedAt DESC, id DESC LIMIT 1")
     fun observeLatestSnapshot(bvId: String): Flow<VideoSnapshotEntity?>
 

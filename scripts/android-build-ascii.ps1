@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "v0.4.0",
+    [string]$Version = "v0.5.0",
     [string]$ProjectRoot = "",
     [string]$AsciiRoot = "C:\Users\LittleTaro\codex-bilibili-monitor-ascii"
 )
@@ -110,24 +110,29 @@ $buildInfoLines.Add("SHA256: $sha256")
 $buildInfo = [string]::Join([Environment]::NewLine, $buildInfoLines)
 
 $changelogLines = New-Object System.Collections.Generic.List[string]
-$changelogLines.Add("# $Version Android Stability Changelog")
+$changelogLines.Add("# $Version Android Changelog")
 $changelogLines.Add("")
 $changelogLines.Add("## Added")
 $changelogLines.Add("")
-$changelogLines.Add("- Fixed Android build/test entrypoint through scripts/android-build-ascii.ps1.")
+$changelogLines.Add("- Added opt-in low-frequency auto refresh with WorkManager.")
+$changelogLines.Add("- Added DataStore-backed auto refresh settings; default remains disabled.")
+$changelogLines.Add("- Added local trend calculation and chart/table display for views, likes, replies, coins, and favorites.")
+$changelogLines.Add("- Added Android Sharesheet export sharing through FileProvider.")
 $changelogLines.Add("- Generates versioned Debug APK under releases/android/$Version/.")
 $changelogLines.Add("- Generates build info and test report with APK size and SHA256.")
 $changelogLines.Add("")
 $changelogLines.Add("## Changed")
 $changelogLines.Add("")
 $changelogLines.Add("- Android versionName/versionCode updated for $Version.")
-$changelogLines.Add("- Android MVP usability tightened for export result display, loading states, logs, and user-facing network errors.")
+$changelogLines.Add("- Export results now show file name, absolute path, size, and export time.")
+$changelogLines.Add("- Logs distinguish manual refresh, auto refresh registration/cancel, worker execution, and failures.")
 $changelogLines.Add("")
 $changelogLines.Add("## Known Issues")
 $changelogLines.Add("")
 $changelogLines.Add("- Codex did not perform real-device installation testing for $Version.")
 $changelogLines.Add("- Direct Android unit tests under the formal Chinese path may still fail because of JDK/Gradle worker argfile classpath handling.")
-$changelogLines.Add("- Network requests remain manual and low frequency; no login, Cookie, captcha, proxy, or risk-control bypass is implemented.")
+$changelogLines.Add("- Auto refresh depends on Android WorkManager scheduling and can be delayed or merged by the system.")
+$changelogLines.Add("- Network requests remain low frequency and cover only already-added videos; no login, Cookie, captcha, proxy, or risk-control bypass is implemented.")
 $changelog = [string]::Join([Environment]::NewLine, $changelogLines)
 
 $testReportLines = New-Object System.Collections.Generic.List[string]

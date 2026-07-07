@@ -5,6 +5,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import java.time.Instant
 
+enum class RefreshTrigger(val logLabel: String) {
+    MANUAL("manual"),
+    AUTO("auto")
+}
+
+data class RefreshAllResult(
+    val total: Int,
+    val success: Int,
+    val failed: Int
+)
+
 class MonitorRepository(
     private val dao: MonitorDao,
     private val api: BilibiliApi,
@@ -21,7 +32,7 @@ class MonitorRepository(
         val bvId = try {
             BvParser.parse(input)
         } catch (exc: IllegalArgumentException) {
-            log("warning", "parser", "BV 解析失败", exc.message)
+            writeLog("warning", "parser", "BV 解析失败", exc.message)
             throw exc
         }
         return try {
@@ -42,28 +53,28 @@ class MonitorRepository(
                         updatedAt = now
                     )
                 )
-                log("info", "database", "视频写入成功", bvId)
+                writeLog("info", "database", "视频写入成功", bvId)
             } else {
-                log("info", "database", "视频已存在，未重复创建", bvId)
+                writeLog("info", "database", "视频已存在，未重复创建", bvId)
             }
-            log("info", "parser", "BV 解析成功", bvId)
+            writeLog("info", "parser", "BV 解析成功", bvId)
             bvId
         } catch (exc: Exception) {
-            log("error", "database", "视频写入失败", "bvId=$bvId, ${exc.message}")
+            writeLog("error", "database", "视频写入失败", "bvId=$bvId, ${exc.message}")
             throw exc
         }
     }
 
-    suspend fun refresh(bvId: String) {
+    suspend fun refresh(bvId: String, trigger: RefreshTrigger = RefreshTrigger.MANUAL) {
         withContext(Dispatchers.IO) {
             try {
-                log("info", "network", "网络请求开始", bvId)
+                writeLog("info", "network", "${trigger.logLabel} 刷新请求开始", bvId)
                 val record = api.fetchSnapshot(bvId)
                 val existing = dao.videoByBvId(bvId)
                 dao.upsertVideo(record.video.copy(createdAt = existing?.createdAt ?: record.video.createdAt))
                 dao.insertSnapshot(record.snapshot)
-                log("info", "database", "快照写入成功", "status=${record.snapshot.fetchStatus}, bvId=$bvId")
-                log("info", "network", "网络请求成功", "status=${record.snapshot.fetchStatus}, bvId=$bvId")
+                writeLog("info", "database", "${trigger.logLabel} 快照写入成功", "status=${record.snapshot.fetchStatus}, bvId=$bvId")
+                writeLog("info", "network", "${trigger.logLabel} 刷新请求成功", "status=${record.snapshot.fetchStatus}, bvId=$bvId")
             } catch (exc: Exception) {
                 val now = Instant.now().toString()
                 val message = exc.message ?: "未知错误"
@@ -84,13 +95,31 @@ class MonitorRepository(
                             errorMessage = message
                         )
                     )
-                    log("warning", "database", "失败快照已写入", bvId)
+                    writeLog("warning", "database", "${trigger.logLabel} 失败快照已写入", bvId)
                 } catch (dbExc: Exception) {
-                    log("error", "database", "数据库写入失败", "bvId=$bvId, ${dbExc.message}")
+                    writeLog("error", "database", "数据库写入失败", "bvId=$bvId, ${dbExc.message}")
                 }
-                log("error", "network", "网络请求失败", "bvId=$bvId, ${exc.javaClass.simpleName}: $message")
+                writeLog("error", "network", "${trigger.logLabel} 刷新请求失败", "bvId=$bvId, ${exc.javaClass.simpleName}: $message")
+                throw exc
             }
         }
+    }
+
+    suspend fun refreshAllExistingVideos(trigger: RefreshTrigger): RefreshAllResult = withContext(Dispatchers.IO) {
+        val videos = dao.videosForRefresh()
+        writeLog("info", "work", "${trigger.logLabel} 批量刷新开始", "videos=${videos.size}")
+        var success = 0
+        var failed = 0
+        videos.forEach { video ->
+            try {
+                refresh(video.bvId, trigger)
+                success += 1
+            } catch (_: Exception) {
+                failed += 1
+            }
+        }
+        writeLog("info", "work", "${trigger.logLabel} 批量刷新完成", "total=${videos.size}, success=$success, failed=$failed")
+        RefreshAllResult(total = videos.size, success = success, failed = failed)
     }
 
     suspend fun exportJson(bvId: String): ExportResult = withContext(Dispatchers.IO) {
@@ -98,10 +127,10 @@ class MonitorRepository(
             val video = dao.videoByBvId(bvId) ?: throw IllegalArgumentException("视频不存在")
             val snapshots = dao.snapshotsForExport(bvId)
             val result = exporter.exportJson(video, snapshots)
-            log("info", "export", "JSON 导出成功", "${result.fileName}, ${result.path}")
+            writeLog("info", "export", "JSON 导出成功", "${result.fileName}, ${result.sizeBytes} bytes, ${result.path}")
             result
         } catch (exc: Exception) {
-            log("error", "export", "JSON 导出失败", "bvId=$bvId, ${exc.message}")
+            writeLog("error", "export", "JSON 导出失败", "bvId=$bvId, ${exc.message}")
             throw exc
         }
     }
@@ -111,15 +140,15 @@ class MonitorRepository(
             val video = dao.videoByBvId(bvId) ?: throw IllegalArgumentException("视频不存在")
             val snapshots = dao.snapshotsForExport(bvId)
             val result = exporter.exportCsv(video, snapshots)
-            log("info", "export", "CSV 导出成功", "${result.fileName}, ${result.path}")
+            writeLog("info", "export", "CSV 导出成功", "${result.fileName}, ${result.sizeBytes} bytes, ${result.path}")
             result
         } catch (exc: Exception) {
-            log("error", "export", "CSV 导出失败", "bvId=$bvId, ${exc.message}")
+            writeLog("error", "export", "CSV 导出失败", "bvId=$bvId, ${exc.message}")
             throw exc
         }
     }
 
-    private suspend fun log(level: String, tag: String, message: String, detail: String? = null) {
+    suspend fun writeLog(level: String, tag: String, message: String, detail: String? = null) {
         dao.insertLog(
             AppLogEntity(
                 time = Instant.now().toString(),

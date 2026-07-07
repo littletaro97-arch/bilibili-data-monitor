@@ -209,3 +209,41 @@ powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
 3. 每次手动刷新会追加 snapshot。
 4. 历史记录按 `collectedAt DESC, id DESC` 排序。
 5. 如需改 schema，下一版必须提高 Room version 并补 migration 或明确破坏性迁移策略。
+
+## Android v0.5.0 低频刷新排查
+
+### 自动刷新没有准点执行
+
+1. 先确认设置页显示“已开启”。
+2. 确认间隔是 15 分钟、30 分钟、1 小时、3 小时或 6 小时之一。
+3. 查看日志页是否有 `auto refresh registered`、`auto refresh worker started`、`auto refresh worker finished`。
+4. WorkManager 周期任务可能被 Android 省电策略延迟或合并；这不是实时监控能力。
+5. 如果手机厂商后台限制严格，先关闭电池优化复测，但不要实现隐藏保活。
+
+### 自动刷新请求失败
+
+1. 查看日志页 `auto 刷新请求失败` 和失败快照。
+2. 区分无网络、超时、HTTP 403、HTTP 412、登录、验证码、风控。
+3. 自动刷新只针对已经添加的视频；没有添加视频时应只有批量开始/完成日志。
+4. 遇到登录、验证码或风控只记录失败，不加 Cookie、不代理、不绕过。
+
+### 设置不生效
+
+1. 设置项保存在 DataStore，不写入 Room。
+2. 切换开启/关闭后应有注册或取消日志。
+3. 修改间隔或 Wi-Fi 约束时，如果自动刷新已开启，应有重调度日志。
+4. 清理应用数据会清除 DataStore 设置和 Room 数据。
+
+### 分享导出失败
+
+1. 先确认导出页已经生成 JSON 或 CSV，并显示文件名、大小、时间和绝对路径。
+2. 分享使用 FileProvider，只开放 app external files 下 `exports/`。
+3. 不需要也不应申请 `MANAGE_EXTERNAL_STORAGE` 或宽泛外部存储权限。
+4. 如果目标 App 收不到文件，换一个系统分享目标复测并记录设备型号。
+
+### 趋势图异常
+
+1. 趋势只使用本地 Room 快照，不发起网络请求。
+2. 空数据应显示空状态；单点数据只画点，不强行画线。
+3. 指标字段为 null 时跳过该绘图点，表格中显示 `-`。
+4. 最近 20/50 只影响趋势计算窗口，不删除历史快照。

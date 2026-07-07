@@ -8,9 +8,9 @@ import com.littletaro.bilibilimonitor.ui.MonitorApp
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val repository = (application as BilibiliMonitorApplication).repository
+        val app = application as BilibiliMonitorApplication
         setContent {
-            MonitorApp(repository)
+            MonitorApp(app.repository, app.settingsStore, app.autoRefreshScheduler)
         }
     }
 }

@@ -67,7 +67,7 @@ C:\Users\LittleTaro\Desktop\课外项目\迭代版本
 
 ## 不支持内容
 
-不实现安卓 App、鸿蒙 App、自动登录、多账号、Cookie、代理池、验证码绕过、设备指纹伪造、高频抓取、局域网手机访问和 exe 打包。
+Windows 端不内嵌 Android App、不实现鸿蒙 App、自动登录、多账号、Cookie、代理池、验证码绕过、设备指纹伪造、高频抓取和 exe 打包。Android 原生 App 位于 `android/`，和根目录 Windows/Python 端 `app/` 隔离维护。
 
 评论真实采集需要明确、稳定的公开数据源后才启用。当前不会临时搜索、拼接或切换评论接口。
 
@@ -292,3 +292,21 @@ releases/android/v0.4.0/bilibili-monitor-android-v0.4.0-debug.apk
 ```
 
 v0.4.0 只做稳定化和可用性修复：导出结果显示文件名/路径/时间，网络错误提示更明确，日志级别统一为 `info/warning/error`，详情页刷新和导出按钮增加 loading 防重复点击。不引入后台高频采集、登录、Cookie、验证码、代理池或风控绕过。
+
+## v0.5.0 Android 低频刷新和趋势增强
+
+v0.5.0 在 Android 端新增默认关闭的低频自动刷新：
+
+- 设置页手动开启，支持 15 分钟、30 分钟、1 小时、3 小时、6 小时间隔。
+- 使用 WorkManager 调度，Android 系统可能延迟或合并后台任务；它只适合趋势补点，不是实时监控。
+- 自动刷新只刷新已经添加的视频，不发现新视频，不采集评论/弹幕，不处理登录、验证码或风控。
+- 设置使用 DataStore，不写入 Room 快照表；Room schema 未变化。
+- 日志页继续只显示最近 200 条，并区分手动刷新、自动刷新注册/取消、Worker 执行和失败。
+- 历史页增加本地快照趋势图和增量表，支持播放、点赞、评论、投币、收藏，最近 20/50 条。
+- 导出页显示文件名、路径、大小和时间，并可通过 Android Sharesheet 分享 JSON/CSV；不申请宽泛存储权限。
+
+Debug APK 输出：
+
+```text
+releases/android/v0.5.0/bilibili-monitor-android-v0.5.0-debug.apk
+```

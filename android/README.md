@@ -53,3 +53,22 @@ v0.4.0 输出位置：
 ```text
 releases/android/v0.4.0/bilibili-monitor-android-v0.4.0-debug.apk
 ```
+
+v0.5.0 输出位置：
+
+```text
+releases/android/v0.5.0/bilibili-monitor-android-v0.5.0-debug.apk
+```
+
+## v0.5.0 范围
+
+v0.5.0 增加低频后台刷新和趋势展示，但仍不扩大采集边界：
+
+- 自动刷新默认关闭，必须在设置页手动开启。
+- 使用 WorkManager，间隔限制为 15 分钟、30 分钟、1 小时、3 小时、6 小时。
+- WorkManager 由 Android 系统调度，可能被省电策略延迟或合并，不保证准点执行。
+- 自动刷新只刷新 Room 中已经添加的视频，不发现新视频，不采集评论/弹幕。
+- 不实现登录、Cookie、验证码处理、代理池、风控绕过或高频保活。
+- 设置项使用 DataStore；Room schema 未变化，数据库版本仍为 1。
+- 历史页使用本地快照绘制简单 Compose Canvas 趋势图，支持最近 20/50 条。
+- 导出页显示文件名、路径、大小、时间，并通过 FileProvider 调用 Android Sharesheet 分享文件。

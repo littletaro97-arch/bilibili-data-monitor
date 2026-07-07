@@ -9,7 +9,8 @@ import java.time.Instant
 data class ExportResult(
     val fileName: String,
     val path: String,
-    val exportedAt: String
+    val exportedAt: String,
+    val sizeBytes: Long
 )
 
 class SnapshotExporter(context: Context) {
@@ -33,7 +34,7 @@ class SnapshotExporter(context: Context) {
             })
         val target = File(exportDir, "${video.bvId}_${System.currentTimeMillis()}.json")
         target.writeText(root.toString(2), Charsets.UTF_8)
-        return ExportResult(target.name, target.absolutePath, exportedAt)
+        return ExportResult(target.name, target.absolutePath, exportedAt, target.length())
     }
 
     fun exportCsv(video: VideoEntity, snapshots: List<VideoSnapshotEntity>): ExportResult {
@@ -68,7 +69,7 @@ class SnapshotExporter(context: Context) {
             }
         }
         target.writeText(lines.joinToString("\n"), Charsets.UTF_8)
-        return ExportResult(target.name, target.absolutePath, exportedAt)
+        return ExportResult(target.name, target.absolutePath, exportedAt, target.length())
     }
 
     companion object {
