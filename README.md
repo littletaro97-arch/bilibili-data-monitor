@@ -1,5 +1,32 @@
 # B站公开视频本地分析工具
 
+## 当前正式目录
+
+本目录是 B 站数据监控项目的正式工作目录：
+
+```text
+C:\Users\LittleTaro\Desktop\课外项目\bilibili数据监控
+```
+
+历史来源目录为：
+
+```text
+C:\Users\LittleTaro\Desktop\课外项目\迭代版本
+```
+
+迁移前已在来源仓库创建 Git tag：`pre-formal-dir-20260707`。后续开发、debug、文档和 Android 端规划应优先基于本目录继续，不再把 `迭代版本` 作为长期工作目录。
+
+当前 Windows 端源码仍保留在项目根的 `app/` 下。暂不移动到 `windows/app/`，因为现有配置、数据库、报告输出和测试路径都以项目根为基准，强行移动会引入不必要的路径回归风险。
+
+关键文档：
+
+- `docs/当前项目审计报告.md`
+- `docs/版本迭代记录.md`
+- `docs/debug记录.md`
+- `docs/实机测试记录.md`
+- `docs/Android端规划.md`
+- `docs/抓取边界与合规说明.md`
+
 这是一个运行在 Windows 本机的 B站公开视频公开互动数据采集与分析工具。当前版本提供本地 Web 面板、SQLite 存储、定时采集、趋势图、HTML 报告导出，以及第二版的评论/弹幕数据表和手动弹幕采集入口。
 
 ## 功能范围
