@@ -120,3 +120,34 @@ Android 端从 `v0.3.0` 开始进入 MVP。`v0.2.0` 只做规划、schema 和文
 - `v0.4.0`：WorkManager 低频任务和前台服务通知。
 - `v0.5.0`：Windows + Android 数据格式统一验证。
 
+## v0.3.0 落地情况
+
+v0.3.0 已创建 Android 原生工程并完成 MVP 原型：
+
+- 工程根目录：`android/`
+- 应用模块：`android/app/`
+- 技术栈：Kotlin、Compose、Material 3、Room、OkHttp、Coroutines、JUnit。
+- 数据范围：公开视频基础信息和统计字段。
+- 触发方式：仅手动刷新，不做后台高频采集。
+- 导出格式：JSON/CSV，字段尽量对齐 `shared/data_schema/`。
+
+已实现页面：
+
+- 首页 / 视频输入页
+- 视频详情页
+- 历史记录页
+- 导出页
+- 日志页
+
+v0.3.0 不包含：
+
+- WorkManager
+- 前台服务
+- 登录系统
+- Cookie
+- 验证码处理
+- 风控绕过
+- 代理池
+- 高频后台监控
+
+后续 v0.4.0 不应直接扩大采集频率，应先完成实机安装、Room 数据检查、导出路径验证和错误提示优化。

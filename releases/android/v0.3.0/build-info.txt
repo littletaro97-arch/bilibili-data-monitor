@@ -1,0 +1,17 @@
+Version: v0.3.0
+Build time: 2026-07-07 19:10:37 +08:00
+Git commit hash at build time: b2a9c0e
+Git branch: codex/bilibili-project-setup
+Gradle version: 8.7
+Android Gradle Plugin version: 8.5.2
+Kotlin plugin version: 1.9.24
+JDK: 21.0.9
+minSdk: 26
+targetSdk: 35
+compileSdk: 35
+APK file name: bilibili-monitor-android-v0.3.0-debug.apk
+APK size: 9658118 bytes
+SHA256: CC5B49C0FE09D04F2675466A24C0DE25E61C7A40270161C430C96E32F92EAE8A
+APK output path: releases/android/v0.3.0/bilibili-monitor-android-v0.3.0-debug.apk
+Android test/build path used: C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android
+Android test/build path note: temporary ASCII junction pointing to the formal project directory, used because direct unit tests under the Chinese path hit JDK/Gradle worker @argfile ClassNotFoundException.

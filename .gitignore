@@ -12,3 +12,12 @@ reports/output/
 .env
 *.local
 config.toml
+
+# Android local/build artifacts
+android/.gradle/
+android/local.properties
+android/**/build/
+android/.idea/
+
+# Release APKs are kept as local deliverables, not Git history.
+releases/**/*.apk

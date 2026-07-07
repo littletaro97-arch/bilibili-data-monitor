@@ -258,3 +258,21 @@ v0.2.0 的目标是 Windows 端稳定性、文档、测试和共享 schema 基�
 - 默认本机安全：LAN 关闭时只允许监听 `127.0.0.1`。
 - `shared/data_schema/` 固化 Android MVP 需要遵守的 JSON 字段。
 - Android 端仍处于规划阶段，不包含业务代码。
+
+## v0.3.0 Android MVP 说明
+
+v0.3.0 新增 Android 原生 MVP 工程，代码位于 `android/`，不移动、不混入根目录 Windows/Python 端 `app/`。
+
+- `app/`：Windows/Python 后端、页面、采集、导出与测试。
+- `android/app/`：Android 原生应用模块。
+- `shared/`：继续只放共享 schema 和文档。
+
+Android MVP 支持 BV/链接输入、BV 解析、手动刷新公开视频基础数据、Room 本地保存、历史快照、日志页、JSON/CSV 导出和 Debug APK 打包。本版本不做登录、Cookie、验证码处理、代理池、风控绕过或高频后台采集。
+
+Debug APK 本地输出：
+
+```text
+releases/android/v0.3.0/bilibili-monitor-android-v0.3.0-debug.apk
+```
+
+注意：本机原始路径包含中文字符，Android unit test 在该路径下触发 Gradle/JDK worker `@argfile` classpath 加载问题。v0.3.0 的 Android 测试和 APK 构建通过临时 ASCII junction 指向同一仓库执行；代码和产物仍在正式项目目录内。
