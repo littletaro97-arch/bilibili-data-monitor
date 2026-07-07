@@ -145,3 +145,67 @@ C:\Users\LittleTaro\codex-bilibili-monitor-ascii
 ```
 
 该 junction 指向正式仓库，不改变代码归属。后续若要彻底解决，应评估升级 Gradle/AGP/JDK 组合，或将 Android 构建工作区放在 ASCII 路径。
+
+## Android v0.4.0 固化构建流程
+
+### android-build-ascii.ps1 使用方法
+
+在项目根目录执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
+```
+
+脚本会：
+
+1. 检查 `C:\Users\LittleTaro\codex-bilibili-monitor-ascii` 是否存在。
+2. 不存在时创建 junction，指向正式项目目录。
+3. 在 ASCII 路径下进入 `android/`。
+4. 执行 `.\gradlew.bat test`。
+5. 执行 `.\gradlew.bat assembleDebug`。
+6. 复制 APK 到 `releases/android/v0.4.0/`。
+7. 生成 `build-info.txt`、`changelog.md`、`test-report.md`。
+
+创建 junction 不需要管理员权限；如果本机策略阻止 junction 创建，可以手动把项目复制到纯英文路径构建，但要注意不要把复制目录当成正式工作目录提交。
+
+### Gradle Sync 失败排查
+
+1. 优先从 `android/` 打开工程。
+2. 确认使用 `android/gradlew.bat`。
+3. 确认 `android/local.properties` 指向本机 SDK。
+4. 如果路径包含中文，先用 `scripts/android-build-ascii.ps1` 验证命令行构建是否正常。
+
+### APK 构建失败排查
+
+1. 先运行 `powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1`。
+2. 查看 Gradle 输出中第一个失败任务。
+3. 检查 `android/app/build/reports/`。
+4. 构建失败时不要创建版本 tag。
+
+### 真机安装失败排查
+
+1. 确认 APK 文件名带版本号。
+2. 确认手机 Android 版本满足 minSdk 26。
+3. 使用 `adb install -r` 复测并记录错误。
+4. 不要临时改签名密钥或提交签名材料。
+
+### 导出文件找不到排查
+
+1. v0.4.0 导出成功后会显示文件名、时间和绝对路径。
+2. 导出目录仍是 app external files 下的 `exports`，不请求高风险存储权限。
+3. 如果文件管理器不可见，v0.4.1 应考虑系统分享或 SAF 文件选择器导出。
+
+### 网络 403 / 412 / 风控限制排查
+
+1. 403 表示访问被拒绝或平台限制。
+2. 412 表示请求被风控限制。
+3. 登录、验证码、风控场景只记录失败，不绕过、不加 Cookie、不用代理池。
+4. 失败快照会保留，便于历史页看到失败时间点。
+
+### Room 数据异常排查
+
+1. v0.4.0 未改 Room schema，数据库版本仍为 1。
+2. 同一 BV 使用 `bvId` 主键，不会重复创建 video 记录。
+3. 每次手动刷新会追加 snapshot。
+4. 历史记录按 `collectedAt DESC, id DESC` 排序。
+5. 如需改 schema，下一版必须提高 Room version 并补 migration 或明确破坏性迁移策略。

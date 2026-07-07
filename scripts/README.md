@@ -7,5 +7,20 @@
 - 发布前检查
 - 文档检查
 
-当前不放置业务脚本，避免与现有 `run.bat` 和 Python 模块混淆。
+## Android 构建脚本
 
+`android-build-ascii.ps1` 用于固定 Android 测试、打包和 APK 复制流程。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
+```
+
+脚本会检查或创建：
+
+```text
+C:\Users\LittleTaro\codex-bilibili-monitor-ascii
+```
+
+该 junction 指向正式项目目录，用来规避 Windows 中文路径下 Gradle/JDK worker `@argfile` 可能导致的 Android unit-test classpath 问题。
+
+脚本不提交 APK，不提交 `android/local.properties`、`.gradle/`、`build/`、签名密钥、`config.toml`、`data/` 或 `logs/`。

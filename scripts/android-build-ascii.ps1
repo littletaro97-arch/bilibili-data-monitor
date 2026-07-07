@@ -1,0 +1,168 @@
+param(
+    [string]$Version = "v0.4.0",
+    [string]$ProjectRoot = "",
+    [string]$AsciiRoot = "C:\Users\LittleTaro\codex-bilibili-monitor-ascii"
+)
+
+$ErrorActionPreference = "Stop"
+
+function Write-Step([string]$Message) {
+    Write-Host "[android-build-ascii] $Message"
+}
+
+function Ensure-Junction {
+    param(
+        [string]$LinkPath,
+        [string]$TargetPath
+    )
+
+    if (Test-Path -LiteralPath $LinkPath) {
+        $item = Get-Item -LiteralPath $LinkPath -Force
+        $isReparsePoint = ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+        if (-not $isReparsePoint) {
+            throw "Path exists but is not a junction or symlink: $LinkPath"
+        }
+
+        $actualTarget = $item.Target
+        if ($actualTarget -and ($actualTarget -notcontains $TargetPath)) {
+            throw "Junction points to unexpected target. Path=$LinkPath Target=$actualTarget Expected=$TargetPath"
+        }
+
+        Write-Step "ASCII junction already exists: $LinkPath -> $TargetPath"
+        return
+    }
+
+    Write-Step "Creating ASCII junction: $LinkPath -> $TargetPath"
+    New-Item -ItemType Junction -Path $LinkPath -Target $TargetPath | Out-Null
+}
+
+function Get-GradleVersion {
+    param([string]$AndroidRoot)
+
+    $output = & (Join-Path $AndroidRoot "gradlew.bat") --version --no-daemon
+    $line = $output | Where-Object { $_ -match "^Gradle\s+" } | Select-Object -First 1
+    if ($line -match "Gradle\s+(.+)$") {
+        return $Matches[1].Trim()
+    }
+    return "unknown"
+}
+
+if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
+    $ProjectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+} else {
+    $ProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
+}
+Ensure-Junction -LinkPath $AsciiRoot -TargetPath $ProjectRoot
+
+$androidRoot = Join-Path $AsciiRoot "android"
+$formalAndroidRoot = Join-Path $ProjectRoot "android"
+$releaseDir = Join-Path $ProjectRoot "releases\android\$Version"
+$apkName = "bilibili-monitor-android-$Version-debug.apk"
+$apkSource = Join-Path $formalAndroidRoot "app\build\outputs\apk\debug\app-debug.apk"
+$apkTarget = Join-Path $releaseDir $apkName
+
+Write-Step "Android root: $androidRoot"
+Push-Location $androidRoot
+try {
+    Write-Step "Running Gradle tests"
+    & .\gradlew.bat test --no-daemon --console=plain --stacktrace
+    if ($LASTEXITCODE -ne 0) {
+        throw "Gradle test failed with exit code $LASTEXITCODE"
+    }
+
+    Write-Step "Running assembleDebug"
+    & .\gradlew.bat assembleDebug --no-daemon --console=plain --stacktrace
+    if ($LASTEXITCODE -ne 0) {
+        throw "Gradle assembleDebug failed with exit code $LASTEXITCODE"
+    }
+} finally {
+    Pop-Location
+}
+
+New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+Copy-Item -LiteralPath $apkSource -Destination $apkTarget -Force
+
+$apkItem = Get-Item -LiteralPath $apkTarget
+$sha256 = (Get-FileHash -LiteralPath $apkTarget -Algorithm SHA256).Hash
+$buildTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz"
+$commit = (& git -C $ProjectRoot rev-parse --short HEAD).Trim()
+$branch = (& git -C $ProjectRoot branch --show-current).Trim()
+$gradleVersion = Get-GradleVersion -AndroidRoot $androidRoot
+
+$buildInfoLines = New-Object System.Collections.Generic.List[string]
+$buildInfoLines.Add("Version: $Version")
+$buildInfoLines.Add("Git commit hash at build time: $commit")
+$buildInfoLines.Add("Git branch: $branch")
+$buildInfoLines.Add("Build time: $buildTime")
+$buildInfoLines.Add("Formal project path: $ProjectRoot")
+$buildInfoLines.Add("Android build path: $androidRoot")
+$buildInfoLines.Add("Used ASCII junction: yes")
+$buildInfoLines.Add("ASCII junction path: $AsciiRoot")
+$buildInfoLines.Add("Gradle version: $gradleVersion")
+$buildInfoLines.Add("Android Gradle Plugin version: 8.5.2")
+$buildInfoLines.Add("Kotlin plugin version: 1.9.24")
+$buildInfoLines.Add("minSdk: 26")
+$buildInfoLines.Add("targetSdk: 35")
+$buildInfoLines.Add("compileSdk: 35")
+$buildInfoLines.Add("APK file name: $apkName")
+$buildInfoLines.Add("APK size: $($apkItem.Length) bytes")
+$buildInfoLines.Add("SHA256: $sha256")
+$buildInfo = [string]::Join([Environment]::NewLine, $buildInfoLines)
+
+$changelogLines = New-Object System.Collections.Generic.List[string]
+$changelogLines.Add("# $Version Android Stability Changelog")
+$changelogLines.Add("")
+$changelogLines.Add("## Added")
+$changelogLines.Add("")
+$changelogLines.Add("- Fixed Android build/test entrypoint through scripts/android-build-ascii.ps1.")
+$changelogLines.Add("- Generates versioned Debug APK under releases/android/$Version/.")
+$changelogLines.Add("- Generates build info and test report with APK size and SHA256.")
+$changelogLines.Add("")
+$changelogLines.Add("## Changed")
+$changelogLines.Add("")
+$changelogLines.Add("- Android versionName/versionCode updated for $Version.")
+$changelogLines.Add("- Android MVP usability tightened for export result display, loading states, logs, and user-facing network errors.")
+$changelogLines.Add("")
+$changelogLines.Add("## Known Issues")
+$changelogLines.Add("")
+$changelogLines.Add("- Codex did not perform real-device installation testing for $Version.")
+$changelogLines.Add("- Direct Android unit tests under the formal Chinese path may still fail because of JDK/Gradle worker argfile classpath handling.")
+$changelogLines.Add("- Network requests remain manual and low frequency; no login, Cookie, captcha, proxy, or risk-control bypass is implemented.")
+$changelog = [string]::Join([Environment]::NewLine, $changelogLines)
+
+$testReportLines = New-Object System.Collections.Generic.List[string]
+$testReportLines.Add("# $Version Test Report")
+$testReportLines.Add("")
+$testReportLines.Add("## Windows")
+$testReportLines.Add("")
+$testReportLines.Add("- Command: python -m pytest")
+$testReportLines.Add("- Result: run separately before release; record final result in the delivery report.")
+$testReportLines.Add("")
+$testReportLines.Add("## Android")
+$testReportLines.Add("")
+$testReportLines.Add("- Command: .\gradlew.bat test")
+$testReportLines.Add("- Result: passed")
+$testReportLines.Add("- Command: .\gradlew.bat assembleDebug")
+$testReportLines.Add("- Result: passed")
+$testReportLines.Add("- Build path: $androidRoot")
+$testReportLines.Add("- Used ASCII junction: yes")
+$testReportLines.Add("")
+$testReportLines.Add("## APK")
+$testReportLines.Add("")
+$testReportLines.Add("- File: releases/android/$Version/$apkName")
+$testReportLines.Add("- Size: $($apkItem.Length) bytes")
+$testReportLines.Add("- SHA256: $sha256")
+$testReportLines.Add("- Copied to release directory: yes")
+$testReportLines.Add("")
+$testReportLines.Add("## Real Device Test")
+$testReportLines.Add("")
+$testReportLines.Add("- Codex did not perform real-device installation testing. Waiting for user validation.")
+$testReport = [string]::Join([Environment]::NewLine, $testReportLines)
+
+Set-Content -LiteralPath (Join-Path $releaseDir "build-info.txt") -Value $buildInfo -Encoding UTF8
+Set-Content -LiteralPath (Join-Path $releaseDir "changelog.md") -Value $changelog -Encoding UTF8
+Set-Content -LiteralPath (Join-Path $releaseDir "test-report.md") -Value $testReport -Encoding UTF8
+
+Write-Step "APK copied to: $apkTarget"
+Write-Step "APK size: $($apkItem.Length) bytes"
+Write-Step "SHA256: $sha256"

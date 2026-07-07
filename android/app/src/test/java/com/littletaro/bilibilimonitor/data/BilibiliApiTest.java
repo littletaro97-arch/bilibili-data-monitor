@@ -51,4 +51,19 @@ public class BilibiliApiTest {
         assertEquals("failed", record.getSnapshot().getFetchStatus());
         assertEquals("接口返回失败：code=-400, message=bad request", record.getSnapshot().getErrorMessage());
     }
+
+    @Test
+    public void loginLimitedApiCodeCreatesClearMessage() {
+        VideoSnapshotRecord record = BilibiliApi.Companion.mapViewResponse(
+                "BV1xx411c7mD",
+                "{\"code\":-101,\"message\":\"账号未登录\"}",
+                "2026-07-07T00:00:00Z"
+        );
+
+        assertEquals("failed", record.getSnapshot().getFetchStatus());
+        assertEquals(
+                "接口要求登录，本应用不会绕过登录限制：code=-101, message=账号未登录",
+                record.getSnapshot().getErrorMessage()
+        );
+    }
 }

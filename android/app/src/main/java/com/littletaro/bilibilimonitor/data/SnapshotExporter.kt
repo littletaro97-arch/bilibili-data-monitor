@@ -6,12 +6,19 @@ import org.json.JSONObject
 import java.io.File
 import java.time.Instant
 
+data class ExportResult(
+    val fileName: String,
+    val path: String,
+    val exportedAt: String
+)
+
 class SnapshotExporter(context: Context) {
     private val exportDir: File = File(context.getExternalFilesDir(null), "exports").apply {
         mkdirs()
     }
 
-    fun exportJson(video: VideoEntity, snapshots: List<VideoSnapshotEntity>): String {
+    fun exportJson(video: VideoEntity, snapshots: List<VideoSnapshotEntity>): ExportResult {
+        val exportedAt = Instant.now().toString()
         val root = JSONObject()
             .put("platform", "bilibili")
             .put("bv_id", video.bvId)
@@ -20,16 +27,17 @@ class SnapshotExporter(context: Context) {
             .put("author_name", video.authorName)
             .put("author_mid", video.authorMid)
             .put("source_url", video.sourceUrl)
-            .put("exported_at", Instant.now().toString())
+            .put("exported_at", exportedAt)
             .put("snapshots", JSONArray().also { array ->
                 snapshots.forEach { array.put(snapshotJson(video, it)) }
             })
         val target = File(exportDir, "${video.bvId}_${System.currentTimeMillis()}.json")
         target.writeText(root.toString(2), Charsets.UTF_8)
-        return target.absolutePath
+        return ExportResult(target.name, target.absolutePath, exportedAt)
     }
 
-    fun exportCsv(video: VideoEntity, snapshots: List<VideoSnapshotEntity>): String {
+    fun exportCsv(video: VideoEntity, snapshots: List<VideoSnapshotEntity>): ExportResult {
+        val exportedAt = Instant.now().toString()
         val target = File(exportDir, "${video.bvId}_${System.currentTimeMillis()}.csv")
         val lines = buildList {
             add(CSV_HEADER.joinToString(","))
@@ -60,7 +68,7 @@ class SnapshotExporter(context: Context) {
             }
         }
         target.writeText(lines.joinToString("\n"), Charsets.UTF_8)
-        return target.absolutePath
+        return ExportResult(target.name, target.absolutePath, exportedAt)
     }
 
     companion object {

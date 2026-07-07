@@ -276,3 +276,19 @@ releases/android/v0.3.0/bilibili-monitor-android-v0.3.0-debug.apk
 ```
 
 注意：本机原始路径包含中文字符，Android unit test 在该路径下触发 Gradle/JDK worker `@argfile` classpath 加载问题。v0.3.0 的 Android 测试和 APK 构建通过临时 ASCII junction 指向同一仓库执行；代码和产物仍在正式项目目录内。
+
+## v0.4.0 Android 构建流程说明
+
+v0.4.0 固化 Android ASCII 构建脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
+```
+
+脚本会检查或创建 `C:\Users\LittleTaro\codex-bilibili-monitor-ascii`，通过该 ASCII junction 执行 `gradlew.bat test` 和 `gradlew.bat assembleDebug`，并复制 APK 到：
+
+```text
+releases/android/v0.4.0/bilibili-monitor-android-v0.4.0-debug.apk
+```
+
+v0.4.0 只做稳定化和可用性修复：导出结果显示文件名/路径/时间，网络错误提示更明确，日志级别统一为 `info/warning/error`，详情页刷新和导出按钮增加 loading 防重复点击。不引入后台高频采集、登录、Cookie、验证码、代理池或风控绕过。

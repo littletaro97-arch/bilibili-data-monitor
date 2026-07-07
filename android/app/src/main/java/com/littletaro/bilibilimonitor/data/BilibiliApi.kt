@@ -3,8 +3,11 @@ package com.littletaro.bilibilimonitor.data
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.time.Instant
 
 class BilibiliApi(private val client: OkHttpClient) {
@@ -18,15 +21,26 @@ class BilibiliApi(private val client: OkHttpClient) {
             .header("Referer", "https://www.bilibili.com/")
             .build()
 
-        client.newCall(request).execute().use { response ->
-            if (response.code == 403 || response.code == 412) {
-                throw IOException("请求被平台限制，HTTP ${response.code}")
+        try {
+            client.newCall(request).execute().use { response ->
+                if (response.code == 403) {
+                    throw IOException("HTTP 403：访问被拒绝，可能触发平台限制")
+                }
+                if (response.code == 412) {
+                    throw IOException("HTTP 412：请求被平台风控限制")
+                }
+                if (!response.isSuccessful) {
+                    throw IOException("网络请求失败：HTTP ${response.code}")
+                }
+                val body = response.body?.string() ?: throw IOException("响应为空")
+                return mapViewResponse(bvId, body, Instant.now().toString())
             }
-            if (!response.isSuccessful) {
-                throw IOException("网络请求失败，HTTP ${response.code}")
-            }
-            val body = response.body?.string() ?: throw IOException("响应为空")
-            return mapViewResponse(bvId, body, Instant.now().toString())
+        } catch (exc: UnknownHostException) {
+            throw IOException("无法连接网络或 DNS 解析失败，请检查网络", exc)
+        } catch (exc: SocketTimeoutException) {
+            throw IOException("请求超时，请稍后重试", exc)
+        } catch (exc: JSONException) {
+            throw IOException("接口返回内容无法解析，可能是 B 站接口结构变化", exc)
         }
     }
 
@@ -40,7 +54,7 @@ class BilibiliApi(private val client: OkHttpClient) {
             val code = root.optInt("code", Int.MIN_VALUE)
             if (code != 0) {
                 val message = root.optString("message", "接口返回失败")
-                return failedRecord(bvId, collectedAt, "接口返回失败：code=$code, message=$message")
+                return failedRecord(bvId, collectedAt, classifyApiFailure(code, message))
             }
             val data = root.optJSONObject("data")
                 ?: return failedRecord(bvId, collectedAt, "接口响应结构异常：缺少 data")
@@ -109,6 +123,18 @@ class BilibiliApi(private val client: OkHttpClient) {
                     errorMessage = message
                 )
             )
+        }
+
+        private fun classifyApiFailure(code: Int, message: String): String {
+            val normalized = message.lowercase()
+            val hint = when {
+                "login" in normalized || "登录" in message -> "接口要求登录，本应用不会绕过登录限制"
+                "captcha" in normalized || "验证码" in message -> "接口要求验证码，本应用不会处理验证码"
+                "risk" in normalized || "风控" in message -> "接口触发风控限制，本应用不会绕过"
+                code == -404 -> "视频不存在或不可访问"
+                else -> "接口返回失败"
+            }
+            return "$hint：code=$code, message=$message"
         }
     }
 }
