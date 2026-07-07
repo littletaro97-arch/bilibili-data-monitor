@@ -8,7 +8,7 @@ from fastapi.responses import RedirectResponse
 
 from app.collectors.bilibili_client import BilibiliClient
 from app.collectors.provider import BilibiliWebProvider
-from app.config import BASE_DIR, settings
+from app.config import BASE_DIR, Settings, settings
 from app.database import Database, Repository
 from app.logger import logger
 from app.services.crawl_service import CrawlService
@@ -19,6 +19,16 @@ from app.services.task_service import TaskScheduler
 from app.services.video_service import VideoService
 from app.security import verify_session_token
 from app.ui.pages import router
+
+
+def resolve_bind_host(current_settings: Settings = settings) -> str:
+    if current_settings.lan.enabled:
+        if not current_settings.lan.password_hash:
+            raise RuntimeError("LAN access requires a password. Disable LAN or set a password in config.toml.")
+        return "0.0.0.0"
+    if current_settings.app.host != "127.0.0.1":
+        raise RuntimeError("LAN access is disabled, so the app must listen on 127.0.0.1")
+    return current_settings.app.host
 
 
 def create_app() -> FastAPI:
@@ -62,7 +72,14 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        logger.info("application startup on %s:%s", settings.app.host, settings.app.port)
+        bind_host = resolve_bind_host(settings)
+        logger.info("application startup on %s:%s", bind_host, settings.app.port)
+        if settings.lan.enabled:
+            logger.warning(
+                "LAN access is enabled; service is reachable from the local network on 0.0.0.0:%s. "
+                "Disable LAN mode for local-only debugging.",
+                settings.app.port,
+            )
         repository.add_log("INFO", "application startup")
         scheduler.start()
         try:
@@ -102,11 +119,13 @@ app = create_app()
 
 
 def main() -> None:
-    if settings.lan.enabled and not settings.lan.password_hash:
-        raise RuntimeError("LAN access requires a password. Disable LAN or set a password in config.toml.")
-    host = "0.0.0.0" if settings.lan.enabled else settings.app.host
-    if not settings.lan.enabled and host != "127.0.0.1":
-        raise RuntimeError("LAN access is disabled, so the app must listen on 127.0.0.1")
+    host = resolve_bind_host(settings)
+    if settings.lan.enabled:
+        logger.warning(
+            "LAN access is enabled; uvicorn will listen on 0.0.0.0:%s. "
+            "Use only on a trusted LAN with a password.",
+            settings.app.port,
+        )
     uvicorn.run("app.main:app", host=host, port=settings.app.port, reload=False)
 
 

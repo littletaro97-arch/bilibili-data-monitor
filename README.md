@@ -95,8 +95,30 @@ python -m app.main
 http://127.0.0.1:7860
 ```
 
-默认只监听 `127.0.0.1`。第三版允许在设置页手动启用局域网访问，启用后必须设置密码并重启。
+默认只监听 `127.0.0.1`。本机调试推荐保持：
+
+```toml
+[app]
+host = "127.0.0.1"
+
+[lan]
+enabled = false
+```
+
+不要通过把 `host` 改成 `0.0.0.0` 来开放访问。需要局域网访问时，只能在设置页手动开启 LAN 模式并设置访问密码；重启后程序会监听 `0.0.0.0`，启动日志会输出风险提示。
+
+关闭 LAN 模式：进入设置页取消“启用局域网访问”，保存后重启；也可以在本机 `config.toml` 中把 `[lan].enabled` 改为 `false`。
+
+LAN 模式只适合同一可信局域网内临时查看。不要在公共 Wi-Fi、公司网络或不可信路由器环境中开启。
+
 `run.bat` 会读取设置页里的启动窗口选项。隐藏 CMD 后，启动错误需要查看 `logs/launcher.log` 和 `logs/app.log`。
+
+如果启动失败：
+
+- 先确认依赖已安装：`pip install -r requirements.txt`
+- 检查端口占用：`netstat -ano | findstr :7860`
+- 如果 `run.bat` 隐藏窗口启动失败，查看 `logs/launcher.log`
+- 如果应用已进入启动流程但报错，查看 `logs/app.log`
 
 ## 添加视频
 
@@ -227,3 +249,12 @@ python -m pytest
 ```
 
 测试使用 mock 响应和临时 SQLite，不依赖真实 B站接口。
+
+## v0.2.0 基线说明
+
+v0.2.0 的目标是 Windows 端稳定性、文档、测试和共享 schema 基线：
+
+- 保持 Windows 端源码仍在 `app/`，暂不移动到 `windows/app/`。
+- 默认本机安全：LAN 关闭时只允许监听 `127.0.0.1`。
+- `shared/data_schema/` 固化 Android MVP 需要遵守的 JSON 字段。
+- Android 端仍处于规划阶段，不包含业务代码。

@@ -1,6 +1,31 @@
 # Windows端说明
 
+## 当前源码位置
+
+现有 Windows 端源码仍位于项目根的 `app/`。不要为了目录整齐立即移动到 `windows/app/`，否则需要同步修改：
+
+- `app/config.py`
+- 启动命令
+- 测试导入路径
+- 数据库路径
+- 报告输出路径
+- `run.bat`
+
+这类移动应单独作为后续路径重构任务处理。
+
+## 安装
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+没有 `.venv` 时，`run.bat` 会回退到系统 Python。
+
 ## 启动
+
+推荐命令：
 
 ```powershell
 python -m app.main
@@ -12,11 +37,51 @@ python -m app.main
 run.bat
 ```
 
-默认地址：
+默认本机地址：
 
 ```text
 http://127.0.0.1:7860
 ```
+
+## LAN 配置
+
+默认应保持：
+
+```toml
+[app]
+host = "127.0.0.1"
+
+[lan]
+enabled = false
+```
+
+只有用户明确启用 LAN 且设置访问密码后，程序才会监听 `0.0.0.0`。启动日志会显示当前绑定地址；如果 LAN 开启，会输出风险提示。
+
+本机调试时不要开启 LAN。公共 Wi-Fi、公司网络、不可信路由器环境下不要开启 LAN。
+
+## 启动失败排查
+
+1. 运行 `python -m app.main`，优先看控制台报错。
+2. 如果端口占用，运行：
+
+```powershell
+netstat -ano | findstr :7860
+```
+
+3. 如果通过 `run.bat` 启动且窗口被隐藏，查看：
+
+```text
+logs/launcher.log
+logs/app.log
+```
+
+4. 如果 LAN 已开启但无法访问，确认：
+
+- `config.toml` 中 `[lan].enabled = true`
+- 已设置访问密码
+- 程序已重启
+- 防火墙允许本机 7860 端口
+- 手机和电脑在同一可信局域网
 
 ## 测试
 
@@ -24,16 +89,5 @@ http://127.0.0.1:7860
 python -m pytest
 ```
 
-## 当前不调整源码位置
-
-现有 Windows 端源码仍位于项目根的 `app/`。不要为了目录整齐立即移动到 `windows/app/`，否则需要同步修改：
-
-- `app/config.py`
-- 启动命令
-- 测试导入路径
-- 数据库路径
-- 报告输出路径
-- `run.bat`
-
-这类移动应单独作为 `v0.2.x` 路径重构任务处理。
+当前测试使用 mock 响应和临时 SQLite，不依赖真实 B 站网络请求。
 

@@ -1,4 +1,6 @@
 [app]
+# 本机调试默认只监听 127.0.0.1。
+# 不要把这里改成 0.0.0.0；需要局域网访问时使用 [lan].enabled。
 host = "127.0.0.1"
 port = 7860
 
@@ -27,6 +29,7 @@ comment_min_interval_seconds = 600
 danmaku_min_interval_seconds = 600
 
 [lan]
+# 默认关闭。启用后程序会监听 0.0.0.0，并要求非本机访问输入密码。
 enabled = false
 password_hash = ""
 session_cookie = "blla_lan_auth"

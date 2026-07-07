@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from app.collectors.provider import BilibiliWebProvider, MockVideoDataProvider, _map_info, _map_stats
+from app.collectors.provider import BilibiliWebProvider, MockVideoDataProvider, _as_float, _map_info, _map_stats
 from app.models import ProviderError
 
 
@@ -37,6 +37,12 @@ def test_online_count_can_be_mapped_from_fixed_payload():
     stats = _map_stats("BV1xx411c7mD", payload)
     assert stats.online_count == 12
     assert stats.online_text == "12"
+
+
+def test_as_float_maps_danmaku_progress():
+    assert _as_float("12.5") == 12.5
+    assert _as_float("bad") is None
+    assert _as_float(None) is None
 
 
 def test_save_raw_json_is_optional():

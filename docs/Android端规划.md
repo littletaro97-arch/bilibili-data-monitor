@@ -1,150 +1,122 @@
 # Android端规划
 
-## MVP 目标
+## 当前结论
 
-Android MVP 只做低频、透明、本地优先的数据查看与记录，不做绕过登录、验证码、风控、代理池、高频采集或隐藏后台长期运行。
+Android 端从 `v0.3.0` 开始进入 MVP。`v0.2.0` 只做规划、schema 和文档，不创建完整 Android 业务代码。
 
-第一阶段能力：
+## MVP 第一阶段范围
 
-- 手动输入 Bilibili 视频链接或 BV 号。
-- 获取公开视频基础信息。
-- 获取播放、点赞、投币、收藏、评论数、弹幕数等公开基础数据。
-- 支持手动刷新。
-- 支持低频定时刷新。
-- 本地保存历史记录。
-- 显示简单趋势图。
-- 支持导出 CSV / JSON。
-- 支持前台服务通知。
-- 提供本地日志页面，方便实机 debug。
+只做：
 
-## 推荐技术栈
+1. 输入 BV 号或视频链接。
+2. 解析 BV 号。
+3. 手动刷新获取基础视频数据。
+4. 本地 Room 数据库保存快照。
+5. 列表页展示视频。
+6. 详情页展示最近一次快照。
+7. 简单历史趋势图。
+8. 导出 JSON / CSV。
+9. 本地日志页面。
 
-- Kotlin：Android 长期维护首选语言。
-- Jetpack Compose：适合快速构建表单、列表、详情页和设置页。
-- Room：本地 SQLite 抽象，适合历史快照和任务表。
-- WorkManager：低频、可约束的后台任务。
-- Foreground Service：用户可见的刷新状态与长任务提示。
-- OkHttp 或 Retrofit：网络请求、超时、拦截器和错误处理清晰。
-- kotlinx.serialization：CSV/JSON 导出前的数据模型序列化。
-- MPAndroidChart 或 Compose 图表库：先用简单折线图，不做复杂交互图表。
+暂不做：
 
-## 不推荐技术栈
+1. 高频后台监控。
+2. 自动绕过登录。
+3. 验证码处理。
+4. 代理池。
+5. Cookie 自动抓取。
+6. 评论全文大规模抓取。
+7. 弹幕全文大规模抓取。
+8. 鸿蒙端。
+9. 云端同步。
+10. 付费服务器。
 
-- WebView 包装 Windows 端页面：不能解决本地存储、后台任务、通知和 Android 系统限制，调试也更差。
-- React Native：本项目核心风险在后台任务、前台服务、Room、权限和系统限制，跨端层会增加原生桥接成本。
-- Flutter：可做 UI，但后台调度、前台服务、通知和平台限制仍要写大量原生代码；当前收益不如 Kotlin 原生。
-- Java 原生：可行但开发效率和 Compose 生态不如 Kotlin。
-- 隐藏后台保活方案：不可靠，也容易触碰系统和平台边界。
+## 推荐技术路线
+
+- Kotlin：主语言，减少 Java 模板代码。
+- Android Studio：标准构建和实机调试环境。
+- Jetpack Compose：MVP 页面简单，适合快速迭代。
+- Room：本地 SQLite，适合快照历史和日志。
+- OkHttp：MVP 阶段比 Retrofit 更轻，后续接口稳定后可再封装。
+- kotlinx.serialization：JSON 导入导出和 schema 对齐。
+- WorkManager：只用于后续低频任务，不作为 MVP 首要目标。
+- 图表库：优先评估 MPAndroidChart 的稳定性；若 Compose 图表库维护不足，不要为了纯 Compose 强行采用。
+
+## 不推荐技术路线
+
+- WebView 包装 Windows 页面：不能解决本地 Room、导出、通知和后台限制，调试成本更高。
+- React Native：后台任务、前台服务、Room、权限都要桥接，当前收益不足。
+- Flutter：UI 可行，但原生后台和通知仍需平台代码；对这个 MVP 不是最小路径。
+- Java 原生：可行但 Compose 和 Kotlin 生态更适合后续维护。
+- 隐藏保活方案：不可靠，也不符合项目边界。
 
 ## 页面结构
 
-- 首页：视频任务列表、最新数据、刷新状态。
-- 添加视频页：输入 BV 号或链接，校验格式。
-- 视频详情页：基础信息、最新快照、趋势图、历史记录。
-- 导出页：导出 CSV / JSON，显示文件位置。
-- 日志页：网络请求、任务调度、错误和风控提示。
-- 设置页：刷新间隔、仅 Wi-Fi、通知开关、数据清理。
+- 首页：视频列表、最近刷新时间、失败状态。
+- 添加页：输入 BV 号或链接，显示解析错误。
+- 详情页：视频基础信息、最近一次快照、简单趋势图。
+- 导出页：导出 JSON / CSV，显示本地文件路径。
+- 日志页：本地请求、解析、数据库和导出日志。
+- 设置页：刷新超时、最低间隔、数据清理。
 
 ## 数据流
 
-1. 用户输入 BV 号或链接。
-2. 解析为标准 BV 号。
-3. 请求公开视频基础接口。
-4. 将视频信息写入 Room。
-5. 手动刷新或 WorkManager 触发低频刷新。
-6. 将统计快照写入 Room。
-7. UI 观察 Room 数据并刷新图表。
-8. 导出模块从 Room 查询并生成 CSV / JSON。
+1. 输入文本。
+2. 解析为 `bv_id`。
+3. OkHttp 请求公开数据源。
+4. 响应映射为 shared schema 字段。
+5. Room 写入视频基础信息和快照。
+6. UI 从 Room 读取并展示。
+7. 导出模块按 `shared/data_schema/` 输出 JSON / CSV。
 
-## 本地数据库方案
+## Room 表建议
 
-建议表：
+- `videos`
+- `video_snapshots`
+- `crawl_logs`
+- `export_records`
 
-- `videos`：视频基础信息。
-- `crawl_tasks`：刷新任务、状态、间隔和失败信息。
-- `video_stats_snapshot`：统计快照。
-- `crawl_logs`：本地日志。
+字段必须参考 `docs/数据结构说明.md` 和 `shared/data_schema/`。
 
-字段应尽量对齐 Windows 端 SQLite：
+## 网络请求规则
 
-- `bvid`
-- `aid`
-- `cid`
-- `title`
-- `owner_mid`
-- `owner_name`
-- `captured_at`
-- `view_count`
-- `danmaku_count`
-- `reply_count`
-- `favorite_count`
-- `coin_count`
-- `share_count`
-- `like_count`
-- `online_count`
-- `online_text`
-- `source_type`
-- `source_note`
-
-## 网络请求方案
-
-- 固定公开数据源，不自动拼接或切换未知接口。
-- 每个请求必须设置超时。
-- 遇到 403、412、验证码、风控、登录要求或异常结构时停止任务或进入冷却。
+- 固定公开数据源。
+- 设置超时。
+- 遇到 403、412、验证码、风控、登录要求或异常结构时标记失败。
 - 不自动寻找替代接口。
-- 不伪造设备指纹。
 - 不注入 Cookie。
-
-## 定时任务方案
-
-- 使用 WorkManager 做低频任务。
-- 默认间隔不低于 Windows 端最低间隔。
-- 支持仅 Wi-Fi、充电时执行等约束。
-- Android 系统可能推迟任务，UI 必须明确显示“计划时间”和“实际执行时间”。
-
-## 前台服务与通知方案
-
-- 只有用户明确开启低频监控时显示前台服务通知。
-- 通知显示当前任务数量、最近刷新时间、最近错误。
-- 通知必须可停止。
-- 不承诺隐藏后台稳定长期运行。
+- 不伪造设备指纹。
 
 ## 日志方案
 
-- 本地 `crawl_logs` 表保存关键事件。
-- 日志页按时间倒序展示。
-- 日志包含请求目标类型、错误类型、冷却原因和任务 ID。
-- 不记录 Cookie、账号、密码、完整敏感响应。
+本地日志至少记录：
 
-## 与 Windows 端共享的数据格式
+- 时间
+- 操作类型
+- `bv_id`
+- 请求状态
+- 错误类型
+- 简短错误信息
 
-第一阶段共享 CSV / JSON 字段，不共享数据库文件。
-
-建议导出字段：
-
-```text
-bvid,captured_at,view_count,danmaku_count,reply_count,favorite_count,coin_count,share_count,like_count,online_count,online_text,source_type,source_note
-```
-
-后续在 `shared/data_schema/` 固化 schema，再让 Windows 和 Android 双端共同遵守。
+不得记录 Cookie、账号、密码、完整敏感响应。
 
 ## 实机调试步骤
 
 1. 安装 debug APK。
-2. 清空旧数据或记录迁移状态。
-3. 输入一个公开视频 BV 号。
-4. 手动刷新并查看日志。
-5. 切换网络后重试。
-6. 开启低频定时刷新。
-7. 锁屏等待 WorkManager 执行窗口。
-8. 查看前台服务通知是否可见且可停止。
-9. 导出 CSV / JSON 并与 Windows 字段对齐。
+2. 输入一个公开视频 BV 号。
+3. 手动刷新。
+4. 检查详情页最新快照。
+5. 检查 Room 数据。
+6. 导出 JSON / CSV。
+7. 与 `shared/data_schema/` 对照字段。
+8. 记录到 `docs/实机测试记录.md`。
 
 ## 版本路线图
 
-- `v0.3.0`：Android MVP 空工程、Room schema、BV 解析、手动刷新。
-- `v0.3.1`：趋势图和导出 CSV / JSON。
-- `v0.3.2`：日志页和错误冷却展示。
-- `v0.4.0`：WorkManager、前台服务通知、实机后台限制验证。
-- `v0.5.0`：Windows + Android 共享数据格式冻结。
+- `v0.3.0`：Android MVP 工程、BV 解析、Room schema、手动刷新。
+- `v0.3.1`：列表页、详情页、最近快照展示。
+- `v0.3.2`：趋势图、JSON / CSV 导出。
+- `v0.3.3`：日志页和错误状态。
+- `v0.4.0`：WorkManager 低频任务和前台服务通知。
+- `v0.5.0`：Windows + Android 数据格式统一验证。
 

@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.bilibili-monitor/schemas/video_snapshot.schema.json",
+  "title": "Video Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "platform",
+    "bv_id",
+    "collected_at",
+    "fetch_status"
+  ],
+  "properties": {
+    "platform": {
+      "type": "string",
+      "const": "bilibili"
+    },
+    "bv_id": {
+      "type": "string",
+      "pattern": "^BV[0-9A-Za-z]{10}$"
+    },
+    "aid": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "title": {
+      "type": ["string", "null"]
+    },
+    "author_name": {
+      "type": ["string", "null"]
+    },
+    "author_mid": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "duration": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Video duration in seconds."
+    },
+    "pubdate": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Unix timestamp in seconds when available."
+    },
+    "collected_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp with timezone."
+    },
+    "view_count": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "danmaku_count": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "reply_count": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "favorite_count": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "coin_count": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "share_count": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "like_count": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "online_count": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "online_text": {
+      "type": ["string", "null"]
+    },
+    "source_url": {
+      "type": ["string", "null"],
+      "format": "uri"
+    },
+    "source_type": {
+      "type": ["string", "null"],
+      "enum": ["collected", "imported", "manual", null]
+    },
+    "source_note": {
+      "type": ["string", "null"]
+    },
+    "fetch_status": {
+      "type": "string",
+      "enum": ["success", "partial", "failed"]
+    },
+    "error_message": {
+      "type": ["string", "null"]
+    }
+  }
+}

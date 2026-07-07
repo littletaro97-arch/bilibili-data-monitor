@@ -210,6 +210,10 @@ def _as_int(value: Any) -> int | None:
 def _as_float(value: Any) -> float | None:
     if value is None:
         return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _extract_online_display(data: dict[str, Any], online_payload: dict[str, Any] | None = None) -> tuple[str | None, int | None]:
@@ -234,7 +238,3 @@ def _extract_online_count(data: dict[str, Any]) -> int | None:
             if value is not None:
                 return value
     return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
