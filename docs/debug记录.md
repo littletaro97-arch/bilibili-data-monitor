@@ -304,3 +304,32 @@ powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
 4. 等待 Android 系统调度后，设置页应出现最近开始/结束时间。
 5. 如果已有视频，历史页应追加成功快照或失败快照。
 6. 断网测试时，自动刷新失败应写失败快照或错误日志，不应静默失败。
+
+## Android v0.6.0 自动刷新诊断增强排查
+
+### 诊断区不显示
+
+1. 进入首页点击“自动刷新设置”。
+2. 设置页应显示任务名称、开关、注册、间隔、网络约束、最近状态和累计成功/失败。
+3. 如果没有累计计数，检查 `AutoRefreshSettingsStore` 是否读取 `auto_refresh_success_count` 和 `auto_refresh_failure_count`。
+
+### 测试自动刷新一次失败
+
+1. 按钮只执行一次，不循环。
+2. 查看设置页最近结果和最近错误。
+3. 查看日志页 `manual auto refresh test started/finished/failed`。
+4. 如果断网，失败应记录为错误或 failed snapshot，不应静默。
+
+### 批量刷新所有视频失败
+
+1. 按钮只刷新本地已添加视频。
+2. 没有视频时应显示 `total=0, success=0, failed=0`。
+3. 单个视频失败不应阻断其它视频刷新；结果应统计 failed。
+
+### 日志筛选异常
+
+1. 先切回“全部”确认日志总量。
+2. level 筛选按 `info` / `warning` / `error` 匹配。
+3. 自动刷新筛选按 `auto` 关键词匹配 message/detail。
+4. 手动刷新筛选按 `manual` 关键词匹配 message/detail。
+5. 导出筛选按 tag `export` 匹配。

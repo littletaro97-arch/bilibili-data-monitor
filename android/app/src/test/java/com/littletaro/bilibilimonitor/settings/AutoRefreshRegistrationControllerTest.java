@@ -20,7 +20,9 @@ public class AutoRefreshRegistrationControllerTest {
                 null,
                 null,
                 null,
-                null
+                null,
+                0L,
+                0L
         );
 
         AutoRefreshRegistrationResult result =
@@ -58,7 +60,9 @@ public class AutoRefreshRegistrationControllerTest {
                 null,
                 null,
                 null,
-                null
+                null,
+                0L,
+                0L
         );
 
         AutoRefreshRegistrationResult enabledResult =
@@ -90,7 +94,9 @@ public class AutoRefreshRegistrationControllerTest {
                 null,
                 null,
                 null,
-                null
+                null,
+                0L,
+                0L
         );
 
         AutoRefreshRegistrationController.INSTANCE.changeWifiOnly(false, enabled, client);

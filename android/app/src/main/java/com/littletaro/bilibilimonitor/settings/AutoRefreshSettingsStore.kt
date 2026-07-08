@@ -21,7 +21,9 @@ data class AutoRefreshSettings(
     val lastAutoRefreshStartedAt: String? = null,
     val lastAutoRefreshFinishedAt: String? = null,
     val lastAutoRefreshResult: String? = null,
-    val lastAutoRefreshError: String? = null
+    val lastAutoRefreshError: String? = null,
+    val autoRefreshSuccessCount: Long = 0,
+    val autoRefreshFailureCount: Long = 0
 )
 
 object RefreshIntervals {
@@ -48,7 +50,9 @@ class AutoRefreshSettingsStore(private val context: Context) {
             lastAutoRefreshStartedAt = preferences[Keys.LAST_AUTO_REFRESH_STARTED_AT],
             lastAutoRefreshFinishedAt = preferences[Keys.LAST_AUTO_REFRESH_FINISHED_AT],
             lastAutoRefreshResult = preferences[Keys.LAST_AUTO_REFRESH_RESULT],
-            lastAutoRefreshError = preferences[Keys.LAST_AUTO_REFRESH_ERROR]
+            lastAutoRefreshError = preferences[Keys.LAST_AUTO_REFRESH_ERROR],
+            autoRefreshSuccessCount = preferences[Keys.AUTO_REFRESH_SUCCESS_COUNT] ?: 0,
+            autoRefreshFailureCount = preferences[Keys.AUTO_REFRESH_FAILURE_COUNT] ?: 0
         )
     }
 
@@ -94,10 +98,20 @@ class AutoRefreshSettingsStore(private val context: Context) {
         }
     }
 
-    suspend fun recordWorkerFinished(time: String, result: String, error: String? = null) {
+    suspend fun recordWorkerFinished(
+        time: String,
+        result: String,
+        error: String? = null,
+        successDelta: Long = 0,
+        failureDelta: Long = 0
+    ) {
         context.autoRefreshDataStore.edit { preferences ->
             preferences[Keys.LAST_AUTO_REFRESH_FINISHED_AT] = time
             preferences[Keys.LAST_AUTO_REFRESH_RESULT] = result
+            preferences[Keys.AUTO_REFRESH_SUCCESS_COUNT] =
+                (preferences[Keys.AUTO_REFRESH_SUCCESS_COUNT] ?: 0) + successDelta
+            preferences[Keys.AUTO_REFRESH_FAILURE_COUNT] =
+                (preferences[Keys.AUTO_REFRESH_FAILURE_COUNT] ?: 0) + failureDelta
             if (error == null) {
                 preferences.remove(Keys.LAST_AUTO_REFRESH_ERROR)
             } else {
@@ -117,5 +131,7 @@ class AutoRefreshSettingsStore(private val context: Context) {
         val LAST_AUTO_REFRESH_FINISHED_AT = stringPreferencesKey("last_auto_refresh_finished_at")
         val LAST_AUTO_REFRESH_RESULT = stringPreferencesKey("last_auto_refresh_result")
         val LAST_AUTO_REFRESH_ERROR = stringPreferencesKey("last_auto_refresh_error")
+        val AUTO_REFRESH_SUCCESS_COUNT = longPreferencesKey("auto_refresh_success_count")
+        val AUTO_REFRESH_FAILURE_COUNT = longPreferencesKey("auto_refresh_failure_count")
     }
 }

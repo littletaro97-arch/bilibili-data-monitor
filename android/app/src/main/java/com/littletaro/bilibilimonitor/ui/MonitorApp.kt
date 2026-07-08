@@ -437,13 +437,32 @@ private fun ExportPage(repository: MonitorRepository, bvId: String) {
 @Composable
 private fun LogsPage(repository: MonitorRepository) {
     val logs by repository.logs.collectAsStateWithLifecycle(initialValue = emptyList())
+    var filter by remember { mutableStateOf("全部") }
+    val filteredLogs = remember(logs, filter) {
+        logs.filter { log ->
+            when (filter) {
+                "info", "warning", "error" -> log.level == filter
+                "手动刷新" -> log.message.contains("manual") || log.detail.orEmpty().contains("manual")
+                "自动刷新" -> log.message.contains("auto") || log.detail.orEmpty().contains("auto")
+                "导出" -> log.tag == "export"
+                else -> true
+            }
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("最近 200 条日志，按时间倒序")
-        if (logs.isEmpty()) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            items(listOf("全部", "info", "warning", "error", "手动刷新", "自动刷新", "导出")) { item ->
+                TextButton(onClick = { filter = item }) {
+                    Text(if (filter == item) "$item *" else item)
+                }
+            }
+        }
+        if (filteredLogs.isEmpty()) {
             Text("暂无日志")
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(logs) { log ->
+                items(filteredLogs) { log ->
                     LogCard(log)
                 }
             }
@@ -460,6 +479,8 @@ private fun SettingsPage(
     val settings by settingsStore.settings.collectAsStateWithLifecycle(initialValue = AutoRefreshSettings())
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<String?>(null) }
+    var testRunning by remember { mutableStateOf(false) }
+    var bulkRunning by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("低频自动刷新", style = MaterialTheme.typography.titleMedium)
@@ -496,6 +517,66 @@ private fun SettingsPage(
         Text("Android 可能延迟或合并后台任务；这里是低频趋势刷新，不是实时监控。")
         status?.let { Text(it) }
         AutoRefreshStatusBlock(settings)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = {
+                    scope.launch {
+                        testRunning = true
+                        val startedAt = Instant.now().toString()
+                        settingsStore.recordWorkerStarted(startedAt)
+                        repository.writeLog("info", "work", "manual auto refresh test started")
+                        try {
+                            val result = repository.refreshAllExistingVideos(RefreshTrigger.AUTO)
+                            val resultText = "total=${result.total}, success=${result.success}, failed=${result.failed}"
+                            settingsStore.recordWorkerFinished(
+                                Instant.now().toString(),
+                                resultText,
+                                successDelta = result.success.toLong(),
+                                failureDelta = result.failed.toLong()
+                            )
+                            repository.writeLog("info", "work", "manual auto refresh test finished", resultText)
+                            status = "测试自动刷新完成：$resultText"
+                        } catch (exc: Exception) {
+                            val error = "${exc.javaClass.simpleName}: ${exc.message}"
+                            settingsStore.recordWorkerFinished(
+                                Instant.now().toString(),
+                                "failed",
+                                error,
+                                failureDelta = 1
+                            )
+                            repository.writeLog("error", "work", "manual auto refresh test failed", error)
+                            status = "测试自动刷新失败：$error"
+                        } finally {
+                            testRunning = false
+                        }
+                    }
+                },
+                enabled = !testRunning && !bulkRunning,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(if (testRunning) "测试中" else "测试自动刷新一次") }
+            Button(
+                onClick = {
+                    scope.launch {
+                        bulkRunning = true
+                        repository.writeLog("info", "work", "manual bulk refresh started")
+                        try {
+                            val result = repository.refreshAllExistingVideos(RefreshTrigger.MANUAL)
+                            val resultText = "total=${result.total}, success=${result.success}, failed=${result.failed}"
+                            repository.writeLog("info", "work", "manual bulk refresh finished", resultText)
+                            status = "刷新所有已添加视频完成：$resultText"
+                        } catch (exc: Exception) {
+                            val error = "${exc.javaClass.simpleName}: ${exc.message}"
+                            repository.writeLog("error", "work", "manual bulk refresh failed", error)
+                            status = "刷新所有已添加视频失败：$error"
+                        } finally {
+                            bulkRunning = false
+                        }
+                    }
+                },
+                enabled = !testRunning && !bulkRunning,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(if (bulkRunning) "刷新中" else "刷新所有已添加视频") }
+        }
         Text("间隔")
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             RefreshIntervals.allowedMinutes.forEach { minutes ->
@@ -551,12 +632,19 @@ private fun AutoRefreshStatusBlock(settings: AutoRefreshSettings) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("自动刷新调试状态", fontWeight = FontWeight.Bold)
+            Text("任务名称：${AutoRefreshScheduler.UNIQUE_WORK_NAME}")
+            Text("开关：${if (settings.enabled) "已开启" else "已关闭"}")
+            Text("注册：${if (settings.workRegistered) "已注册" else "未注册"}")
+            Text("间隔：${minutesLabel(settings.intervalMinutes)}")
+            Text("网络约束：${if (settings.wifiOnly) "仅 Wi-Fi" else "任意联网"}")
             Text("最近注册：${settings.lastRegisteredAt ?: "-"}")
             Text("最近取消：${settings.lastCancelledAt ?: "-"}")
             Text("最近开始：${settings.lastAutoRefreshStartedAt ?: "-"}")
             Text("最近结束：${settings.lastAutoRefreshFinishedAt ?: "-"}")
             Text("最近结果：${settings.lastAutoRefreshResult ?: "-"}")
             Text("最近错误：${settings.lastAutoRefreshError ?: "-"}")
+            Text("累计成功：${settings.autoRefreshSuccessCount}")
+            Text("累计失败：${settings.autoRefreshFailureCount}")
         }
     }
 }

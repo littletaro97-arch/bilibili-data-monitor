@@ -49,7 +49,12 @@ class AutoRefreshWorker(
             val result = repository.refreshAllExistingVideos(RefreshTrigger.AUTO)
             val now = Instant.now().toString()
             val resultText = AutoRefreshWorkerStatus.finished(result)
-            settingsStore.recordWorkerFinished(now, resultText)
+            settingsStore.recordWorkerFinished(
+                now,
+                resultText,
+                successDelta = result.success.toLong(),
+                failureDelta = result.failed.toLong()
+            )
             repository.writeLog(
                 "info",
                 "work",
@@ -62,7 +67,8 @@ class AutoRefreshWorker(
             settingsStore.recordWorkerFinished(
                 Instant.now().toString(),
                 "failed",
-                error
+                error,
+                failureDelta = 1
             )
             repository.writeLog(
                 "error",

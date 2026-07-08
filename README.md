@@ -327,3 +327,19 @@ Debug APK 输出：
 ```text
 releases/android/v0.5.1/bilibili-monitor-android-v0.5.1-debug.apk
 ```
+
+## v0.6.0 Android 自动刷新诊断增强
+
+v0.6.0 在 v0.5.1 基础上增加实机诊断工具：
+
+- 设置页诊断区显示 WorkManager unique work name、开关、注册状态、间隔、网络约束、最近注册/取消/开始/结束、最近结果、最近错误、累计成功/失败次数。
+- 新增“测试自动刷新一次”按钮，手动执行一次与自动刷新同范围的刷新逻辑，用于实机 debug。
+- 新增“刷新所有已添加视频”按钮，用户手动批量刷新本地已添加视频。
+- 日志页增加筛选：全部、info、warning、error、手动刷新、自动刷新、导出。
+- 这些按钮不循环执行，不做高频后台采集，不处理登录、验证码、Cookie 或风控绕过。
+
+Debug APK 输出：
+
+```text
+releases/android/v0.6.0/bilibili-monitor-android-v0.6.0-debug.apk
+```
