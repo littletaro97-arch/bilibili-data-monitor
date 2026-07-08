@@ -34,28 +34,41 @@ class AutoRefreshWorker(
         )
 
         if (!settings.enabled) {
+            settingsStore.recordWorkerFinished(
+                Instant.now().toString(),
+                "skipped: settings disabled"
+            )
             repository.writeLog("info", "work", "auto refresh skipped", "settings disabled")
             return Result.success()
         }
 
         return try {
+            val startedAt = Instant.now().toString()
+            settingsStore.recordWorkerStarted(startedAt)
             repository.writeLog("info", "work", "auto refresh worker started", "interval=${settings.intervalMinutes}m")
             val result = repository.refreshAllExistingVideos(RefreshTrigger.AUTO)
             val now = Instant.now().toString()
-            settingsStore.recordLastAutoRefreshAt(now)
+            val resultText = AutoRefreshWorkerStatus.finished(result)
+            settingsStore.recordWorkerFinished(now, resultText)
             repository.writeLog(
                 "info",
                 "work",
                 "auto refresh worker finished",
-                "total=${result.total}, success=${result.success}, failed=${result.failed}, time=$now"
+                "$resultText, time=$now"
             )
             Result.success()
         } catch (exc: Exception) {
+            val error = AutoRefreshWorkerStatus.failed(exc)
+            settingsStore.recordWorkerFinished(
+                Instant.now().toString(),
+                "failed",
+                error
+            )
             repository.writeLog(
                 "error",
                 "work",
                 "auto refresh worker failed",
-                "${exc.javaClass.simpleName}: ${exc.message}; no immediate retry"
+                error
             )
             Result.success()
         }

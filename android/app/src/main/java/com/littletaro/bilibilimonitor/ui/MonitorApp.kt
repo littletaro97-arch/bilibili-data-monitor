@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -50,10 +51,12 @@ import com.littletaro.bilibilimonitor.data.VideoEntity
 import com.littletaro.bilibilimonitor.data.VideoSnapshotEntity
 import com.littletaro.bilibilimonitor.settings.AutoRefreshSettings
 import com.littletaro.bilibilimonitor.settings.AutoRefreshSettingsStore
+import com.littletaro.bilibilimonitor.settings.AutoRefreshRegistrationController
 import com.littletaro.bilibilimonitor.settings.RefreshIntervals
 import com.littletaro.bilibilimonitor.worker.AutoRefreshScheduler
 import kotlinx.coroutines.launch
 import java.io.File
+import java.time.Instant
 
 private enum class Page {
     Home,
@@ -80,7 +83,7 @@ fun MonitorApp(
                 NavRow(page, selectedBvId != null) { page = it }
                 Spacer(Modifier.height(12.dp))
                 when (page) {
-                    Page.Home -> HomePage(repository) {
+                    Page.Home -> HomePage(repository, onOpenSettings = { page = Page.Settings }) {
                         selectedBvId = it
                         page = Page.Detail
                     }
@@ -97,18 +100,22 @@ fun MonitorApp(
 
 @Composable
 private fun NavRow(current: Page, hasSelection: Boolean, onSelect: (Page) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        TextButton(onClick = { onSelect(Page.Home) }) { Text(if (current == Page.Home) "首页 *" else "首页") }
-        TextButton(onClick = { onSelect(Page.Detail) }, enabled = hasSelection) { Text("详情") }
-        TextButton(onClick = { onSelect(Page.History) }, enabled = hasSelection) { Text("历史") }
-        TextButton(onClick = { onSelect(Page.Export) }, enabled = hasSelection) { Text("导出") }
-        TextButton(onClick = { onSelect(Page.Logs) }) { Text("日志") }
-        TextButton(onClick = { onSelect(Page.Settings) }) { Text("设置") }
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        item { TextButton(onClick = { onSelect(Page.Home) }) { Text(if (current == Page.Home) "首页 *" else "首页") } }
+        item { TextButton(onClick = { onSelect(Page.Detail) }, enabled = hasSelection) { Text("详情") } }
+        item { TextButton(onClick = { onSelect(Page.History) }, enabled = hasSelection) { Text("历史") } }
+        item { TextButton(onClick = { onSelect(Page.Export) }, enabled = hasSelection) { Text("导出") } }
+        item { TextButton(onClick = { onSelect(Page.Logs) }) { Text("日志") } }
+        item { Button(onClick = { onSelect(Page.Settings) }) { Text(if (current == Page.Settings) "设置 *" else "设置") } }
     }
 }
 
 @Composable
-private fun HomePage(repository: MonitorRepository, onOpenVideo: (String) -> Unit) {
+private fun HomePage(
+    repository: MonitorRepository,
+    onOpenSettings: () -> Unit,
+    onOpenVideo: (String) -> Unit
+) {
     val videos by repository.videos.collectAsStateWithLifecycle(initialValue = emptyList())
     val scope = rememberCoroutineScope()
     var input by remember { mutableStateOf("") }
@@ -166,6 +173,9 @@ private fun HomePage(repository: MonitorRepository, onOpenVideo: (String) -> Uni
             if (loading) CircularProgressIndicator()
         }
         status?.let { Text(it) }
+        Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
+            Text("自动刷新设置")
+        }
         Text("最近视频", style = MaterialTheme.typography.titleMedium)
         if (videos.isEmpty()) {
             Text("暂无视频，请先输入 BV 号或视频链接")
@@ -449,30 +459,43 @@ private fun SettingsPage(
 ) {
     val settings by settingsStore.settings.collectAsStateWithLifecycle(initialValue = AutoRefreshSettings())
     val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("低频自动刷新", style = MaterialTheme.typography.titleMedium)
+        Text("当前状态：${if (settings.enabled) "已开启" else "已关闭"}")
+        Text("WorkManager 注册：${if (settings.workRegistered) "已注册，等待系统调度" else "未注册"}")
+        Text("当前间隔：${minutesLabel(settings.intervalMinutes)}")
+        Text("网络约束：${if (settings.wifiOnly) "仅 Wi-Fi" else "任意联网"}")
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(if (settings.enabled) "已开启" else "已关闭")
+            Text("自动刷新开关")
             Switch(
                 checked = settings.enabled,
                 onCheckedChange = { enabled ->
                     scope.launch {
                         settingsStore.setEnabled(enabled)
+                        val result = AutoRefreshRegistrationController.changeEnabled(
+                            enabled,
+                            settings,
+                            autoRefreshScheduler
+                        )
+                        val now = Instant.now().toString()
                         if (enabled) {
-                            autoRefreshScheduler.schedule(settings.intervalMinutes, settings.wifiOnly)
+                            settingsStore.recordRegistered(now)
                             repository.writeLog("info", "work", "auto refresh registered", "interval=${settings.intervalMinutes}m, wifiOnly=${settings.wifiOnly}")
                         } else {
-                            autoRefreshScheduler.cancel()
+                            settingsStore.recordCancelled(now)
                             repository.writeLog("info", "work", "auto refresh cancelled")
                         }
+                        status = result.message
                     }
                 }
             )
         }
         Text("刷新范围：仅刷新你已经添加的视频，不发现新视频，不采集评论/弹幕，不处理登录、验证码或风控。")
         Text("Android 可能延迟或合并后台任务；这里是低频趋势刷新，不是实时监控。")
-        Text("最近一次自动刷新：${settings.lastAutoRefreshAt ?: "尚无记录"}")
+        status?.let { Text(it) }
+        AutoRefreshStatusBlock(settings)
         Text("间隔")
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             RefreshIntervals.allowedMinutes.forEach { minutes ->
@@ -480,10 +503,17 @@ private fun SettingsPage(
                     onClick = {
                         scope.launch {
                             settingsStore.setIntervalMinutes(minutes)
+                            val result = AutoRefreshRegistrationController.changeInterval(
+                                minutes,
+                                settings,
+                                autoRefreshScheduler
+                            )
                             if (settings.enabled) {
-                                autoRefreshScheduler.schedule(minutes, settings.wifiOnly)
+                                val now = Instant.now().toString()
+                                settingsStore.recordRegistered(now)
                                 repository.writeLog("info", "work", "auto refresh rescheduled", "interval=${minutes}m, wifiOnly=${settings.wifiOnly}")
                             }
+                            status = if (result.action == "saved") "已保存间隔：${minutesLabel(minutes)}" else result.message
                         }
                     }
                 ) {
@@ -498,13 +528,35 @@ private fun SettingsPage(
                 onCheckedChange = { wifiOnly ->
                     scope.launch {
                         settingsStore.setWifiOnly(wifiOnly)
+                        val result = AutoRefreshRegistrationController.changeWifiOnly(
+                            wifiOnly,
+                            settings,
+                            autoRefreshScheduler
+                        )
                         if (settings.enabled) {
-                            autoRefreshScheduler.schedule(settings.intervalMinutes, wifiOnly)
+                            val now = Instant.now().toString()
+                            settingsStore.recordRegistered(now)
                             repository.writeLog("info", "work", "auto refresh network constraint updated", "interval=${settings.intervalMinutes}m, wifiOnly=$wifiOnly")
                         }
+                        status = result.message
                     }
                 }
             )
+        }
+    }
+}
+
+@Composable
+private fun AutoRefreshStatusBlock(settings: AutoRefreshSettings) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("自动刷新调试状态", fontWeight = FontWeight.Bold)
+            Text("最近注册：${settings.lastRegisteredAt ?: "-"}")
+            Text("最近取消：${settings.lastCancelledAt ?: "-"}")
+            Text("最近开始：${settings.lastAutoRefreshStartedAt ?: "-"}")
+            Text("最近结束：${settings.lastAutoRefreshFinishedAt ?: "-"}")
+            Text("最近结果：${settings.lastAutoRefreshResult ?: "-"}")
+            Text("最近错误：${settings.lastAutoRefreshError ?: "-"}")
         }
     }
 }

@@ -15,7 +15,13 @@ data class AutoRefreshSettings(
     val enabled: Boolean = false,
     val intervalMinutes: Long = RefreshIntervals.DEFAULT_MINUTES,
     val wifiOnly: Boolean = true,
-    val lastAutoRefreshAt: String? = null
+    val workRegistered: Boolean = false,
+    val lastRegisteredAt: String? = null,
+    val lastCancelledAt: String? = null,
+    val lastAutoRefreshStartedAt: String? = null,
+    val lastAutoRefreshFinishedAt: String? = null,
+    val lastAutoRefreshResult: String? = null,
+    val lastAutoRefreshError: String? = null
 )
 
 object RefreshIntervals {
@@ -36,7 +42,13 @@ class AutoRefreshSettingsStore(private val context: Context) {
                 preferences[Keys.INTERVAL_MINUTES] ?: RefreshIntervals.DEFAULT_MINUTES
             ),
             wifiOnly = preferences[Keys.WIFI_ONLY] ?: true,
-            lastAutoRefreshAt = preferences[Keys.LAST_AUTO_REFRESH_AT]
+            workRegistered = preferences[Keys.WORK_REGISTERED] ?: false,
+            lastRegisteredAt = preferences[Keys.LAST_REGISTERED_AT],
+            lastCancelledAt = preferences[Keys.LAST_CANCELLED_AT],
+            lastAutoRefreshStartedAt = preferences[Keys.LAST_AUTO_REFRESH_STARTED_AT],
+            lastAutoRefreshFinishedAt = preferences[Keys.LAST_AUTO_REFRESH_FINISHED_AT],
+            lastAutoRefreshResult = preferences[Keys.LAST_AUTO_REFRESH_RESULT],
+            lastAutoRefreshError = preferences[Keys.LAST_AUTO_REFRESH_ERROR]
         )
     }
 
@@ -59,9 +71,38 @@ class AutoRefreshSettingsStore(private val context: Context) {
         }
     }
 
-    suspend fun recordLastAutoRefreshAt(time: String) {
+    suspend fun recordRegistered(time: String) {
         context.autoRefreshDataStore.edit { preferences ->
-            preferences[Keys.LAST_AUTO_REFRESH_AT] = time
+            preferences[Keys.WORK_REGISTERED] = true
+            preferences[Keys.LAST_REGISTERED_AT] = time
+            preferences.remove(Keys.LAST_AUTO_REFRESH_ERROR)
+        }
+    }
+
+    suspend fun recordCancelled(time: String) {
+        context.autoRefreshDataStore.edit { preferences ->
+            preferences[Keys.WORK_REGISTERED] = false
+            preferences[Keys.LAST_CANCELLED_AT] = time
+        }
+    }
+
+    suspend fun recordWorkerStarted(time: String) {
+        context.autoRefreshDataStore.edit { preferences ->
+            preferences[Keys.LAST_AUTO_REFRESH_STARTED_AT] = time
+            preferences[Keys.LAST_AUTO_REFRESH_RESULT] = "running"
+            preferences.remove(Keys.LAST_AUTO_REFRESH_ERROR)
+        }
+    }
+
+    suspend fun recordWorkerFinished(time: String, result: String, error: String? = null) {
+        context.autoRefreshDataStore.edit { preferences ->
+            preferences[Keys.LAST_AUTO_REFRESH_FINISHED_AT] = time
+            preferences[Keys.LAST_AUTO_REFRESH_RESULT] = result
+            if (error == null) {
+                preferences.remove(Keys.LAST_AUTO_REFRESH_ERROR)
+            } else {
+                preferences[Keys.LAST_AUTO_REFRESH_ERROR] = error
+            }
         }
     }
 
@@ -69,6 +110,12 @@ class AutoRefreshSettingsStore(private val context: Context) {
         val ENABLED = booleanPreferencesKey("enabled")
         val INTERVAL_MINUTES = longPreferencesKey("interval_minutes")
         val WIFI_ONLY = booleanPreferencesKey("wifi_only")
-        val LAST_AUTO_REFRESH_AT = stringPreferencesKey("last_auto_refresh_at")
+        val WORK_REGISTERED = booleanPreferencesKey("work_registered")
+        val LAST_REGISTERED_AT = stringPreferencesKey("last_registered_at")
+        val LAST_CANCELLED_AT = stringPreferencesKey("last_cancelled_at")
+        val LAST_AUTO_REFRESH_STARTED_AT = stringPreferencesKey("last_auto_refresh_started_at")
+        val LAST_AUTO_REFRESH_FINISHED_AT = stringPreferencesKey("last_auto_refresh_finished_at")
+        val LAST_AUTO_REFRESH_RESULT = stringPreferencesKey("last_auto_refresh_result")
+        val LAST_AUTO_REFRESH_ERROR = stringPreferencesKey("last_auto_refresh_error")
     }
 }

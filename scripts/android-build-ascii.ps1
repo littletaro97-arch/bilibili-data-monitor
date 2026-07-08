@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "v0.5.0",
+    [string]$Version = "v0.5.1",
     [string]$ProjectRoot = "",
     [string]$AsciiRoot = "C:\Users\LittleTaro\codex-bilibili-monitor-ascii"
 )
@@ -114,18 +114,17 @@ $changelogLines.Add("# $Version Android Changelog")
 $changelogLines.Add("")
 $changelogLines.Add("## Added")
 $changelogLines.Add("")
-$changelogLines.Add("- Added opt-in low-frequency auto refresh with WorkManager.")
-$changelogLines.Add("- Added DataStore-backed auto refresh settings; default remains disabled.")
-$changelogLines.Add("- Added local trend calculation and chart/table display for views, likes, replies, coins, and favorites.")
-$changelogLines.Add("- Added Android Sharesheet export sharing through FileProvider.")
+$changelogLines.Add("- Exposes the auto refresh settings entry on the home screen and scrollable top navigation.")
+$changelogLines.Add("- Adds visible WorkManager registration and worker execution status fields.")
+$changelogLines.Add("- Records registration, cancellation, start, finish, result, and error diagnostics in DataStore.")
 $changelogLines.Add("- Generates versioned Debug APK under releases/android/$Version/.")
 $changelogLines.Add("- Generates build info and test report with APK size and SHA256.")
 $changelogLines.Add("")
 $changelogLines.Add("## Changed")
 $changelogLines.Add("")
 $changelogLines.Add("- Android versionName/versionCode updated for $Version.")
-$changelogLines.Add("- Export results now show file name, absolute path, size, and export time.")
-$changelogLines.Add("- Logs distinguish manual refresh, auto refresh registration/cancel, worker execution, and failures.")
+$changelogLines.Add("- Auto refresh settings are now reachable on narrow phone screens.")
+$changelogLines.Add("- Logs and settings status distinguish not registered, registered, waiting for system scheduling, running, finished, and failed states.")
 $changelogLines.Add("")
 $changelogLines.Add("## Known Issues")
 $changelogLines.Add("")

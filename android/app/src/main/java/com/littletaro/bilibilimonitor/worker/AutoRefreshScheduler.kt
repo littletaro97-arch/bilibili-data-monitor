@@ -6,13 +6,14 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.littletaro.bilibilimonitor.settings.AutoRefreshRegistrationClient
 import com.littletaro.bilibilimonitor.settings.RefreshIntervals
 import java.util.concurrent.TimeUnit
 
-class AutoRefreshScheduler(context: Context) {
+class AutoRefreshScheduler(context: Context) : AutoRefreshRegistrationClient {
     private val appContext = context.applicationContext
 
-    fun schedule(intervalMinutes: Long, wifiOnly: Boolean) {
+    override fun schedule(intervalMinutes: Long, wifiOnly: Boolean) {
         val sanitizedInterval = RefreshIntervals.sanitize(intervalMinutes)
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
@@ -33,7 +34,7 @@ class AutoRefreshScheduler(context: Context) {
         )
     }
 
-    fun cancel() {
+    override fun cancel() {
         WorkManager.getInstance(appContext).cancelUniqueWork(UNIQUE_WORK_NAME)
     }
 

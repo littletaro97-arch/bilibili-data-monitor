@@ -247,3 +247,60 @@ powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
 2. 空数据应显示空状态；单点数据只画点，不强行画线。
 3. 指标字段为 null 时跳过该绘图点，表格中显示 `-`。
 4. 最近 20/50 只影响趋势计算窗口，不删除历史快照。
+
+## Android v0.5.1 设置页与自动刷新热修复排查
+
+### 设置页不可见排查路径
+
+1. 先看首页是否有“自动刷新设置”按钮。
+2. 再看顶部导航是否可以横向滑动，并能看到“设置”按钮。
+3. 如果横屏可见、竖屏不可见，优先检查导航是否仍是普通 `Row` 而不是可滚动导航。
+4. 检查 `MonitorApp.kt` 中 `Page.Settings` 是否在 `when (page)` 中注册。
+5. 检查 `SettingsPage()` 是否没有被 `selectedBvId` 条件拦截；设置页不应要求先选视频。
+
+### Compose Navigation 排查路径
+
+1. 当前 MVP 未使用 Navigation Compose route，而是用 `Page` enum 和 `when` 分支。
+2. 导航入口必须调用 `onSelect(Page.Settings)`。
+3. 顶部导航按钮过多时必须可滚动或换行，不能依赖最后一个按钮刚好在屏幕内。
+4. 首页必须保留一个明确设置入口，避免用户只能从顶部导航猜测。
+
+### WorkManager 未注册排查路径
+
+1. 设置页开启自动刷新后，应显示 `WorkManager 注册：已注册，等待系统调度`。
+2. 日志页应出现 `auto refresh registered`。
+3. DataStore 中 `workRegistered` 应为 true。
+4. 如果没有注册状态，检查设置开关回调是否调用 `AutoRefreshRegistrationController.changeEnabled(true, ...)`。
+5. 检查 `AutoRefreshScheduler.schedule()` 是否调用 `enqueueUniquePeriodicWork()`。
+
+### WorkManager 已注册但不执行排查路径
+
+1. WorkManager 周期任务不保证准点执行，15 分钟只是最小周期。
+2. 设置页如果只有最近注册时间，没有最近开始时间，说明任务可能仍在等待系统调度。
+3. 仅 Wi-Fi 开启时，移动网络不会满足 `UNMETERED` 约束。
+4. 电量低或厂商后台限制可能推迟任务。
+5. 不要用高频循环、隐藏保活或前台规避来制造执行。
+
+### 自动刷新无日志排查路径
+
+1. 开启/关闭设置应立即写入注册/取消日志。
+2. Worker 开始执行时应写入 `auto refresh worker started`。
+3. Worker 完成时应写入 `auto refresh worker finished`。
+4. Worker 失败时应写入 `auto refresh worker failed`，且设置页显示最近错误。
+5. 如果设置页显示已注册但日志没有注册记录，检查 Repository `writeLog()` 调用。
+
+### DataStore 设置未生效排查路径
+
+1. 设置页状态来自 `AutoRefreshSettingsStore.settings` Flow。
+2. 切换开关后应同时调用 `setEnabled()` 和记录注册/取消时间。
+3. 修改间隔或 Wi-Fi 约束后，如果已开启，应重新注册 WorkManager 并记录新的注册时间。
+4. 清理应用数据会清空 DataStore 和 Room，这是预期行为。
+
+### 实机判断自动刷新是否有效的方法
+
+1. 进入首页，点击“自动刷新设置”。
+2. 开启自动刷新，确认设置页显示“已注册，等待系统调度”。
+3. 打开日志页，确认有 `auto refresh registered`。
+4. 等待 Android 系统调度后，设置页应出现最近开始/结束时间。
+5. 如果已有视频，历史页应追加成功快照或失败快照。
+6. 断网测试时，自动刷新失败应写失败快照或错误日志，不应静默失败。

@@ -310,3 +310,20 @@ Debug APK 输出：
 ```text
 releases/android/v0.5.0/bilibili-monitor-android-v0.5.0-debug.apk
 ```
+
+## v0.5.1 Android 自动刷新热修复
+
+v0.5.1 修复 v0.5.0 实机反馈的设置页不可见问题：
+
+- 顶部导航改为可横向滚动，窄屏手机也能看到“设置”入口。
+- 首页新增明确的“自动刷新设置”按钮，用户不需要猜入口位置。
+- 设置页显示自动刷新开关、刷新间隔、仅 Wi-Fi、后台调度说明。
+- 设置页显示 WorkManager 注册状态、最近注册/取消、最近开始/结束、最近结果和最近错误。
+- 开启、关闭、修改间隔或网络约束时会写入 DataStore 状态，并写入日志页。
+- 自动刷新仍只刷新已添加视频，不做高频后台采集，不绕过登录、验证码或风控。
+
+Debug APK 输出：
+
+```text
+releases/android/v0.5.1/bilibili-monitor-android-v0.5.1-debug.apk
+```
