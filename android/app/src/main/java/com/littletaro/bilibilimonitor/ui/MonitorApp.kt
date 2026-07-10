@@ -2,18 +2,25 @@ package com.littletaro.bilibilimonitor.ui
 
 import android.content.Intent
 import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,11 +31,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,8 +48,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.littletaro.bilibilimonitor.data.AppLogEntity
+import com.littletaro.bilibilimonitor.data.ExportPayload
 import com.littletaro.bilibilimonitor.data.ExportResult
 import com.littletaro.bilibilimonitor.data.MonitorRepository
 import com.littletaro.bilibilimonitor.data.RefreshTrigger
@@ -62,9 +73,8 @@ private enum class Page {
     Home,
     Detail,
     History,
-    Export,
-    Logs,
-    Settings
+    Settings,
+    Advanced
 }
 
 @Composable
@@ -74,24 +84,41 @@ fun MonitorApp(
     autoRefreshScheduler: AutoRefreshScheduler
 ) {
     MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            var page by remember { mutableStateOf(Page.Home) }
-            var selectedBvId by remember { mutableStateOf<String?>(null) }
+        Surface(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+            val videos by repository.videos.collectAsStateWithLifecycle(initialValue = emptyList())
+            var page by rememberSaveable { mutableStateOf(Page.Home) }
+            var selectedBvId by rememberSaveable { mutableStateOf<String?>(null) }
+            val hasValidSelection = selectedBvId != null && videos.any { it.bvId == selectedBvId }
+
+            LaunchedEffect(videos, selectedBvId) {
+                if (selectedBvId != null && TopNavigationModel.resolveSelection(selectedBvId, videos.map { it.bvId }) == null) {
+                    selectedBvId = null
+                    if (page == Page.Detail || page == Page.History) {
+                        page = Page.Home
+                    }
+                }
+            }
+
             Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                 Text("B站数据监控 Android MVP", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
-                NavRow(page, selectedBvId != null) { page = it }
+                NavRow(page, hasValidSelection) { target ->
+                    if ((target == Page.Detail || target == Page.History) && !hasValidSelection) {
+                        page = Page.Home
+                    } else {
+                        page = target
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 when (page) {
                     Page.Home -> HomePage(repository, onOpenSettings = { page = Page.Settings }) {
                         selectedBvId = it
                         page = Page.Detail
                     }
-                    Page.Detail -> selectedBvId?.let { DetailPage(repository, it) } ?: EmptySelection()
-                    Page.History -> selectedBvId?.let { HistoryPage(repository, it) } ?: EmptySelection()
-                    Page.Export -> selectedBvId?.let { ExportPage(repository, it) } ?: EmptySelection()
-                    Page.Logs -> LogsPage(repository)
+                    Page.Detail -> if (hasValidSelection) DetailPage(repository, selectedBvId!!) else EmptySelection()
+                    Page.History -> if (hasValidSelection) HistoryPage(repository, selectedBvId!!) else EmptySelection()
                     Page.Settings -> SettingsPage(repository, settingsStore, autoRefreshScheduler)
+                    Page.Advanced -> AdvancedPage(repository, settingsStore, selectedBvId.takeIf { hasValidSelection })
                 }
             }
         }
@@ -100,13 +127,23 @@ fun MonitorApp(
 
 @Composable
 private fun NavRow(current: Page, hasSelection: Boolean, onSelect: (Page) -> Unit) {
+    val pageByLabel = mapOf(
+        "首页" to Page.Home,
+        "详情" to Page.Detail,
+        "历史" to Page.History,
+        "设置" to Page.Settings,
+        "高级" to Page.Advanced
+    )
+    val items = TopNavigationModel.labels(hasSelection).mapNotNull { pageByLabel[it] }
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        item { TextButton(onClick = { onSelect(Page.Home) }) { Text(if (current == Page.Home) "首页 *" else "首页") } }
-        item { TextButton(onClick = { onSelect(Page.Detail) }, enabled = hasSelection) { Text("详情") } }
-        item { TextButton(onClick = { onSelect(Page.History) }, enabled = hasSelection) { Text("历史") } }
-        item { TextButton(onClick = { onSelect(Page.Export) }, enabled = hasSelection) { Text("导出") } }
-        item { TextButton(onClick = { onSelect(Page.Logs) }) { Text("日志") } }
-        item { Button(onClick = { onSelect(Page.Settings) }) { Text(if (current == Page.Settings) "设置 *" else "设置") } }
+        items(items) { item ->
+            val selected = item == current
+            if (selected) {
+                Button(onClick = { onSelect(item) }) { Text(pageLabel(item)) }
+            } else {
+                TextButton(onClick = { onSelect(item) }) { Text(pageLabel(item)) }
+            }
+        }
     }
 }
 
@@ -373,23 +410,119 @@ private fun TrendPointCard(point: TrendPoint, metric: TrendMetric) {
 }
 
 @Composable
-private fun ExportPage(repository: MonitorRepository, bvId: String) {
+private fun AdvancedPage(
+    repository: MonitorRepository,
+    settingsStore: AutoRefreshSettingsStore,
+    selectedBvId: String?
+) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Text("高级", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+        item {
+            if (selectedBvId == null) {
+                Card {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("导出", fontWeight = FontWeight.Bold)
+                        Text("请先在首页选择一个视频，随后这里会显示 JSON / CSV 导出。")
+                    }
+                }
+            } else {
+                ExportPanel(repository, settingsStore, selectedBvId)
+            }
+        }
+        item {
+            LogsPage(repository)
+        }
+    }
+}
+
+@Composable
+private fun ExportPanel(
+    repository: MonitorRepository,
+    settingsStore: AutoRefreshSettingsStore,
+    bvId: String
+) {
     val context = LocalContext.current
+    val settings by settingsStore.settings.collectAsStateWithLifecycle(initialValue = AutoRefreshSettings())
     val scope = rememberCoroutineScope()
     var output by remember { mutableStateOf("尚未导出") }
     var lastExport by remember { mutableStateOf<ExportResult?>(null) }
+    var pendingPayload by remember { mutableStateOf<ExportPayload?>(null) }
+    var askDefaultAfterSave by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    fun handleCreatedDocument(uri: Uri?) {
+        val payload = pendingPayload
+        pendingPayload = null
+        if (uri == null || payload == null) {
+            output = "已取消保存"
+            return
+        }
+        scope.launch {
+            output = writePayloadToUri(context, uri, payload)
+            askDefaultAfterSave = settings.defaultExportTreeUri == null
+            repository.writeLog("info", "export", "SAF 导出成功", "${payload.fileName}, ${payload.sizeBytes} bytes")
+        }
+    }
+    val createJsonDocumentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> handleCreatedDocument(uri) }
+    val createCsvDocumentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri -> handleCreatedDocument(uri) }
+    fun launchCreateDocument(payload: ExportPayload) {
+        pendingPayload = payload
+        if (payload.mimeType == "application/json") {
+            createJsonDocumentLauncher.launch(payload.fileName)
+        } else {
+            createCsvDocumentLauncher.launch(payload.fileName)
+        }
+    }
+    val openTreeLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri == null) {
+            output = "未选择默认导出目录"
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                settingsStore.setDefaultExportTreeUri(uri.toString())
+                settingsStore.setAskExportLocationEveryTime(false)
+                askDefaultAfterSave = false
+                output = "已设置默认导出目录"
+            } catch (exc: Exception) {
+                output = "默认目录授权失败：${exc.message ?: exc.javaClass.simpleName}"
+            }
+        }
+    }
+
+    Card {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("导出 $bvId")
+        Text("首次导出会打开系统保存窗口。已设置默认目录时，可直接保存，也可本次选择其他位置。")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = {
                     scope.launch {
                         loading = true
                         try {
-                            val result = repository.exportJson(bvId)
-                            lastExport = result
-                            output = result.formatForDisplay("JSON")
+                            val payload = repository.jsonPayload(bvId)
+                            settingsStore.setDefaultExportFormat("json")
+                            output = saveOrLaunchPicker(
+                                context = context,
+                                settingsStore = settingsStore,
+                                settings = settings,
+                                payload = payload,
+                                forcePicker = false,
+                                onNeedPicker = {
+                                    launchCreateDocument(payload)
+                                }
+                            )
                         } catch (exc: Exception) {
                             lastExport = null
                             output = exc.message ?: "JSON 导出失败"
@@ -405,9 +538,18 @@ private fun ExportPage(repository: MonitorRepository, bvId: String) {
                     scope.launch {
                         loading = true
                         try {
-                            val result = repository.exportCsv(bvId)
-                            lastExport = result
-                            output = result.formatForDisplay("CSV")
+                            val payload = repository.csvPayload(bvId)
+                            settingsStore.setDefaultExportFormat("csv")
+                            output = saveOrLaunchPicker(
+                                context = context,
+                                settingsStore = settingsStore,
+                                settings = settings,
+                                payload = payload,
+                                forcePicker = false,
+                                onNeedPicker = {
+                                    launchCreateDocument(payload)
+                                }
+                            )
                         } catch (exc: Exception) {
                             lastExport = null
                             output = exc.message ?: "CSV 导出失败"
@@ -421,16 +563,58 @@ private fun ExportPage(repository: MonitorRepository, bvId: String) {
         }
         Button(
             onClick = {
-                lastExport?.let { result ->
-                    shareExport(context, result)
+                scope.launch {
+                    val payload = if (settings.defaultExportFormat == "json") {
+                        repository.jsonPayload(bvId)
+                    } else {
+                        repository.csvPayload(bvId)
+                    }
+                    launchCreateDocument(payload)
                 }
             },
-            enabled = lastExport != null && !loading
+            enabled = !loading,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("本次选择其他位置") }
+        Button(
+            onClick = {
+                scope.launch {
+                    loading = true
+                    try {
+                        val result = if (settings.defaultExportFormat == "json") {
+                            repository.exportJson(bvId)
+                        } else {
+                            repository.exportCsv(bvId)
+                        }
+                        lastExport = result
+                        shareExport(context, result)
+                    } catch (exc: Exception) {
+                        output = exc.message ?: "分享文件失败"
+                    } finally {
+                        loading = false
+                    }
+                }
+            },
+            enabled = !loading,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text("分享文件")
+            Text("生成并分享文件")
         }
         if (loading) CircularProgressIndicator()
         Text(output)
+        if (askDefaultAfterSave) {
+            ExportDefaultPrompt(
+                onChooseDefault = { openTreeLauncher.launch(null) },
+                onAskEveryTime = {
+                    scope.launch {
+                        settingsStore.setAskExportLocationEveryTime(true)
+                        askDefaultAfterSave = false
+                        output = "后续导出将继续询问保存位置"
+                    }
+                },
+                onDismiss = { askDefaultAfterSave = false }
+            )
+        }
+        }
     }
 }
 
@@ -476,47 +660,162 @@ private fun SettingsPage(
     settingsStore: AutoRefreshSettingsStore,
     autoRefreshScheduler: AutoRefreshScheduler
 ) {
+    val context = LocalContext.current
     val settings by settingsStore.settings.collectAsStateWithLifecycle(initialValue = AutoRefreshSettings())
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<String?>(null) }
     var testRunning by remember { mutableStateOf(false) }
     var bulkRunning by remember { mutableStateOf(false) }
+    val defaultTreeLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri == null) {
+            status = "未选择默认导出目录"
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                settingsStore.setDefaultExportTreeUri(uri.toString())
+                status = "已设置默认导出目录"
+            } catch (exc: Exception) {
+                status = "默认目录授权失败：${exc.message ?: exc.javaClass.simpleName}"
+            }
+        }
+    }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("低频自动刷新", style = MaterialTheme.typography.titleMedium)
-        Text("当前状态：${if (settings.enabled) "已开启" else "已关闭"}")
-        Text("WorkManager 注册：${if (settings.workRegistered) "已注册，等待系统调度" else "未注册"}")
-        Text("当前间隔：${minutesLabel(settings.intervalMinutes)}")
-        Text("网络约束：${if (settings.wifiOnly) "仅 Wi-Fi" else "任意联网"}")
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("自动刷新开关")
-            Switch(
-                checked = settings.enabled,
-                onCheckedChange = { enabled ->
-                    scope.launch {
-                        settingsStore.setEnabled(enabled)
-                        val result = AutoRefreshRegistrationController.changeEnabled(
-                            enabled,
-                            settings,
-                            autoRefreshScheduler
-                        )
-                        val now = Instant.now().toString()
-                        if (enabled) {
-                            settingsStore.recordRegistered(now)
-                            repository.writeLog("info", "work", "auto refresh registered", "interval=${settings.intervalMinutes}m, wifiOnly=${settings.wifiOnly}")
-                        } else {
-                            settingsStore.recordCancelled(now)
-                            repository.writeLog("info", "work", "auto refresh cancelled")
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { Text("设置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+        item {
+            SettingsSection("自动刷新") {
+                SettingSwitchRow(
+                    title = "启用自动刷新",
+                    subtitle = "仅刷新已添加视频；Android 可能延迟后台任务。",
+                    checked = settings.enabled,
+                    onCheckedChange = { enabled: Boolean ->
+                        scope.launch {
+                            settingsStore.setEnabled(enabled)
+                            val result = AutoRefreshRegistrationController.changeEnabled(
+                                enabled,
+                                settings,
+                                autoRefreshScheduler
+                            )
+                            val now = Instant.now().toString()
+                            if (enabled) {
+                                settingsStore.recordRegistered(now)
+                                repository.writeLog("info", "work", "auto refresh registered", "interval=${settings.intervalMinutes}m, wifiOnly=${settings.wifiOnly}")
+                            } else {
+                                settingsStore.recordCancelled(now)
+                                repository.writeLog("info", "work", "auto refresh cancelled")
+                            }
+                            status = result.message
                         }
-                        status = result.message
+                    }
+                )
+                Text("间隔：${minutesLabel(settings.intervalMinutes)}")
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    items(RefreshIntervals.allowedMinutes) { minutes: Long ->
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    settingsStore.setIntervalMinutes(minutes)
+                                    val result = AutoRefreshRegistrationController.changeInterval(
+                                        minutes,
+                                        settings,
+                                        autoRefreshScheduler
+                                    )
+                                    if (settings.enabled) {
+                                        val now = Instant.now().toString()
+                                        settingsStore.recordRegistered(now)
+                                        repository.writeLog("info", "work", "auto refresh rescheduled", "interval=${minutes}m, wifiOnly=${settings.wifiOnly}")
+                                    }
+                                    status = if (result.action == "saved") "已保存间隔：${minutesLabel(minutes)}" else result.message
+                                }
+                            }
+                        ) {
+                            Text(if (settings.intervalMinutes == minutes) "${minutesLabel(minutes)} *" else minutesLabel(minutes))
+                        }
                     }
                 }
-            )
+                Text("后台任务：${if (settings.workRegistered) "已注册，等待系统调度" else "未注册"}")
+            }
         }
-        Text("刷新范围：仅刷新你已经添加的视频，不发现新视频，不采集评论/弹幕，不处理登录、验证码或风控。")
-        Text("Android 可能延迟或合并后台任务；这里是低频趋势刷新，不是实时监控。")
+        item {
+            SettingsSection("网络约束") {
+                SettingSwitchRow(
+                    title = "仅 Wi-Fi",
+                    subtitle = if (settings.wifiOnly) "移动网络下不会执行自动刷新。" else "允许任意联网状态下执行自动刷新。",
+                    checked = settings.wifiOnly,
+                    onCheckedChange = { wifiOnly: Boolean ->
+                        scope.launch {
+                            settingsStore.setWifiOnly(wifiOnly)
+                            val result = AutoRefreshRegistrationController.changeWifiOnly(
+                                wifiOnly,
+                                settings,
+                                autoRefreshScheduler
+                            )
+                            if (settings.enabled) {
+                                val now = Instant.now().toString()
+                                settingsStore.recordRegistered(now)
+                                repository.writeLog("info", "work", "auto refresh network constraint updated", "interval=${settings.intervalMinutes}m, wifiOnly=$wifiOnly")
+                            }
+                            status = result.message
+                        }
+                    }
+                )
+                Text("当前网络约束：${if (settings.wifiOnly) "仅 Wi-Fi" else "任意联网"}")
+                Text("网络不可用时刷新会失败并写入日志，不弹出打扰提示。")
+            }
+        }
+        item {
+            SettingsSection("导出设置") {
+                Text("默认导出格式：${settings.defaultExportFormat.uppercase()}")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = { scope.launch { settingsStore.setDefaultExportFormat("csv") } }) {
+                        Text(if (settings.defaultExportFormat == "csv") "CSV *" else "CSV")
+                    }
+                    TextButton(onClick = { scope.launch { settingsStore.setDefaultExportFormat("json") } }) {
+                        Text(if (settings.defaultExportFormat == "json") "JSON *" else "JSON")
+                    }
+                }
+                Text("默认目录：${settings.defaultExportTreeUri ?: "未设置，每次使用系统保存窗口"}")
+                Button(onClick = { defaultTreeLauncher.launch(null) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("选择默认导出目录")
+                }
+                Button(
+                    onClick = {
+                        scope.launch {
+                            settingsStore.setDefaultExportTreeUri(null)
+                            status = "已清除默认导出目录"
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("清除默认导出目录")
+                }
+            }
+        }
+        item {
+            SettingsSection("数据与存储") {
+                Text("Room 数据库版本：1")
+                Text("历史快照保存在本机应用数据库。当前版本未提供批量清库入口。")
+            }
+        }
+        item {
+            SettingsSection("通知与后台运行") {
+                Text("当前未启用前台服务通知。后台刷新由 WorkManager 调度，可能被系统延迟。")
+            }
+        }
+        item {
+            SettingsSection("关于与诊断") {
+                AutoRefreshStatusBlock(settings)
+            }
+        }
+        item {
         status?.let { Text(it) }
-        AutoRefreshStatusBlock(settings)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Button(
                 onClick = {
@@ -577,52 +876,6 @@ private fun SettingsPage(
                 modifier = Modifier.fillMaxWidth()
             ) { Text(if (bulkRunning) "刷新中" else "刷新所有已添加视频") }
         }
-        Text("间隔")
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            RefreshIntervals.allowedMinutes.forEach { minutes ->
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            settingsStore.setIntervalMinutes(minutes)
-                            val result = AutoRefreshRegistrationController.changeInterval(
-                                minutes,
-                                settings,
-                                autoRefreshScheduler
-                            )
-                            if (settings.enabled) {
-                                val now = Instant.now().toString()
-                                settingsStore.recordRegistered(now)
-                                repository.writeLog("info", "work", "auto refresh rescheduled", "interval=${minutes}m, wifiOnly=${settings.wifiOnly}")
-                            }
-                            status = if (result.action == "saved") "已保存间隔：${minutesLabel(minutes)}" else result.message
-                        }
-                    }
-                ) {
-                    Text(if (settings.intervalMinutes == minutes) "${minutesLabel(minutes)} *" else minutesLabel(minutes))
-                }
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("仅 Wi-Fi")
-            Switch(
-                checked = settings.wifiOnly,
-                onCheckedChange = { wifiOnly ->
-                    scope.launch {
-                        settingsStore.setWifiOnly(wifiOnly)
-                        val result = AutoRefreshRegistrationController.changeWifiOnly(
-                            wifiOnly,
-                            settings,
-                            autoRefreshScheduler
-                        )
-                        if (settings.enabled) {
-                            val now = Instant.now().toString()
-                            settingsStore.recordRegistered(now)
-                            repository.writeLog("info", "work", "auto refresh network constraint updated", "interval=${settings.intervalMinutes}m, wifiOnly=$wifiOnly")
-                        }
-                        status = result.message
-                    }
-                }
-            )
         }
     }
 }
@@ -648,6 +901,126 @@ private fun AutoRefreshStatusBlock(settings: AutoRefreshSettings) {
         }
     }
 }
+
+@Composable
+private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Card {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, fontWeight = FontWeight.Bold)
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SettingSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, fontWeight = FontWeight.Bold)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun ExportDefaultPrompt(
+    onChooseDefault: () -> Unit,
+    onAskEveryTime: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("设置默认导出位置？") },
+        text = { Text("Android 需要你额外选择一个目录并授权，才能在后续导出中直接保存到默认位置。") },
+        confirmButton = {
+            TextButton(onClick = onChooseDefault) { Text("选择默认目录") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onAskEveryTime) { Text("每次询问") }
+                TextButton(onClick = onDismiss) { Text("取消") }
+            }
+        }
+    )
+}
+
+private suspend fun saveOrLaunchPicker(
+    context: Context,
+    settingsStore: AutoRefreshSettingsStore,
+    settings: AutoRefreshSettings,
+    payload: ExportPayload,
+    forcePicker: Boolean,
+    onNeedPicker: () -> Unit
+): String {
+    val treeUri = settings.defaultExportTreeUri
+    if (ExportLocationPolicy.shouldLaunchPicker(treeUri, settings.askExportLocationEveryTime, forcePicker)) {
+        onNeedPicker()
+        return "请选择保存位置：${payload.fileName}"
+    }
+    return try {
+        writePayloadToTree(context, Uri.parse(treeUri), payload)
+    } catch (exc: SecurityException) {
+        settingsStore.setDefaultExportTreeUri(null)
+        onNeedPicker()
+        "默认目录授权失效，请重新选择保存位置"
+    } catch (exc: Exception) {
+        "导出失败：${exc.message ?: exc.javaClass.simpleName}"
+    }
+}
+
+private fun writePayloadToUri(context: Context, uri: Uri, payload: ExportPayload): String {
+    context.contentResolver.openOutputStream(uri)?.use { stream ->
+        stream.write(payload.content.toByteArray(Charsets.UTF_8))
+    } ?: throw IllegalStateException("无法打开系统保存位置")
+    return payload.formatSaved("系统选择位置")
+}
+
+private fun writePayloadToTree(context: Context, treeUri: Uri, payload: ExportPayload): String {
+    val permissionValid = context.contentResolver.persistedUriPermissions.any {
+        it.uri == treeUri && it.isWritePermission
+    }
+    if (!permissionValid) {
+        throw SecurityException("默认目录授权不存在或已失效")
+    }
+    val tree = DocumentFile.fromTreeUri(context, treeUri)
+        ?: throw IllegalStateException("无法访问默认导出目录")
+    val targetName = uniqueDocumentName(tree, payload.fileName)
+    val target = tree.createFile(payload.mimeType, targetName)
+        ?: throw IllegalStateException("无法创建导出文件")
+    context.contentResolver.openOutputStream(target.uri)?.use { stream ->
+        stream.write(payload.content.toByteArray(Charsets.UTF_8))
+    } ?: throw IllegalStateException("无法写入导出文件")
+    return payload.formatSaved(targetName)
+}
+
+private fun uniqueDocumentName(tree: DocumentFile, fileName: String): String {
+    val dotIndex = fileName.lastIndexOf('.')
+    val base = if (dotIndex > 0) fileName.substring(0, dotIndex) else fileName
+    val ext = if (dotIndex > 0) fileName.substring(dotIndex) else ""
+    var candidate = fileName
+    var index = 1
+    while (tree.findFile(candidate) != null) {
+        candidate = "${base}_$index$ext"
+        index += 1
+    }
+    return candidate
+}
+
+private fun ExportPayload.formatSaved(location: String): String =
+    "导出成功\n文件名：$fileName\n大小：$sizeBytes bytes\n时间：$exportedAt\n位置：$location"
 
 @Composable
 private fun LogCard(log: AppLogEntity) {
@@ -693,3 +1066,12 @@ private fun minValueText(points: List<TrendPoint>): String =
 
 private fun maxValueText(points: List<TrendPoint>): String =
     points.maxOfOrNull { it.value ?: Long.MIN_VALUE }?.toString() ?: "-"
+
+private fun pageLabel(page: Page): String =
+    when (page) {
+        Page.Home -> "首页"
+        Page.Detail -> "详情"
+        Page.History -> "历史"
+        Page.Settings -> "设置"
+        Page.Advanced -> "高级"
+    }

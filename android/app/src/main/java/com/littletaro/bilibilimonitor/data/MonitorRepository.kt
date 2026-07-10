@@ -148,6 +148,16 @@ class MonitorRepository(
         }
     }
 
+    suspend fun jsonPayload(bvId: String): ExportPayload = withContext(Dispatchers.IO) {
+        val video = dao.videoByBvId(bvId) ?: throw IllegalArgumentException("视频不存在")
+        exporter.jsonPayload(video, dao.snapshotsForExport(bvId))
+    }
+
+    suspend fun csvPayload(bvId: String): ExportPayload = withContext(Dispatchers.IO) {
+        val video = dao.videoByBvId(bvId) ?: throw IllegalArgumentException("视频不存在")
+        exporter.csvPayload(video, dao.snapshotsForExport(bvId))
+    }
+
     suspend fun writeLog(level: String, tag: String, message: String, detail: String? = null) {
         dao.insertLog(
             AppLogEntity(

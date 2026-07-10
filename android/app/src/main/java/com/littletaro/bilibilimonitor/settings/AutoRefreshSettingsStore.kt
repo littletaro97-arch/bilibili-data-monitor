@@ -23,7 +23,10 @@ data class AutoRefreshSettings(
     val lastAutoRefreshResult: String? = null,
     val lastAutoRefreshError: String? = null,
     val autoRefreshSuccessCount: Long = 0,
-    val autoRefreshFailureCount: Long = 0
+    val autoRefreshFailureCount: Long = 0,
+    val defaultExportTreeUri: String? = null,
+    val askExportLocationEveryTime: Boolean = true,
+    val defaultExportFormat: String = "csv"
 )
 
 object RefreshIntervals {
@@ -52,7 +55,10 @@ class AutoRefreshSettingsStore(private val context: Context) {
             lastAutoRefreshResult = preferences[Keys.LAST_AUTO_REFRESH_RESULT],
             lastAutoRefreshError = preferences[Keys.LAST_AUTO_REFRESH_ERROR],
             autoRefreshSuccessCount = preferences[Keys.AUTO_REFRESH_SUCCESS_COUNT] ?: 0,
-            autoRefreshFailureCount = preferences[Keys.AUTO_REFRESH_FAILURE_COUNT] ?: 0
+            autoRefreshFailureCount = preferences[Keys.AUTO_REFRESH_FAILURE_COUNT] ?: 0,
+            defaultExportTreeUri = preferences[Keys.DEFAULT_EXPORT_TREE_URI],
+            askExportLocationEveryTime = preferences[Keys.ASK_EXPORT_LOCATION_EVERY_TIME] ?: true,
+            defaultExportFormat = preferences[Keys.DEFAULT_EXPORT_FORMAT] ?: "csv"
         )
     }
 
@@ -120,6 +126,31 @@ class AutoRefreshSettingsStore(private val context: Context) {
         }
     }
 
+    suspend fun setDefaultExportTreeUri(uri: String?) {
+        context.autoRefreshDataStore.edit { preferences ->
+            if (uri == null) {
+                preferences.remove(Keys.DEFAULT_EXPORT_TREE_URI)
+                preferences[Keys.ASK_EXPORT_LOCATION_EVERY_TIME] = true
+            } else {
+                preferences[Keys.DEFAULT_EXPORT_TREE_URI] = uri
+                preferences[Keys.ASK_EXPORT_LOCATION_EVERY_TIME] = false
+            }
+        }
+    }
+
+    suspend fun setAskExportLocationEveryTime(ask: Boolean) {
+        context.autoRefreshDataStore.edit { preferences ->
+            preferences[Keys.ASK_EXPORT_LOCATION_EVERY_TIME] = ask
+        }
+    }
+
+    suspend fun setDefaultExportFormat(format: String) {
+        require(format == "csv" || format == "json") { "Unsupported export format: $format" }
+        context.autoRefreshDataStore.edit { preferences ->
+            preferences[Keys.DEFAULT_EXPORT_FORMAT] = format
+        }
+    }
+
     private object Keys {
         val ENABLED = booleanPreferencesKey("enabled")
         val INTERVAL_MINUTES = longPreferencesKey("interval_minutes")
@@ -133,5 +164,8 @@ class AutoRefreshSettingsStore(private val context: Context) {
         val LAST_AUTO_REFRESH_ERROR = stringPreferencesKey("last_auto_refresh_error")
         val AUTO_REFRESH_SUCCESS_COUNT = longPreferencesKey("auto_refresh_success_count")
         val AUTO_REFRESH_FAILURE_COUNT = longPreferencesKey("auto_refresh_failure_count")
+        val DEFAULT_EXPORT_TREE_URI = stringPreferencesKey("default_export_tree_uri")
+        val ASK_EXPORT_LOCATION_EVERY_TIME = booleanPreferencesKey("ask_export_location_every_time")
+        val DEFAULT_EXPORT_FORMAT = stringPreferencesKey("default_export_format")
     }
 }

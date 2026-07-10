@@ -8,6 +8,7 @@ data/*.db-*
 data/exports/
 logs/*.log
 reports/output/
+reports/*.png
 
 .env
 *.local

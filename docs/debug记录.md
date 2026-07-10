@@ -333,3 +333,39 @@ powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
 3. 自动刷新筛选按 `auto` 关键词匹配 message/detail。
 4. 手动刷新筛选按 `manual` 关键词匹配 message/detail。
 5. 导出筛选按 tag `export` 匹配。
+
+## Android v0.7.0 导航、导出和设置页排查
+
+### 顶部导航显示异常
+
+1. 未选中视频时，顶部导航只应显示“首页 / 设置 / 高级”。
+2. 选中首页列表中的视频后，顶部导航才应显示“详情 / 历史”。
+3. 如果删除或清空了当前选中视频，详情和历史入口应消失，页面应回到首页。
+4. 如果“设置”被错误高亮，检查当前 `Page` 状态和 `pageLabel(page)`，不要写死设置页选中态。
+5. 旋转屏幕后选中视频应通过 `rememberSaveable` 保留；App 被系统杀掉后的长期恢复不属于当前版本范围。
+
+### 状态栏或刘海屏遮挡
+
+1. App 根容器应使用 `safeDrawingPadding()`。
+2. 不要给顶部导航再叠加固定高度状态栏 padding，避免双重留白。
+3. 如果某个页面单独贴边，优先检查该页面是否绕过了 `MonitorApp` 根容器。
+
+### 首次导出没有系统保存窗口
+
+1. 默认设置应为 `askExportLocationEveryTime=true` 且 `defaultExportTreeUri=null`。
+2. 直接导出 JSON/CSV 时应调用 `CreateDocument`，由系统保存窗口选择文件名和位置。
+3. 不能先写到 app 外部目录再把路径展示给用户；分享功能可以继续使用 app 私有导出文件。
+
+### 默认导出目录不生效
+
+1. `CreateDocument` 返回的是文件 URI，不能把它当目录 URI。
+2. 默认目录必须通过 `OpenDocumentTree` 获取，并调用 `takePersistableUriPermission()`。
+3. 直存前必须检查 `contentResolver.persistedUriPermissions` 是否仍有写权限。
+4. 授权失效时应清除默认目录并回退系统保存窗口，而不是静默失败。
+5. 同名文件应追加后缀，避免覆盖已有导出文件。
+
+### Android unit test 在中文路径下 ClassNotFoundException
+
+1. 如果 `app/build/intermediates/javac/.../*Test.class` 存在，但测试报告显示所有测试类 `ClassNotFoundException`，优先怀疑 Gradle/JDK worker classpath 在中文路径下异常。
+2. 使用 `C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android` 这个 ASCII junction 重新执行同一测试。
+3. 只有 ASCII 路径下仍失败时，才按代码或测试逻辑失败处理。

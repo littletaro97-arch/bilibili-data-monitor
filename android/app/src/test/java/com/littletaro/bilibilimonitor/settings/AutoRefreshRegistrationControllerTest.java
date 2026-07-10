@@ -22,7 +22,10 @@ public class AutoRefreshRegistrationControllerTest {
                 null,
                 null,
                 0L,
-                0L
+                0L,
+                null,
+                true,
+                "csv"
         );
 
         AutoRefreshRegistrationResult result =
@@ -62,7 +65,10 @@ public class AutoRefreshRegistrationControllerTest {
                 null,
                 null,
                 0L,
-                0L
+                0L,
+                null,
+                true,
+                "csv"
         );
 
         AutoRefreshRegistrationResult enabledResult =
@@ -96,7 +102,10 @@ public class AutoRefreshRegistrationControllerTest {
                 null,
                 null,
                 0L,
-                0L
+                0L,
+                null,
+                true,
+                "csv"
         );
 
         AutoRefreshRegistrationController.INSTANCE.changeWifiOnly(false, enabled, client);

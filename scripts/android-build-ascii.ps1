@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "v0.6.0",
+    [string]$Version = "v0.7.0",
     [string]$ProjectRoot = "",
     [string]$AsciiRoot = "C:\Users\LittleTaro\codex-bilibili-monitor-ascii"
 )
@@ -70,6 +70,12 @@ try {
         throw "Gradle test failed with exit code $LASTEXITCODE"
     }
 
+    Write-Step "Running lintDebug"
+    & .\gradlew.bat lintDebug --no-daemon --console=plain --stacktrace
+    if ($LASTEXITCODE -ne 0) {
+        throw "Gradle lintDebug failed with exit code $LASTEXITCODE"
+    }
+
     Write-Step "Running assembleDebug"
     & .\gradlew.bat assembleDebug --no-daemon --console=plain --stacktrace
     if ($LASTEXITCODE -ne 0) {
@@ -87,12 +93,15 @@ $sha256 = (Get-FileHash -LiteralPath $apkTarget -Algorithm SHA256).Hash
 $buildTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz"
 $commit = (& git -C $ProjectRoot rev-parse --short HEAD).Trim()
 $branch = (& git -C $ProjectRoot branch --show-current).Trim()
+$dirtyLines = @(& git -C $ProjectRoot status --short)
+$workingTreeClean = if ($dirtyLines.Count -eq 0) { "yes" } else { "no" }
 $gradleVersion = Get-GradleVersion -AndroidRoot $androidRoot
 
 $buildInfoLines = New-Object System.Collections.Generic.List[string]
 $buildInfoLines.Add("Version: $Version")
 $buildInfoLines.Add("Git commit hash at build time: $commit")
 $buildInfoLines.Add("Git branch: $branch")
+$buildInfoLines.Add("Git working tree clean at build time: $workingTreeClean")
 $buildInfoLines.Add("Build time: $buildTime")
 $buildInfoLines.Add("Formal project path: $ProjectRoot")
 $buildInfoLines.Add("Android build path: $androidRoot")
@@ -114,21 +123,23 @@ $changelogLines.Add("# $Version Android Changelog")
 $changelogLines.Add("")
 $changelogLines.Add("## Added")
 $changelogLines.Add("")
-$changelogLines.Add("- Adds an auto refresh diagnostics area with cumulative success and failure counts.")
-$changelogLines.Add("- Adds a one-shot auto refresh test button for real-device debugging.")
-$changelogLines.Add("- Adds a manual refresh-all-existing-videos button.")
-$changelogLines.Add("- Adds log filters for level, manual refresh, auto refresh, and export logs.")
+$changelogLines.Add("- Adds a combined Advanced area for selected-video export tools and logs.")
+$changelogLines.Add("- Adds dynamic top navigation that hides detail/history until a video is selected.")
+$changelogLines.Add("- Adds Android system save flow for first export, with optional persisted default directory.")
+$changelogLines.Add("- Adds export naming and export location policy unit coverage.")
 $changelogLines.Add("- Generates versioned Debug APK under releases/android/$Version/.")
 $changelogLines.Add("- Generates build info and test report with APK size and SHA256.")
 $changelogLines.Add("")
 $changelogLines.Add("## Changed")
 $changelogLines.Add("")
 $changelogLines.Add("- Android versionName/versionCode updated for $Version.")
-$changelogLines.Add("- Settings diagnostics now show unique work name, constraints, counters, and last result details.")
+$changelogLines.Add("- Applies safe drawing insets around the app shell for status bars and display cutouts.")
+$changelogLines.Add("- Reorganizes Settings into auto refresh, network constraints, export settings, storage, background, and diagnostics sections.")
+$changelogLines.Add("- Keeps share export available while changing direct export to Storage Access Framework.")
 $changelogLines.Add("")
 $changelogLines.Add("## Known Issues")
 $changelogLines.Add("")
-$changelogLines.Add("- Codex did not perform real-device installation testing for $Version.")
+$changelogLines.Add("- Full SAF save-directory behavior still depends on user interaction in Android's system picker.")
 $changelogLines.Add("- Direct Android unit tests under the formal Chinese path may still fail because of JDK/Gradle worker argfile classpath handling.")
 $changelogLines.Add("- Auto refresh depends on Android WorkManager scheduling and can be delayed or merged by the system.")
 $changelogLines.Add("- Network requests remain low frequency and cover only already-added videos; no login, Cookie, captcha, proxy, or risk-control bypass is implemented.")
@@ -145,6 +156,8 @@ $testReportLines.Add("")
 $testReportLines.Add("## Android")
 $testReportLines.Add("")
 $testReportLines.Add("- Command: .\gradlew.bat test")
+$testReportLines.Add("- Result: passed")
+$testReportLines.Add("- Command: .\gradlew.bat lintDebug")
 $testReportLines.Add("- Result: passed")
 $testReportLines.Add("- Command: .\gradlew.bat assembleDebug")
 $testReportLines.Add("- Result: passed")

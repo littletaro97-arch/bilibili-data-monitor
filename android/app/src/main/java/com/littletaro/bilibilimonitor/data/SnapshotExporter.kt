@@ -13,12 +13,35 @@ data class ExportResult(
     val sizeBytes: Long
 )
 
+data class ExportPayload(
+    val fileName: String,
+    val mimeType: String,
+    val content: String,
+    val exportedAt: String
+) {
+    val sizeBytes: Long = content.toByteArray(Charsets.UTF_8).size.toLong()
+}
+
 class SnapshotExporter(context: Context) {
     private val exportDir: File = File(context.getExternalFilesDir(null), "exports").apply {
         mkdirs()
     }
 
     fun exportJson(video: VideoEntity, snapshots: List<VideoSnapshotEntity>): ExportResult {
+        val payload = jsonPayload(video, snapshots)
+        val target = File(exportDir, payload.fileName)
+        target.writeText(payload.content, Charsets.UTF_8)
+        return ExportResult(target.name, target.absolutePath, payload.exportedAt, target.length())
+    }
+
+    fun exportCsv(video: VideoEntity, snapshots: List<VideoSnapshotEntity>): ExportResult {
+        val payload = csvPayload(video, snapshots)
+        val target = File(exportDir, payload.fileName)
+        target.writeText(payload.content, Charsets.UTF_8)
+        return ExportResult(target.name, target.absolutePath, payload.exportedAt, target.length())
+    }
+
+    fun jsonPayload(video: VideoEntity, snapshots: List<VideoSnapshotEntity>): ExportPayload {
         val exportedAt = Instant.now().toString()
         val root = JSONObject()
             .put("platform", "bilibili")
@@ -32,14 +55,16 @@ class SnapshotExporter(context: Context) {
             .put("snapshots", JSONArray().also { array ->
                 snapshots.forEach { array.put(snapshotJson(video, it)) }
             })
-        val target = File(exportDir, "${video.bvId}_${System.currentTimeMillis()}.json")
-        target.writeText(root.toString(2), Charsets.UTF_8)
-        return ExportResult(target.name, target.absolutePath, exportedAt, target.length())
+        return ExportPayload(
+            fileName = ExportFileNamer.build(video.bvId, video.title, "历史数据", "json"),
+            mimeType = "application/json",
+            content = root.toString(2),
+            exportedAt = exportedAt
+        )
     }
 
-    fun exportCsv(video: VideoEntity, snapshots: List<VideoSnapshotEntity>): ExportResult {
+    fun csvPayload(video: VideoEntity, snapshots: List<VideoSnapshotEntity>): ExportPayload {
         val exportedAt = Instant.now().toString()
-        val target = File(exportDir, "${video.bvId}_${System.currentTimeMillis()}.csv")
         val lines = buildList {
             add(CSV_HEADER.joinToString(","))
             snapshots.forEach { snapshot ->
@@ -68,8 +93,12 @@ class SnapshotExporter(context: Context) {
                 )
             }
         }
-        target.writeText(lines.joinToString("\n"), Charsets.UTF_8)
-        return ExportResult(target.name, target.absolutePath, exportedAt, target.length())
+        return ExportPayload(
+            fileName = ExportFileNamer.build(video.bvId, video.title, "历史数据", "csv"),
+            mimeType = "text/csv",
+            content = lines.joinToString("\n"),
+            exportedAt = exportedAt
+        )
     }
 
     companion object {

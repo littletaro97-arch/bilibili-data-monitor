@@ -39,6 +39,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
 ```
 
 该脚本会通过 `C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android` 执行测试和构建，并把 Debug APK 复制到对应版本的 `releases/android/` 目录。
+从 v0.7.0 起，该脚本还会执行 `lintDebug`。
 
 如果项目位于包含中文字符的 Windows 路径，JDK/Gradle 的测试 worker `@argfile` 可能无法正确加载 unit-test classpath，表现为 `ClassNotFoundException`。本机验证时使用临时 ASCII junction 指向同一仓库后执行 Android 测试和打包。
 
@@ -70,6 +71,12 @@ v0.6.0 输出位置：
 
 ```text
 releases/android/v0.6.0/bilibili-monitor-android-v0.6.0-debug.apk
+```
+
+v0.7.0 输出位置：
+
+```text
+releases/android/v0.7.0/bilibili-monitor-android-v0.7.0-debug.apk
 ```
 
 ## v0.5.0 范围
@@ -104,3 +111,15 @@ v0.6.0 只增强自动刷新可观测性和手动 debug 工具：
 - “刷新所有已添加视频”按钮手动批量刷新本地已有视频。
 - 日志页提供基础筛选。
 - 不新增循环任务，不降低 WorkManager 周期，不做隐藏保活。
+
+## v0.7.0 导航、导出和设置页修复范围
+
+v0.7.0 只修复 Android 端可用性和系统存储交互：
+
+- 顶部导航根据是否选中视频动态显示；无选中视频时隐藏详情和历史。
+- App 外层适配安全绘制区域，降低状态栏、刘海屏、挖孔屏遮挡风险。
+- 直接导出走 Android Storage Access Framework：首次必须打开系统保存窗口，默认目录通过目录授权单独设置。
+- 默认目录直存会避开同名覆盖；授权失效时清理默认目录并回到系统保存窗口。
+- 原分享导出继续通过 FileProvider 和系统分享面板工作。
+- 设置页按功能分类重排，网络约束开关整行可点击并右侧对齐。
+- 不新增采集范围，不处理登录、Cookie、验证码、代理池或风控绕过。
