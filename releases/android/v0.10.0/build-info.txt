@@ -1,0 +1,12 @@
+Version: v0.10.0
+Baseline commit: 44bc2bff71d67d028b356b8aa424e0ff585940c3
+Branch: codex/bilibili-project-setup
+Build date: 2026-07-11
+Used ASCII junction: yes
+minSdk: 26
+targetSdk: 35
+compileSdk: 35
+Room database version: 2
+APK file name: bilibili-monitor-android-v0.10.0-debug.apk
+APK size: 10723988 bytes
+SHA256: AC6C1501D7FC8CF4E48CFE421F8B3362AA3F21D51D9B308DCF273797875D680D

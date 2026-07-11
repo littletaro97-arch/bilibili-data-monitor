@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "v0.9.1",
+    [string]$Version = "v0.10.0",
     [string]$ProjectRoot = "",
     [string]$AsciiRoot = "C:\Users\LittleTaro\codex-bilibili-monitor-ascii"
 )

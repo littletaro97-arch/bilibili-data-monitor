@@ -12,8 +12,8 @@ android {
         applicationId = "com.littletaro.bilibilimonitor"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "0.9.1"
+        versionCode = 16
+        versionName = "0.10.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -73,4 +73,5 @@ dependencies {
     testImplementation("org.json:json:20240303")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("androidx.room:room-testing:2.6.1")
 }
