@@ -67,7 +67,15 @@ class ContinuousMonitoringService : Service() {
                         stopWithResult("stopped: no videos")
                         return@launch
                     }
-                    app.repository.writeLog("info", "work", "continuous monitoring cycle finished", "total=${result.total}, success=${result.success}, failed=${result.failed}")
+                    val finishedAt = DeviceTime.nowInstant()
+                    val notificationResult = MonitorNotificationManager.maybeNotifyRefreshResult(this@ContinuousMonitoringService, latest, result, finishedAt)
+                    app.settingsStore.recordNotificationAttempt(finishedAt.toString(), notificationResult.value)
+                    app.repository.writeLog(
+                        "info",
+                        "work",
+                        "continuous monitoring cycle finished",
+                        "total=${result.total}, success=${result.success}, failed=${result.failed}, notification=${notificationResult.value}"
+                    )
                 }
                 stopWithResult("settings changed")
             } catch (_: CancellationException) {
@@ -96,7 +104,7 @@ class ContinuousMonitoringService : Service() {
         val stopIntent = PendingIntent.getService(this, 11, Intent(this, ContinuousMonitoringService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
-            .setContentTitle("B站数据持续监控")
+            .setContentTitle("B站数据监控正在后台运行")
             .setContentText(intervalMinutes?.let { "当前间隔：$it 分钟；系统可能延迟执行" } ?: "正在启动持续监控")
             .setContentIntent(openIntent)
             .addAction(0, "停止", stopIntent)
@@ -110,7 +118,11 @@ class ContinuousMonitoringService : Service() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(NotificationManager::class.java)
         if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-            manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "持续监控", NotificationManager.IMPORTANCE_LOW))
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "后台运行", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "持续监控运行期间显示，停止监控后自动消失"
+                }
+            )
         }
     }
 
@@ -140,6 +152,8 @@ class ContinuousMonitoringService : Service() {
 
     companion object {
         const val CHANNEL_ID = "continuous_monitoring"
+        const val NOTIFICATION_ONGOING = true
+        const val NOTIFICATION_AUTO_CANCEL = false
         const val ACTION_STOP = "com.littletaro.bilibilimonitor.STOP_CONTINUOUS_MONITORING"
         private const val NOTIFICATION_ID = 2100
 
