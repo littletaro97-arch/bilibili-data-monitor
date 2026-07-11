@@ -13,3 +13,7 @@
 | root `config.toml`, `data/`, `logs/`, `reports/` | `windows/runtime-data/` | Copy only when the destination is absent; never overwrite or delete legacy data. |
 
 Windows SQLite moves from PRAGMA user_version 0 to 1 and adds `collection_source` plus `exchange_digest`. Existing source labels are ambiguous and migrate to `UNKNOWN`. Android Room moves from v2 to v3 and adds nullable `exchangeDigest` without deleting snapshots.
+
+## v0.11.1
+
+No database schema migration. New Android timestamps are stored as canonical UTC `Z` strings. Existing UTC and offset-bearing timestamps remain unchanged and are parsed as absolute instants for history/trend sorting and import deduplication. Legacy timestamps without an offset remain preserved; Windows interprets them using the current system zone because their original zone cannot be recovered with certainty.

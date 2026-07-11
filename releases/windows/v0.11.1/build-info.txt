@@ -1,0 +1,8 @@
+Version: v0.11.1
+Git baseline at validation time: 1de3636
+Git branch: codex/bilibili-project-setup
+Entry point: windows/run.bat
+Python test result: 56 passed
+SQLite user_version: 1
+History exchange format version: 1
+Packaged executable: not produced; existing source-based launch retained
