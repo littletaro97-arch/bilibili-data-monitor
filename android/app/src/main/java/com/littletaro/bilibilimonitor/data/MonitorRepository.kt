@@ -164,6 +164,20 @@ class MonitorRepository(
         exporter.csvPayload(video, dao.snapshotsForExport(bvId))
     }
 
+    suspend fun exportHistoryExchange(sourceVersion: String): ByteArray = withContext(Dispatchers.IO) {
+        HistoryExchangeCodec.export(dao.allVideosForExchange(), dao.allSnapshotsForExchange(), sourceVersion)
+    }
+
+    suspend fun previewHistoryExchange(bytes: ByteArray): HistoryImportPreview = withContext(Dispatchers.IO) {
+        HistoryExchangeCodec.preview(bytes)
+    }
+
+    suspend fun importHistoryExchange(packageData: HistoryExchangePackage): HistoryImportReport = withContext(Dispatchers.IO) {
+        val report = dao.mergeHistoryExchange(packageData)
+        writeLog("info", "exchange", "history exchange imported", "videos=${report.videosAdded}, snapshots=${report.snapshotsAdded}, duplicates=${report.duplicates}, conflicts=${report.conflicts}")
+        report
+    }
+
     suspend fun writeLog(level: String, tag: String, message: String, detail: String? = null) {
         dao.insertLog(
             AppLogEntity(

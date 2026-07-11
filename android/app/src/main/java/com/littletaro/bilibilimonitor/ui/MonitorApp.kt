@@ -69,6 +69,8 @@ import com.littletaro.bilibilimonitor.data.AppLogEntity
 import com.littletaro.bilibilimonitor.data.DeviceTime
 import com.littletaro.bilibilimonitor.data.ExportPayload
 import com.littletaro.bilibilimonitor.data.ExportResult
+import com.littletaro.bilibilimonitor.data.HistoryExchangeCodec
+import com.littletaro.bilibilimonitor.data.HistoryImportPreview
 import com.littletaro.bilibilimonitor.data.MonitorRepository
 import com.littletaro.bilibilimonitor.data.RefreshAllResult
 import com.littletaro.bilibilimonitor.data.SnapshotSources
@@ -79,6 +81,8 @@ import com.littletaro.bilibilimonitor.data.TrendPoint
 import com.littletaro.bilibilimonitor.data.VideoEntity
 import com.littletaro.bilibilimonitor.data.VideoSnapshotEntity
 import com.littletaro.bilibilimonitor.notifications.MonitorNotificationManager
+import com.littletaro.bilibilimonitor.navigation.AndroidVideoIntentStarter
+import com.littletaro.bilibilimonitor.navigation.VideoLinkOpener
 import com.littletaro.bilibilimonitor.settings.AutoRefreshSettings
 import com.littletaro.bilibilimonitor.settings.AutoRefreshSettingsStore
 import com.littletaro.bilibilimonitor.settings.AutoRefreshRegistrationController
@@ -87,6 +91,7 @@ import com.littletaro.bilibilimonitor.settings.NotificationIntervals
 import com.littletaro.bilibilimonitor.settings.NotificationModes
 import com.littletaro.bilibilimonitor.settings.RefreshIntervals
 import com.littletaro.bilibilimonitor.worker.AutoRefreshScheduler
+import com.littletaro.bilibilimonitor.worker.ContinuousMonitoringService
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -145,8 +150,8 @@ fun MonitorApp(
                 }
             }
 
-            LaunchedEffect(appSettings.enabled, appSettings.intervalMinutes) {
-                if (!appSettings.enabled || appSettings.intervalMinutes >= RefreshIntervals.MIN_WORK_MANAGER_MINUTES) return@LaunchedEffect
+            LaunchedEffect(appSettings.enabled, appSettings.intervalMinutes, appSettings.continuousMonitoringEnabled) {
+                if (!appSettings.enabled || appSettings.continuousMonitoringEnabled || appSettings.intervalMinutes >= RefreshIntervals.MIN_WORK_MANAGER_MINUTES) return@LaunchedEffect
                 repository.writeLog("info", "work", "foreground refresh loop started", "interval=${appSettings.intervalMinutes}m")
                 while (true) {
                     delay(appSettings.intervalMinutes * 60_000L)
@@ -167,7 +172,13 @@ fun MonitorApp(
             ) {
                 Text("B站数据监控 Android MVP", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
-                NavRow(page, hasValidSelection) { target ->
+                val backgroundRestricted = appSettings.enabled && (
+                    (!appSettings.workRegistered && !appSettings.continuousMonitoringRunning) ||
+                        appSettings.autoRefreshFailureCount >= 3 ||
+                        (appSettings.continuousMonitoringEnabled &&
+                            (!appSettings.continuousMonitoringRunning || !MonitorNotificationManager.permissionGranted(context)))
+                    )
+                NavRow(page, hasValidSelection, backgroundRestricted) { target ->
                     if ((target == Page.Detail || target == Page.History) && !hasValidSelection) {
                         page = Page.Home
                     } else {
@@ -255,7 +266,7 @@ private fun BackgroundGuideDialog(
 }
 
 @Composable
-private fun NavRow(current: Page, hasSelection: Boolean, onSelect: (Page) -> Unit) {
+private fun NavRow(current: Page, hasSelection: Boolean, backgroundRestricted: Boolean, onSelect: (Page) -> Unit) {
     val pageByLabel = mapOf(
         "首页" to Page.Home,
         "详情" to Page.Detail,
@@ -268,9 +279,9 @@ private fun NavRow(current: Page, hasSelection: Boolean, onSelect: (Page) -> Uni
         items(items) { item ->
             val selected = item == current
             if (selected) {
-                Button(onClick = { onSelect(item) }) { Text(pageLabel(item)) }
+                Button(onClick = { onSelect(item) }) { Text(pageLabel(item, backgroundRestricted)) }
             } else {
-                TextButton(onClick = { onSelect(item) }) { Text(pageLabel(item)) }
+                TextButton(onClick = { onSelect(item) }) { Text(pageLabel(item, backgroundRestricted)) }
             }
         }
     }
@@ -355,16 +366,18 @@ private fun HomePage(
             item { Text("暂无视频，请先输入 BV 号或视频链接") }
         } else {
             items(videos, key = { it.bvId }) { video ->
-                VideoCard(video, onOpenVideo)
+                VideoCard(repository, video, onOpenVideo)
             }
         }
     }
 }
 
 @Composable
-private fun VideoCard(video: VideoEntity, onOpenVideo: (String) -> Unit) {
+private fun VideoCard(repository: MonitorRepository, video: VideoEntity, onOpenVideo: (String) -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var openError by remember { mutableStateOf<String?>(null) }
+    var openingExternal by remember { mutableStateOf(false) }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ExpandableText(
@@ -376,7 +389,31 @@ private fun VideoCard(video: VideoEntity, onOpenVideo: (String) -> Unit) {
             Text("UP: ${video.authorName ?: "未知"}")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { onOpenVideo(video.bvId) }) { Text("详情") }
-                Button(onClick = { openError = openBilibiliVideo(context, video.bvId) }) { Text("打开") }
+                Button(
+                    enabled = !openingExternal,
+                    onClick = {
+                        openingExternal = true
+                        val result = runCatching {
+                            VideoLinkOpener(AndroidVideoIntentStarter(context)).open(video.bvId)
+                        }
+                        openError = result.fold(
+                            onSuccess = { it.errorMessage },
+                            onFailure = { if (it is IllegalArgumentException) "无效 BV 号" else "未找到可以打开该视频链接的应用" }
+                        )
+                        scope.launch {
+                            val detail = result.getOrNull()?.logDetail()
+                                ?: "bvId=${video.bvId}, exception=${result.exceptionOrNull()?.javaClass?.simpleName}"
+                            repository.writeLog(
+                                if (result.getOrNull()?.succeeded == true) "info" else "warning",
+                                "navigation",
+                                "external video open",
+                                detail
+                            )
+                            delay(600)
+                            openingExternal = false
+                        }
+                    }
+                ) { Text("打开") }
             }
             openError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
@@ -834,10 +871,14 @@ private fun SettingsPage(
 ) {
     val context = LocalContext.current
     val settings by settingsStore.settings.collectAsStateWithLifecycle(initialValue = AutoRefreshSettings())
+    val workInfo by autoRefreshScheduler.workInfoFlow().collectAsStateWithLifecycle(initialValue = null)
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<String?>(null) }
     var testRunning by remember { mutableStateOf(false) }
     var bulkRunning by remember { mutableStateOf(false) }
+    var pendingExchangeExport by remember { mutableStateOf<ByteArray?>(null) }
+    var exchangePreview by remember { mutableStateOf<HistoryImportPreview?>(null) }
+    var exchangeImportRunning by remember { mutableStateOf(false) }
     var notificationPermissionGranted by remember {
         mutableStateOf(MonitorNotificationManager.permissionGranted(context))
     }
@@ -877,18 +918,62 @@ private fun SettingsPage(
         }
     }
 
+    val createExchangeLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        val bytes = pendingExchangeExport
+        pendingExchangeExport = null
+        if (uri != null && bytes != null) scope.launch {
+            status = runCatching {
+                context.contentResolver.openOutputStream(uri, "w")?.use { it.write(bytes) }
+                    ?: error("无法写入系统保存位置")
+                "历史交换包导出成功：${bytes.size} bytes"
+            }.getOrElse { "导出失败：${it.message}" }
+        }
+    }
+    val openExchangeLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) scope.launch {
+            exchangeImportRunning = true
+            status = runCatching {
+                val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    var total = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= HistoryExchangeCodec.MAX_ZIP_BYTES) { "ZIP 超过 100MB 限制" }
+                        output.write(buffer, 0, count)
+                    }
+                    output.toByteArray()
+                } ?: error("无法读取所选文件")
+                exchangePreview = repository.previewHistoryExchange(bytes)
+                "交换包校验通过，等待确认导入"
+            }.getOrElse { "导入预览失败：${it.message}" }
+            exchangeImportRunning = false
+        }
+    }
+
     fun updateInterval(minutes: Long) {
         if (minutes == settings.intervalMinutes) return
         scope.launch {
             settingsStore.setIntervalMinutes(minutes)
-            val result = AutoRefreshRegistrationController.changeInterval(
-                minutes,
-                settings,
-                autoRefreshScheduler
-            )
+            val continuousStillActive = settings.continuousMonitoringEnabled && minutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES
+            if (settings.continuousMonitoringEnabled && !continuousStillActive) {
+                settingsStore.setContinuousMonitoringEnabled(false)
+                ContinuousMonitoringService.stop(context)
+            }
+            val result = if (continuousStillActive) {
+                autoRefreshScheduler.cancel()
+                settingsStore.recordCancelled(DeviceTime.nowIsoString())
+                null
+            } else AutoRefreshRegistrationController.changeInterval(minutes, settings, autoRefreshScheduler)
             if (settings.enabled) {
                 val now = DeviceTime.nowIsoString()
-                settingsStore.recordRegistered(now)
+                if (!continuousStillActive) settingsStore.recordRegistered(now)
                 repository.writeLog(
                     "info",
                     "work",
@@ -896,7 +981,8 @@ private fun SettingsPage(
                     "selected=${minutes}m, effective=${RefreshIntervals.backgroundScheduleMinutes(minutes)}m, wifiOnly=${settings.wifiOnly}"
                 )
             }
-            status = if (result.action == "saved") "已保存间隔：${minutesLabel(minutes)}" else result.message
+            status = if (continuousStillActive) "持续监控间隔已保存：${minutesLabel(minutes)}"
+            else if (result?.action == "saved") "已保存间隔：${minutesLabel(minutes)}" else result?.message
         }
     }
 
@@ -934,6 +1020,8 @@ private fun SettingsPage(
                                     "selected=${settings.intervalMinutes}m, effective=${RefreshIntervals.backgroundScheduleMinutes(settings.intervalMinutes)}m, wifiOnly=${settings.wifiOnly}"
                                 )
                             } else {
+                                settingsStore.setContinuousMonitoringEnabled(false)
+                                ContinuousMonitoringService.stop(context)
                                 settingsStore.recordCancelled(now)
                                 repository.writeLog("info", "work", "auto refresh cancelled")
                             }
@@ -958,6 +1046,26 @@ private fun SettingsPage(
                     else "${minutesLabel(settings.intervalMinutes)}（后台可调度）"
                 )
                 Text("后台任务：${if (settings.workRegistered) "已注册，等待系统调度" else "未注册"}")
+                if (settings.intervalMinutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES) {
+                    SettingSwitchRow(
+                        title = "持续监控模式",
+                        subtitle = "息屏时使用前台服务继续采集，会显示持续通知并增加耗电；系统仍可能延迟或限制运行。",
+                        checked = settings.continuousMonitoringEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                if (enabled && (!MonitorNotificationManager.permissionGranted(context) || !MonitorNotificationManager.channelEnabled(context))) {
+                                    status = "持续监控需要可用的通知权限和通知渠道"
+                                } else {
+                                    settingsStore.setContinuousMonitoringEnabled(enabled)
+                                    if (enabled) ContinuousMonitoringService.start(context) else ContinuousMonitoringService.stop(context)
+                                    status = if (enabled) "正在启动持续监控" else "正在停止持续监控"
+                                }
+                            }
+                        }
+                    )
+                    Text("持续监控：${if (settings.continuousMonitoringRunning) "运行中" else "未运行"}")
+                    Text("最近结果：${settings.continuousMonitoringLastResult ?: "-"}")
+                }
             }
         }
         item {
@@ -1025,7 +1133,26 @@ private fun SettingsPage(
         }
         item {
             SettingsSection("数据与存储") {
-                Text("Room 数据库版本：2")
+                Text("Room 数据库版本：3")
+                Button(
+                    onClick = {
+                        scope.launch {
+                            status = "正在生成历史交换包"
+                            runCatching { repository.exportHistoryExchange("0.11.0") }
+                                .onSuccess {
+                                    pendingExchangeExport = it
+                                    createExchangeLauncher.launch("bilibili-history-v1-${System.currentTimeMillis()}.zip")
+                                }
+                                .onFailure { status = "导出失败：${it.message}" }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("导出跨端历史 ZIP") }
+                Button(
+                    onClick = { openExchangeLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
+                    enabled = !exchangeImportRunning,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("导入跨端历史 ZIP") }
             }
         }
         item {
@@ -1171,8 +1298,8 @@ private fun SettingsPage(
         }
         item {
             ExpandableSection("关于与诊断", initiallyExpanded = false, stateKey = "settings_diagnostics") {
-                Text("版本：0.9.1")
-                AutoRefreshStatusBlock(settings)
+                Text("版本：0.11.0")
+                AutoRefreshStatusBlock(settings, workInfo?.id?.toString(), workInfo?.state?.name)
             }
         }
         item {
@@ -1239,24 +1366,52 @@ private fun SettingsPage(
         }
         }
     }
+    exchangePreview?.let { preview ->
+        AlertDialog(
+            onDismissRequest = { exchangePreview = null },
+            title = { Text("确认合并历史") },
+            text = { Text("来源：${preview.sourcePlatform}\n导出时间：${preview.exportedAt}\n视频：${preview.videoCount}\n快照：${preview.snapshotCount}\n重复会跳过，冲突不会覆盖。") },
+            confirmButton = {
+                Button(onClick = {
+                    scope.launch {
+                        exchangeImportRunning = true
+                        val report = runCatching { repository.importHistoryExchange(preview.packageData) }
+                        status = report.fold(
+                            onSuccess = { "导入完成：视频 +${it.videosAdded}，快照 +${it.snapshotsAdded}，重复 ${it.duplicates}，冲突 ${it.conflicts}" },
+                            onFailure = { "导入失败，数据库已回滚：${it.message}" }
+                        )
+                        exchangeImportRunning = false
+                        exchangePreview = null
+                    }
+                }) { Text("合并导入") }
+            },
+            dismissButton = { TextButton(onClick = { exchangePreview = null }) { Text("取消") } }
+        )
+    }
 }
 
 @Composable
-private fun AutoRefreshStatusBlock(settings: AutoRefreshSettings) {
+private fun AutoRefreshStatusBlock(settings: AutoRefreshSettings, workId: String?, workState: String?) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("自动刷新调试状态", fontWeight = FontWeight.Bold)
             Text("任务名称：${AutoRefreshScheduler.UNIQUE_WORK_NAME}")
+            Text("任务 ID：${workId ?: "-"}")
+            Text("系统任务状态：${workState ?: "未注册或尚未读取"}")
+            Text("实际调度：${if (settings.continuousMonitoringRunning) "前台持续服务" else "WorkManager / 前台机会性刷新"}")
             Text("开关：${if (settings.enabled) "已开启" else "已关闭"}")
             Text("注册：${if (settings.workRegistered) "已注册" else "未注册"}")
             Text("间隔：${minutesLabel(settings.intervalMinutes)}")
             Text("网络约束：${if (settings.wifiOnly) "仅 Wi-Fi" else "任意联网"}")
             Text("最近注册：${DeviceTime.formatForDisplay(settings.lastRegisteredAt)}")
+            Text("最近计划：${DeviceTime.formatForDisplay(settings.lastRegisteredAt)}")
             Text("最近取消：${DeviceTime.formatForDisplay(settings.lastCancelledAt)}")
             Text("最近开始：${DeviceTime.formatForDisplay(settings.lastAutoRefreshStartedAt)}")
             Text("最近结束：${DeviceTime.formatForDisplay(settings.lastAutoRefreshFinishedAt)}")
             Text("最近结果：${settings.lastAutoRefreshResult ?: "-"}")
             Text("最近错误：${settings.lastAutoRefreshError ?: "-"}")
+            Text("前台服务：${if (settings.continuousMonitoringRunning) "运行中" else "未运行"}")
+            Text("厂商后台权限：需要确认")
             Text("累计成功：${settings.autoRefreshSuccessCount}")
             Text("累计失败：${settings.autoRefreshFailureCount}")
         }
@@ -1611,27 +1766,6 @@ private suspend fun notifyManualRefresh(
     repository.writeLog("info", "notification", "manual refresh notification attempt", outcome.value)
 }
 
-private fun openBilibiliVideo(context: Context, bvId: String): String? {
-    val uri = Uri.parse("https://www.bilibili.com/video/$bvId/")
-    val bilibiliIntent = Intent(Intent.ACTION_VIEW, uri).setPackage("tv.danmaku.bili")
-    val fallbackIntent = Intent(Intent.ACTION_VIEW, uri)
-    return try {
-        val intent = if (bilibiliIntent.resolveActivity(context.packageManager) != null) {
-            bilibiliIntent
-        } else {
-            fallbackIntent
-        }
-        if (intent.resolveActivity(context.packageManager) == null) {
-            "没有可打开视频链接的应用"
-        } else {
-            context.startActivity(intent)
-            null
-        }
-    } catch (_: Exception) {
-        "无法打开视频链接"
-    }
-}
-
 private fun ExportPayload.formatSaved(location: String): String =
     "导出成功\n文件名：$fileName\n大小：$sizeBytes bytes\n时间：$exportedAt\n位置：$location"
 
@@ -1687,11 +1821,11 @@ private fun minValueText(points: List<TrendPoint>): String =
 private fun maxValueText(points: List<TrendPoint>): String =
     points.maxOfOrNull { it.value ?: Long.MIN_VALUE }?.toString() ?: "-"
 
-private fun pageLabel(page: Page): String =
+private fun pageLabel(page: Page, backgroundRestricted: Boolean = false): String =
     when (page) {
         Page.Home -> "首页"
         Page.Detail -> "详情"
         Page.History -> "历史"
         Page.Settings -> "设置"
-        Page.Advanced -> "高级"
+        Page.Advanced -> if (backgroundRestricted) "高级 · 后台受限" else "高级"
     }

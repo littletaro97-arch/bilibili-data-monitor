@@ -34,7 +34,12 @@ data class AutoRefreshSettings @JvmOverloads constructor(
     val lastNotificationSentAt: String? = null,
     val backgroundGuideSeen: Boolean = false,
     val lastNotificationAttemptAt: String? = null,
-    val lastNotificationResult: String? = null
+    val lastNotificationResult: String? = null,
+    val continuousMonitoringEnabled: Boolean = false,
+    val continuousMonitoringRunning: Boolean = false,
+    val continuousMonitoringLastStartedAt: String? = null,
+    val continuousMonitoringLastStoppedAt: String? = null,
+    val continuousMonitoringLastResult: String? = null
 )
 
 object RefreshIntervals {
@@ -122,6 +127,11 @@ class AutoRefreshSettingsStore(private val context: Context) {
             lastNotificationSentAt = preferences[Keys.LAST_NOTIFICATION_SENT_AT],
             lastNotificationAttemptAt = preferences[Keys.LAST_NOTIFICATION_ATTEMPT_AT],
             lastNotificationResult = preferences[Keys.LAST_NOTIFICATION_RESULT],
+            continuousMonitoringEnabled = preferences[Keys.CONTINUOUS_MONITORING_ENABLED] ?: false,
+            continuousMonitoringRunning = preferences[Keys.CONTINUOUS_MONITORING_RUNNING] ?: false,
+            continuousMonitoringLastStartedAt = preferences[Keys.CONTINUOUS_MONITORING_LAST_STARTED_AT],
+            continuousMonitoringLastStoppedAt = preferences[Keys.CONTINUOUS_MONITORING_LAST_STOPPED_AT],
+            continuousMonitoringLastResult = preferences[Keys.CONTINUOUS_MONITORING_LAST_RESULT],
             backgroundGuideSeen = preferences[Keys.BACKGROUND_GUIDE_SEEN] ?: false
         )
     }
@@ -264,6 +274,26 @@ class AutoRefreshSettingsStore(private val context: Context) {
         }
     }
 
+    suspend fun setContinuousMonitoringEnabled(enabled: Boolean) {
+        context.autoRefreshDataStore.edit { it[Keys.CONTINUOUS_MONITORING_ENABLED] = enabled }
+    }
+
+    suspend fun recordContinuousMonitoringStarted(time: String) {
+        context.autoRefreshDataStore.edit {
+            it[Keys.CONTINUOUS_MONITORING_RUNNING] = true
+            it[Keys.CONTINUOUS_MONITORING_LAST_STARTED_AT] = time
+            it[Keys.CONTINUOUS_MONITORING_LAST_RESULT] = "running"
+        }
+    }
+
+    suspend fun recordContinuousMonitoringStopped(time: String, result: String) {
+        context.autoRefreshDataStore.edit {
+            it[Keys.CONTINUOUS_MONITORING_RUNNING] = false
+            it[Keys.CONTINUOUS_MONITORING_LAST_STOPPED_AT] = time
+            it[Keys.CONTINUOUS_MONITORING_LAST_RESULT] = result
+        }
+    }
+
     private object Keys {
         val ENABLED = booleanPreferencesKey("enabled")
         val INTERVAL_MINUTES = longPreferencesKey("interval_minutes")
@@ -288,5 +318,10 @@ class AutoRefreshSettingsStore(private val context: Context) {
         val LAST_NOTIFICATION_ATTEMPT_AT = stringPreferencesKey("last_notification_attempt_at")
         val LAST_NOTIFICATION_RESULT = stringPreferencesKey("last_notification_result")
         val BACKGROUND_GUIDE_SEEN = booleanPreferencesKey("background_guide_seen")
+        val CONTINUOUS_MONITORING_ENABLED = booleanPreferencesKey("continuous_monitoring_enabled")
+        val CONTINUOUS_MONITORING_RUNNING = booleanPreferencesKey("continuous_monitoring_running")
+        val CONTINUOUS_MONITORING_LAST_STARTED_AT = stringPreferencesKey("continuous_monitoring_last_started_at")
+        val CONTINUOUS_MONITORING_LAST_STOPPED_AT = stringPreferencesKey("continuous_monitoring_last_stopped_at")
+        val CONTINUOUS_MONITORING_LAST_RESULT = stringPreferencesKey("continuous_monitoring_last_result")
     }
 }

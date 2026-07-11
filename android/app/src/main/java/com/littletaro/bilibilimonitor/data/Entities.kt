@@ -36,7 +36,8 @@ data class VideoSnapshotEntity @JvmOverloads constructor(
     val sourceUrl: String?,
     val fetchStatus: String,
     val errorMessage: String?,
-    val captureSource: String = SnapshotSources.UNKNOWN
+    val captureSource: String = SnapshotSources.UNKNOWN,
+    val exchangeDigest: String? = null
 )
 
 object SnapshotSources {
@@ -46,6 +47,11 @@ object SnapshotSources {
 
     fun from(trigger: RefreshTrigger): String =
         if (trigger == RefreshTrigger.AUTO) AUTO else MANUAL
+
+    fun sanitize(value: String): String = when (value) {
+        MANUAL, AUTO, UNKNOWN -> value
+        else -> UNKNOWN
+    }
 }
 
 @Entity(tableName = "app_logs")

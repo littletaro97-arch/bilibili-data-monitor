@@ -6,9 +6,15 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.WorkInfo
 import com.littletaro.bilibilimonitor.settings.AutoRefreshRegistrationClient
 import com.littletaro.bilibilimonitor.settings.RefreshIntervals
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 class AutoRefreshScheduler(context: Context) : AutoRefreshRegistrationClient {
     private val appContext = context.applicationContext
@@ -36,6 +42,20 @@ class AutoRefreshScheduler(context: Context) : AutoRefreshRegistrationClient {
 
     override fun cancel() {
         WorkManager.getInstance(appContext).cancelUniqueWork(UNIQUE_WORK_NAME)
+    }
+
+    fun cancelAndAwait() {
+        WorkManager.getInstance(appContext).cancelUniqueWork(UNIQUE_WORK_NAME).result.get()
+    }
+
+    fun workInfoFlow(): Flow<WorkInfo?> = flow {
+        while (true) {
+            val infos = withContext(Dispatchers.IO) {
+                WorkManager.getInstance(appContext).getWorkInfosForUniqueWork(UNIQUE_WORK_NAME).get()
+            }
+            emit(infos.maxByOrNull { it.id.toString() })
+            delay(10_000)
+        }
     }
 
     companion object {

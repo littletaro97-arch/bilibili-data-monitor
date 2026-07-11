@@ -9,8 +9,25 @@ import com.littletaro.bilibilimonitor.settings.AutoRefreshSettingsStore
 import com.littletaro.bilibilimonitor.worker.AutoRefreshScheduler
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import com.littletaro.bilibilimonitor.data.DeviceTime
 
 class BilibiliMonitorApplication : Application() {
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override fun onCreate() {
+        super.onCreate()
+        appScope.launch {
+            val current = settingsStore.settings.first()
+            if (current.continuousMonitoringRunning) {
+                settingsStore.recordContinuousMonitoringStopped(DeviceTime.nowIsoString(), "process restarted; user confirmation required")
+            }
+        }
+    }
     val settingsStore: AutoRefreshSettingsStore by lazy {
         AutoRefreshSettingsStore(this)
     }

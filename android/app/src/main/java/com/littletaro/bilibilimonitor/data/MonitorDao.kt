@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -22,6 +23,49 @@ interface MonitorDao {
 
     @Query("SELECT * FROM videos ORDER BY updatedAt DESC")
     suspend fun videosForRefresh(): List<VideoEntity>
+
+    @Query("SELECT * FROM videos ORDER BY bvId ASC")
+    suspend fun allVideosForExchange(): List<VideoEntity>
+
+    @Query("SELECT * FROM video_snapshots ORDER BY bvId ASC, collectedAt ASC, id ASC")
+    suspend fun allSnapshotsForExchange(): List<VideoSnapshotEntity>
+
+    @Query("SELECT * FROM video_snapshots WHERE bvId=:bvId AND captureSource=:captureSource ORDER BY id ASC")
+    suspend fun snapshotsByExchangeSource(bvId: String, captureSource: String): List<VideoSnapshotEntity>
+
+    @Transaction
+    suspend fun mergeHistoryExchange(packageData: HistoryExchangePackage): HistoryImportReport {
+        var videosAdded = 0
+        var snapshotsAdded = 0
+        var duplicates = 0
+        var conflicts = 0
+        packageData.videos.forEach { incoming ->
+            val existing = videoByBvId(incoming.bvId)
+            if (existing == null) {
+                upsertVideo(incoming)
+                videosAdded++
+            }
+        }
+        packageData.snapshots.forEach { incoming ->
+            val incomingInstant = DeviceTime.parseToInstant(incoming.collectedAt)
+            val identityMatches = snapshotsByExchangeSource(incoming.bvId, incoming.captureSource)
+                .filter { DeviceTime.parseToInstant(it.collectedAt) == incomingInstant }
+            val incomingDigest = incoming.exchangeDigest ?: HistoryExchangeCodec.snapshotDigest(incoming)
+            if (identityMatches.isEmpty()) {
+                if (videoByBvId(incoming.bvId) == null) {
+                    conflicts++
+                } else {
+                    insertSnapshot(incoming.copy(exchangeDigest = incomingDigest))
+                    snapshotsAdded++
+                }
+            } else if (identityMatches.any { (it.exchangeDigest ?: HistoryExchangeCodec.snapshotDigest(it)) == incomingDigest }) {
+                duplicates++
+            } else {
+                conflicts++
+            }
+        }
+        return HistoryImportReport(videosAdded, snapshotsAdded, duplicates, conflicts)
+    }
 
     @Query("SELECT * FROM video_snapshots WHERE bvId = :bvId ORDER BY collectedAt DESC, id DESC LIMIT 1")
     fun observeLatestSnapshot(bvId: String): Flow<VideoSnapshotEntity?>
