@@ -8,6 +8,7 @@ import com.littletaro.bilibilimonitor.data.BilibiliApi
 import com.littletaro.bilibilimonitor.data.MonitorRepository
 import com.littletaro.bilibilimonitor.data.RefreshTrigger
 import com.littletaro.bilibilimonitor.data.SnapshotExporter
+import com.littletaro.bilibilimonitor.notifications.MonitorNotificationManager
 import com.littletaro.bilibilimonitor.settings.AutoRefreshSettingsStore
 import com.littletaro.bilibilimonitor.settings.RefreshIntervals
 import kotlinx.coroutines.flow.first
@@ -53,7 +54,8 @@ class AutoRefreshWorker(
                 "selected=${settings.intervalMinutes}m, effective=${RefreshIntervals.backgroundScheduleMinutes(settings.intervalMinutes)}m"
             )
             val result = repository.refreshAllExistingVideos(RefreshTrigger.AUTO)
-            val now = Instant.now().toString()
+            val finishedAt = Instant.now()
+            val now = finishedAt.toString()
             val resultText = AutoRefreshWorkerStatus.finished(result)
             settingsStore.recordWorkerFinished(
                 now,
@@ -67,6 +69,10 @@ class AutoRefreshWorker(
                 "auto refresh worker finished",
                 "$resultText, time=$now"
             )
+            if (MonitorNotificationManager.maybeNotifyRefreshResult(applicationContext, settings, result, finishedAt)) {
+                settingsStore.recordNotificationSent(now)
+                repository.writeLog("info", "notification", "auto refresh notification sent", resultText)
+            }
             Result.success()
         } catch (exc: Exception) {
             val error = AutoRefreshWorkerStatus.failed(exc)

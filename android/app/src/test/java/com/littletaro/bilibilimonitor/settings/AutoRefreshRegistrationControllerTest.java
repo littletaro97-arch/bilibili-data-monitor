@@ -25,7 +25,13 @@ public class AutoRefreshRegistrationControllerTest {
                 0L,
                 null,
                 true,
-                "csv"
+                "csv",
+                false,
+                false,
+                NotificationModes.EACH_REFRESH,
+                60L,
+                null,
+                false
         );
 
         AutoRefreshRegistrationResult result =
@@ -68,7 +74,13 @@ public class AutoRefreshRegistrationControllerTest {
                 0L,
                 null,
                 true,
-                "csv"
+                "csv",
+                false,
+                false,
+                NotificationModes.EACH_REFRESH,
+                60L,
+                null,
+                false
         );
 
         AutoRefreshRegistrationResult enabledResult =
@@ -105,7 +117,13 @@ public class AutoRefreshRegistrationControllerTest {
                 0L,
                 null,
                 true,
-                "csv"
+                "csv",
+                false,
+                false,
+                NotificationModes.EACH_REFRESH,
+                60L,
+                null,
+                false
         );
 
         AutoRefreshRegistrationResult result =
@@ -135,7 +153,13 @@ public class AutoRefreshRegistrationControllerTest {
                 0L,
                 null,
                 true,
-                "csv"
+                "csv",
+                false,
+                false,
+                NotificationModes.EACH_REFRESH,
+                60L,
+                null,
+                false
         );
 
         AutoRefreshRegistrationController.INSTANCE.changeWifiOnly(false, enabled, client);

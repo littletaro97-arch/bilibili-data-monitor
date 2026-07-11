@@ -26,7 +26,13 @@ data class AutoRefreshSettings(
     val autoRefreshFailureCount: Long = 0,
     val defaultExportTreeUri: String? = null,
     val askExportLocationEveryTime: Boolean = true,
-    val defaultExportFormat: String = "csv"
+    val defaultExportFormat: String = "csv",
+    val notificationsEnabled: Boolean = false,
+    val notificationPermissionPrompted: Boolean = false,
+    val notificationMode: String = NotificationModes.EACH_REFRESH,
+    val notificationIntervalMinutes: Long = NotificationIntervals.DEFAULT_MINUTES,
+    val lastNotificationSentAt: String? = null,
+    val backgroundGuideSeen: Boolean = false
 )
 
 object RefreshIntervals {
@@ -43,13 +49,52 @@ object RefreshIntervals {
         sanitize(minutes).coerceAtLeast(MIN_WORK_MANAGER_MINUTES)
 }
 
+object NotificationModes {
+    const val EACH_REFRESH = "each_refresh"
+    const val SUMMARY = "summary"
+
+    fun sanitize(mode: String): String =
+        if (mode == EACH_REFRESH || mode == SUMMARY) mode else EACH_REFRESH
+}
+
+object NotificationIntervals {
+    const val DEFAULT_MINUTES: Long = 60
+    const val STEP_MINUTES: Long = 5
+    const val MAX_MINUTES: Long = 24 * 60
+
+    @JvmStatic
+    fun lowerBoundMinutes(detectionMinutes: Long): Long =
+        ceilToStep(RefreshIntervals.backgroundScheduleMinutes(detectionMinutes).coerceAtLeast(STEP_MINUTES))
+
+    @JvmStatic
+    fun sanitize(minutes: Long, detectionMinutes: Long): Long {
+        val lowerBound = lowerBoundMinutes(detectionMinutes)
+        val bounded = minutes.coerceIn(lowerBound, MAX_MINUTES)
+        return ceilToStep(bounded)
+    }
+
+    @JvmStatic
+    fun options(detectionMinutes: Long): List<Long> {
+        val lowerBound = lowerBoundMinutes(detectionMinutes)
+        return generateSequence(lowerBound) { current -> current + STEP_MINUTES }
+            .takeWhile { it <= MAX_MINUTES }
+            .toList()
+    }
+
+    private fun ceilToStep(minutes: Long): Long {
+        val remainder = minutes % STEP_MINUTES
+        return if (remainder == 0L) minutes else minutes + (STEP_MINUTES - remainder)
+    }
+}
+
 class AutoRefreshSettingsStore(private val context: Context) {
     val settings: Flow<AutoRefreshSettings> = context.autoRefreshDataStore.data.map { preferences ->
+        val intervalMinutes = RefreshIntervals.sanitize(
+            preferences[Keys.INTERVAL_MINUTES] ?: RefreshIntervals.DEFAULT_MINUTES
+        )
         AutoRefreshSettings(
             enabled = preferences[Keys.ENABLED] ?: false,
-            intervalMinutes = RefreshIntervals.sanitize(
-                preferences[Keys.INTERVAL_MINUTES] ?: RefreshIntervals.DEFAULT_MINUTES
-            ),
+            intervalMinutes = intervalMinutes,
             wifiOnly = preferences[Keys.WIFI_ONLY] ?: true,
             workRegistered = preferences[Keys.WORK_REGISTERED] ?: false,
             lastRegisteredAt = preferences[Keys.LAST_REGISTERED_AT],
@@ -62,7 +107,18 @@ class AutoRefreshSettingsStore(private val context: Context) {
             autoRefreshFailureCount = preferences[Keys.AUTO_REFRESH_FAILURE_COUNT] ?: 0,
             defaultExportTreeUri = preferences[Keys.DEFAULT_EXPORT_TREE_URI],
             askExportLocationEveryTime = preferences[Keys.ASK_EXPORT_LOCATION_EVERY_TIME] ?: true,
-            defaultExportFormat = preferences[Keys.DEFAULT_EXPORT_FORMAT] ?: "csv"
+            defaultExportFormat = preferences[Keys.DEFAULT_EXPORT_FORMAT] ?: "csv",
+            notificationsEnabled = preferences[Keys.NOTIFICATIONS_ENABLED] ?: false,
+            notificationPermissionPrompted = preferences[Keys.NOTIFICATION_PERMISSION_PROMPTED] ?: false,
+            notificationMode = NotificationModes.sanitize(
+                preferences[Keys.NOTIFICATION_MODE] ?: NotificationModes.EACH_REFRESH
+            ),
+            notificationIntervalMinutes = NotificationIntervals.sanitize(
+                preferences[Keys.NOTIFICATION_INTERVAL_MINUTES] ?: NotificationIntervals.DEFAULT_MINUTES,
+                intervalMinutes
+            ),
+            lastNotificationSentAt = preferences[Keys.LAST_NOTIFICATION_SENT_AT],
+            backgroundGuideSeen = preferences[Keys.BACKGROUND_GUIDE_SEEN] ?: false
         )
     }
 
@@ -76,6 +132,10 @@ class AutoRefreshSettingsStore(private val context: Context) {
         require(RefreshIntervals.isAllowed(minutes)) { "Unsupported interval: $minutes" }
         context.autoRefreshDataStore.edit { preferences ->
             preferences[Keys.INTERVAL_MINUTES] = minutes
+            val currentNotificationInterval =
+                preferences[Keys.NOTIFICATION_INTERVAL_MINUTES] ?: NotificationIntervals.DEFAULT_MINUTES
+            preferences[Keys.NOTIFICATION_INTERVAL_MINUTES] =
+                NotificationIntervals.sanitize(currentNotificationInterval, minutes)
         }
     }
 
@@ -155,6 +215,43 @@ class AutoRefreshSettingsStore(private val context: Context) {
         }
     }
 
+    suspend fun setNotificationsEnabled(enabled: Boolean) {
+        context.autoRefreshDataStore.edit { preferences ->
+            preferences[Keys.NOTIFICATIONS_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setNotificationPermissionPrompted(prompted: Boolean) {
+        context.autoRefreshDataStore.edit { preferences ->
+            preferences[Keys.NOTIFICATION_PERMISSION_PROMPTED] = prompted
+        }
+    }
+
+    suspend fun setNotificationMode(mode: String) {
+        context.autoRefreshDataStore.edit { preferences ->
+            preferences[Keys.NOTIFICATION_MODE] = NotificationModes.sanitize(mode)
+        }
+    }
+
+    suspend fun setNotificationIntervalMinutes(minutes: Long, detectionMinutes: Long) {
+        val sanitized = NotificationIntervals.sanitize(minutes, detectionMinutes)
+        context.autoRefreshDataStore.edit { preferences ->
+            preferences[Keys.NOTIFICATION_INTERVAL_MINUTES] = sanitized
+        }
+    }
+
+    suspend fun recordNotificationSent(time: String) {
+        context.autoRefreshDataStore.edit { preferences ->
+            preferences[Keys.LAST_NOTIFICATION_SENT_AT] = time
+        }
+    }
+
+    suspend fun setBackgroundGuideSeen(seen: Boolean) {
+        context.autoRefreshDataStore.edit { preferences ->
+            preferences[Keys.BACKGROUND_GUIDE_SEEN] = seen
+        }
+    }
+
     private object Keys {
         val ENABLED = booleanPreferencesKey("enabled")
         val INTERVAL_MINUTES = longPreferencesKey("interval_minutes")
@@ -171,5 +268,11 @@ class AutoRefreshSettingsStore(private val context: Context) {
         val DEFAULT_EXPORT_TREE_URI = stringPreferencesKey("default_export_tree_uri")
         val ASK_EXPORT_LOCATION_EVERY_TIME = booleanPreferencesKey("ask_export_location_every_time")
         val DEFAULT_EXPORT_FORMAT = stringPreferencesKey("default_export_format")
+        val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
+        val NOTIFICATION_PERMISSION_PROMPTED = booleanPreferencesKey("notification_permission_prompted")
+        val NOTIFICATION_MODE = stringPreferencesKey("notification_mode")
+        val NOTIFICATION_INTERVAL_MINUTES = longPreferencesKey("notification_interval_minutes")
+        val LAST_NOTIFICATION_SENT_AT = stringPreferencesKey("last_notification_sent_at")
+        val BACKGROUND_GUIDE_SEEN = booleanPreferencesKey("background_guide_seen")
     }
 }

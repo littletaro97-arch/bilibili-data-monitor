@@ -1,13 +1,17 @@
 package com.littletaro.bilibilimonitor.ui
 
+import android.Manifest
 import android.content.Intent
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,13 +52,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.core.content.FileProvider
+import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.littletaro.bilibilimonitor.data.AppLogEntity
@@ -67,9 +75,13 @@ import com.littletaro.bilibilimonitor.data.TrendMetric
 import com.littletaro.bilibilimonitor.data.TrendPoint
 import com.littletaro.bilibilimonitor.data.VideoEntity
 import com.littletaro.bilibilimonitor.data.VideoSnapshotEntity
+import com.littletaro.bilibilimonitor.notifications.MonitorNotificationManager
 import com.littletaro.bilibilimonitor.settings.AutoRefreshSettings
 import com.littletaro.bilibilimonitor.settings.AutoRefreshSettingsStore
 import com.littletaro.bilibilimonitor.settings.AutoRefreshRegistrationController
+import com.littletaro.bilibilimonitor.settings.BackgroundRunStatus
+import com.littletaro.bilibilimonitor.settings.NotificationIntervals
+import com.littletaro.bilibilimonitor.settings.NotificationModes
 import com.littletaro.bilibilimonitor.settings.RefreshIntervals
 import com.littletaro.bilibilimonitor.worker.AutoRefreshScheduler
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -99,10 +111,26 @@ fun MonitorApp(
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
+            val context = LocalContext.current
+            val scope = rememberCoroutineScope()
             val videos by repository.videos.collectAsStateWithLifecycle(initialValue = emptyList())
+            val appSettings by settingsStore.settings.collectAsStateWithLifecycle(initialValue = AutoRefreshSettings())
             var page by rememberSaveable { mutableStateOf(Page.Home) }
             var selectedBvId by rememberSaveable { mutableStateOf<String?>(null) }
             val hasValidSelection = selectedBvId != null && videos.any { it.bvId == selectedBvId }
+            val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { granted ->
+                scope.launch {
+                    settingsStore.setNotificationPermissionPrompted(true)
+                    if (!granted) settingsStore.setNotificationsEnabled(false)
+                }
+            }
+            val shouldShowNotificationIntro =
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    !MonitorNotificationManager.permissionGranted(context) &&
+                    !appSettings.notificationPermissionPrompted
+            val shouldShowBackgroundGuide = !appSettings.backgroundGuideSeen && !shouldShowNotificationIntro
 
             LaunchedEffect(videos, selectedBvId) {
                 if (selectedBvId != null && TopNavigationModel.resolveSelection(selectedBvId, videos.map { it.bvId }) == null) {
@@ -142,8 +170,70 @@ fun MonitorApp(
                     }
                 }
             }
+            if (shouldShowNotificationIntro) {
+                NotificationPermissionIntroDialog(
+                    onRequest = {
+                        scope.launch { settingsStore.setNotificationPermissionPrompted(true) }
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    },
+                    onSkip = {
+                        scope.launch { settingsStore.setNotificationPermissionPrompted(true) }
+                    }
+                )
+            }
+            if (shouldShowBackgroundGuide) {
+                BackgroundGuideDialog(
+                    onOpenSettings = {
+                        scope.launch { settingsStore.setBackgroundGuideSeen(true) }
+                        page = Page.Settings
+                    },
+                    onSkip = {
+                        scope.launch { settingsStore.setBackgroundGuideSeen(true) }
+                    }
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun NotificationPermissionIntroDialog(
+    onRequest: () -> Unit,
+    onSkip: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onSkip,
+        title = { Text("通知提醒") },
+        text = {
+            Text("通知用于显示监控检测结果，可以随时在设置中关闭；不授权也不影响核心监控和数据查看。")
+        },
+        confirmButton = {
+            Button(onClick = onRequest) { Text("开启通知") }
+        },
+        dismissButton = {
+            TextButton(onClick = onSkip) { Text("暂不开启") }
+        }
+    )
+}
+
+@Composable
+private fun BackgroundGuideDialog(
+    onOpenSettings: () -> Unit,
+    onSkip: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onSkip,
+        title = { Text("后台运行") },
+        text = {
+            Text("后台监控由 Android 系统调度，可能受到电池优化和厂商后台策略影响。相关配置均为可选，跳过后仍可正常使用。")
+        },
+        confirmButton = {
+            Button(onClick = onOpenSettings) { Text("查看设置") }
+        },
+        dismissButton = {
+            TextButton(onClick = onSkip) { Text("稍后") }
+        }
+    )
 }
 
 @Composable
@@ -712,6 +802,24 @@ private fun SettingsPage(
     var status by remember { mutableStateOf<String?>(null) }
     var testRunning by remember { mutableStateOf(false) }
     var bulkRunning by remember { mutableStateOf(false) }
+    var notificationPermissionGranted by remember {
+        mutableStateOf(MonitorNotificationManager.permissionGranted(context))
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        notificationPermissionGranted = granted
+        scope.launch {
+            settingsStore.setNotificationPermissionPrompted(true)
+            if (granted) {
+                settingsStore.setNotificationsEnabled(true)
+                status = "通知权限已开启"
+            } else {
+                settingsStore.setNotificationsEnabled(false)
+                status = "未开启通知权限，核心监控仍可使用"
+            }
+        }
+    }
     val defaultTreeLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
@@ -754,6 +862,11 @@ private fun SettingsPage(
             }
             status = if (result.action == "saved") "已保存间隔：${minutesLabel(minutes)}" else result.message
         }
+    }
+
+    fun openSystemSettings(intent: Intent, fallbackMessage: String) {
+        runCatching { context.startActivity(intent) }
+            .onFailure { status = fallbackMessage }
     }
 
     LazyColumn(
@@ -871,12 +984,123 @@ private fun SettingsPage(
         }
         item {
             SettingsSection("通知与后台运行") {
-                Text("后台刷新由 WorkManager 调度，可能被系统延迟。")
+                Text("通知用于显示监控检测结果，可随时关闭，不影响数据查看。")
+                SettingSwitchRow(
+                    title = "通知提醒",
+                    subtitle = if (notificationPermissionGranted) {
+                        if (settings.notificationsEnabled) "已开启，检测完成后按所选模式提醒。" else "已授权，当前未开启通知。"
+                    } else {
+                        "系统通知权限未开启。"
+                    },
+                    checked = settings.notificationsEnabled && notificationPermissionGranted,
+                    onCheckedChange = { enabled: Boolean ->
+                        if (!enabled) {
+                            scope.launch {
+                                settingsStore.setNotificationsEnabled(false)
+                                status = "通知提醒已关闭"
+                            }
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationPermissionGranted) {
+                            scope.launch { settingsStore.setNotificationPermissionPrompted(true) }
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            scope.launch {
+                                settingsStore.setNotificationsEnabled(true)
+                                status = "通知提醒已开启"
+                            }
+                        }
+                    }
+                )
+                Text("权限状态：${if (notificationPermissionGranted) "已授权" else "未授权"}")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    if (settings.notificationMode == NotificationModes.EACH_REFRESH) {
+                        Button(onClick = { scope.launch { settingsStore.setNotificationMode(NotificationModes.EACH_REFRESH) } }, modifier = Modifier.weight(1f)) {
+                            Text("每次检测")
+                        }
+                    } else {
+                        TextButton(onClick = { scope.launch { settingsStore.setNotificationMode(NotificationModes.EACH_REFRESH) } }, modifier = Modifier.weight(1f)) {
+                            Text("每次检测")
+                        }
+                    }
+                    if (settings.notificationMode == NotificationModes.SUMMARY) {
+                        Button(onClick = { scope.launch { settingsStore.setNotificationMode(NotificationModes.SUMMARY) } }, modifier = Modifier.weight(1f)) {
+                            Text("定时汇总")
+                        }
+                    } else {
+                        TextButton(onClick = { scope.launch { settingsStore.setNotificationMode(NotificationModes.SUMMARY) } }, modifier = Modifier.weight(1f)) {
+                            Text("定时汇总")
+                        }
+                    }
+                }
+                if (settings.notificationMode == NotificationModes.SUMMARY) {
+                    Text("汇总间隔：${minutesLabel(settings.notificationIntervalMinutes)}")
+                    NotificationIntervalWheelPicker(
+                        selectedMinutes = settings.notificationIntervalMinutes,
+                        detectionMinutes = settings.intervalMinutes,
+                        onSelected = { minutes ->
+                            scope.launch {
+                                settingsStore.setNotificationIntervalMinutes(minutes, settings.intervalMinutes)
+                                status = "通知汇总间隔已保存：${minutesLabel(minutes)}"
+                            }
+                        }
+                    )
+                    Text("下限：不能短于当前后台检测间隔 ${minutesLabel(NotificationIntervals.lowerBoundMinutes(settings.intervalMinutes))}")
+                }
+                Button(
+                    onClick = {
+                        openSystemSettings(
+                            MonitorNotificationManager.notificationSettingsIntent(context),
+                            "无法打开系统通知设置，请在系统设置中手动查找本应用。"
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("打开系统通知设置")
+                }
+                Text("最近通知：${settings.lastNotificationSentAt ?: "-"}")
+            }
+        }
+        item {
+            SettingsSection("后台运行") {
+                Text("后台检测由 WorkManager 调度，执行时间可能被系统延迟。")
+                Text("后台任务：${if (settings.workRegistered) "已注册，等待系统调度" else "未注册"}")
+                Text("电池优化：${BackgroundRunStatus.batteryOptimizationLabel(context)}")
+                Text("通知权限：${if (notificationPermissionGranted) "已授权" else "未授权"}")
+                Text("后台权限：需要用户在系统设置中确认")
+                Text("最近执行：${settings.lastAutoRefreshFinishedAt ?: "-"}")
+                Text("最近结果：${settings.lastAutoRefreshResult ?: "-"}")
+                Button(
+                    onClick = {
+                        openSystemSettings(
+                            BackgroundRunStatus.batteryOptimizationSettingsIntent(),
+                            "无法打开电池优化设置，请在系统设置中手动查看。"
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("打开电池优化设置")
+                }
+                Button(
+                    onClick = {
+                        openSystemSettings(
+                            BackgroundRunStatus.appSettingsIntent(context),
+                            "无法打开应用系统设置。"
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("打开应用系统设置")
+                }
+                Button(
+                    onClick = { scope.launch { settingsStore.setBackgroundGuideSeen(false) } },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("重新查看后台运行说明")
+                }
             }
         }
         item {
             ExpandableSection("关于与诊断", initiallyExpanded = false, stateKey = "settings_diagnostics") {
-                Text("版本：0.8.0")
+                Text("版本：0.9.0")
                 AutoRefreshStatusBlock(settings)
             }
         }
@@ -1006,8 +1230,37 @@ private fun IntervalWheelPicker(
     selectedMinutes: Long,
     onSelected: (Long) -> Unit
 ) {
-    val options = RefreshIntervals.allowedMinutes
-    val selectedIndex = options.indexOf(selectedMinutes).takeIf { it >= 0 } ?: options.indexOf(RefreshIntervals.DEFAULT_MINUTES)
+    WheelPicker(
+        options = RefreshIntervals.allowedMinutes,
+        selected = selectedMinutes,
+        label = { minutesLabel(it) },
+        onSelected = onSelected
+    )
+}
+
+@Composable
+private fun NotificationIntervalWheelPicker(
+    selectedMinutes: Long,
+    detectionMinutes: Long,
+    onSelected: (Long) -> Unit
+) {
+    val options = remember(detectionMinutes) { NotificationIntervals.options(detectionMinutes) }
+    WheelPicker(
+        options = options,
+        selected = NotificationIntervals.sanitize(selectedMinutes, detectionMinutes),
+        label = { minutesLabel(it) },
+        onSelected = onSelected
+    )
+}
+
+@Composable
+private fun WheelPicker(
+    options: List<Long>,
+    selected: Long,
+    label: (Long) -> String,
+    onSelected: (Long) -> Unit
+) {
+    val selectedIndex = options.indexOf(selected).takeIf { it >= 0 } ?: 0
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex.coerceAtLeast(0))
     val scope = rememberCoroutineScope()
 
@@ -1017,7 +1270,7 @@ private fun IntervalWheelPicker(
         }
     }
 
-    LaunchedEffect(listState, selectedMinutes) {
+    LaunchedEffect(listState, selected, options) {
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
             .filter { scrolling -> !scrolling }
@@ -1030,49 +1283,60 @@ private fun IntervalWheelPicker(
                     ?: listState.firstVisibleItemIndex
                 val boundedIndex = targetIndex.coerceIn(0, options.lastIndex)
                 listState.animateScrollToItem(boundedIndex)
-                val selected = options[boundedIndex]
-                if (selected != selectedMinutes) {
-                    onSelected(selected)
+                val stableValue = options[boundedIndex]
+                if (stableValue != selected) {
+                    onSelected(stableValue)
                 }
             }
     }
 
-    LazyColumn(
-        state = listState,
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(156.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = PaddingValues(vertical = 48.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .height(176.dp)
     ) {
-        itemsIndexed(options) { index, minutes ->
-            val selected = minutes == selectedMinutes
-            if (selected) {
-                Button(
-                    onClick = {
-                        scope.launch { listState.animateScrollToItem(index) }
-                        onSelected(minutes)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(minutesLabel(minutes))
-                }
-            } else {
-                TextButton(
-                    onClick = {
-                        scope.launch { listState.animateScrollToItem(index) }
-                        onSelected(minutes)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(minutesLabel(minutes))
-                }
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth()
+                .height(44.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f))
+        )
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            contentPadding = PaddingValues(vertical = 66.dp)
+        ) {
+            itemsIndexed(options) { index, minutes ->
+                val isSelected = minutes == selected
+                val distance = abs(index - selectedIndex)
+                Text(
+                    text = label(minutes),
+                    style = if (isSelected) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    color = MaterialTheme.colorScheme.onSurface.copy(
+                        alpha = when {
+                            isSelected -> 1f
+                            distance == 1 -> 0.66f
+                            else -> 0.42f
+                        }
+                    ),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .clickable {
+                            scope.launch { listState.animateScrollToItem(index) }
+                            if (minutes != selected) onSelected(minutes)
+                        }
+                        .padding(vertical = 10.dp)
+                )
             }
         }
     }
 }
-
 @Composable
 private fun ExpandableSection(
     title: String,
