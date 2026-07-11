@@ -5,21 +5,27 @@ import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -39,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -65,9 +72,12 @@ import com.littletaro.bilibilimonitor.settings.AutoRefreshSettingsStore
 import com.littletaro.bilibilimonitor.settings.AutoRefreshRegistrationController
 import com.littletaro.bilibilimonitor.settings.RefreshIntervals
 import com.littletaro.bilibilimonitor.worker.AutoRefreshScheduler
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.Instant
+import kotlin.math.abs
 
 private enum class Page {
     Home,
@@ -84,7 +94,11 @@ fun MonitorApp(
     autoRefreshScheduler: AutoRefreshScheduler
 ) {
     MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+        ) {
             val videos by repository.videos.collectAsStateWithLifecycle(initialValue = emptyList())
             var page by rememberSaveable { mutableStateOf(Page.Home) }
             var selectedBvId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -99,7 +113,12 @@ fun MonitorApp(
                 }
             }
 
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 12.dp)
+            ) {
                 Text("B站数据监控 Android MVP", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 NavRow(page, hasValidSelection) { target ->
@@ -110,15 +129,17 @@ fun MonitorApp(
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                when (page) {
-                    Page.Home -> HomePage(repository, onOpenSettings = { page = Page.Settings }) {
-                        selectedBvId = it
-                        page = Page.Detail
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    when (page) {
+                        Page.Home -> HomePage(repository) {
+                            selectedBvId = it
+                            page = Page.Detail
+                        }
+                        Page.Detail -> if (hasValidSelection) DetailPage(repository, selectedBvId!!) else EmptySelection()
+                        Page.History -> if (hasValidSelection) HistoryPage(repository, selectedBvId!!) else EmptySelection()
+                        Page.Settings -> SettingsPage(repository, settingsStore, autoRefreshScheduler)
+                        Page.Advanced -> AdvancedPage(repository, settingsStore, selectedBvId.takeIf { hasValidSelection })
                     }
-                    Page.Detail -> if (hasValidSelection) DetailPage(repository, selectedBvId!!) else EmptySelection()
-                    Page.History -> if (hasValidSelection) HistoryPage(repository, selectedBvId!!) else EmptySelection()
-                    Page.Settings -> SettingsPage(repository, settingsStore, autoRefreshScheduler)
-                    Page.Advanced -> AdvancedPage(repository, settingsStore, selectedBvId.takeIf { hasValidSelection })
                 }
             }
         }
@@ -150,7 +171,6 @@ private fun NavRow(current: Page, hasSelection: Boolean, onSelect: (Page) -> Uni
 @Composable
 private fun HomePage(
     repository: MonitorRepository,
-    onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit
 ) {
     val videos by repository.videos.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -159,68 +179,72 @@ private fun HomePage(
     var status by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedTextField(
-            value = input,
-            onValueChange = { input = it },
-            label = { Text("BV 号或 Bilibili 视频链接") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(
-                onClick = {
-                    scope.launch {
-                        loading = true
-                        try {
-                            status = runCatching {
-                                val bvId = repository.addVideo(input)
-                                onOpenVideo(bvId)
-                                "已添加 $bvId"
-                            }.getOrElse { it.message ?: "解析失败" }
-                        } finally {
-                            loading = false
-                        }
-                    }
-                },
-                enabled = input.isNotBlank() && !loading
-            ) {
-                Text("解析 / 添加")
-            }
-            Button(
-                onClick = {
-                    scope.launch {
-                        loading = true
-                        try {
-                            status = runCatching {
-                                val bvId = repository.addVideo(input)
-                                repository.refresh(bvId, RefreshTrigger.MANUAL)
-                                onOpenVideo(bvId)
-                                "刷新完成 $bvId"
-                            }.getOrElse { it.message ?: "刷新失败" }
-                        } finally {
-                            loading = false
-                        }
-                    }
-                },
-                enabled = input.isNotBlank() && !loading
-            ) {
-                Text("刷新数据")
-            }
-            if (loading) CircularProgressIndicator()
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = pageContentPadding()
+    ) {
+        item {
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it },
+                label = { Text("BV 号或 Bilibili 视频链接") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
-        status?.let { Text(it) }
-        Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
-            Text("自动刷新设置")
-        }
-        Text("最近视频", style = MaterialTheme.typography.titleMedium)
-        if (videos.isEmpty()) {
-            Text("暂无视频，请先输入 BV 号或视频链接")
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(videos) { video ->
-                    VideoCard(video, onOpenVideo)
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            loading = true
+                            try {
+                                status = runCatching {
+                                    val bvId = repository.addVideo(input)
+                                    onOpenVideo(bvId)
+                                    "已添加 $bvId"
+                                }.getOrElse { it.message ?: "解析失败" }
+                            } finally {
+                                loading = false
+                            }
+                        }
+                    },
+                    enabled = input.isNotBlank() && !loading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("解析 / 添加")
                 }
+                Button(
+                    onClick = {
+                        scope.launch {
+                            loading = true
+                            try {
+                                status = runCatching {
+                                    val bvId = repository.addVideo(input)
+                                    repository.refresh(bvId, RefreshTrigger.MANUAL)
+                                    onOpenVideo(bvId)
+                                    "刷新完成 $bvId"
+                                }.getOrElse { it.message ?: "刷新失败" }
+                            } finally {
+                                loading = false
+                            }
+                        }
+                    },
+                    enabled = input.isNotBlank() && !loading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("刷新数据")
+                }
+                if (loading) CircularProgressIndicator()
+                status?.let { Text(it) }
+            }
+        }
+        item { Text("最近视频", style = MaterialTheme.typography.titleMedium) }
+        if (videos.isEmpty()) {
+            item { Text("暂无视频，请先输入 BV 号或视频链接") }
+        } else {
+            items(videos, key = { it.bvId }) { video ->
+                VideoCard(video, onOpenVideo)
             }
         }
     }
@@ -230,11 +254,10 @@ private fun HomePage(
 private fun VideoCard(video: VideoEntity, onOpenVideo: (String) -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                video.title ?: "未刷新标题",
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+            ExpandableText(
+                text = video.title ?: "未刷新标题",
+                collapsedMaxLines = 2,
+                fontWeight = FontWeight.Bold
             )
             Text("BV: ${video.bvId}")
             Text("UP: ${video.authorName ?: "未知"}")
@@ -253,36 +276,49 @@ private fun DetailPage(repository: MonitorRepository, bvId: String) {
     val scope = rememberCoroutineScope()
     var message by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("视频详情", style = MaterialTheme.typography.titleMedium)
-        Text(
-            "标题：${video?.title ?: "未刷新"}",
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text("UP：${video?.authorName ?: "未知"}")
-        Text("BV：$bvId")
-        Text("aid：${video?.aid ?: "-"}")
-        Text("发布时间：${video?.pubdate ?: "-"}")
-        Button(
-            onClick = {
-                scope.launch {
-                    loading = true
-                    try {
-                        repository.refresh(bvId, RefreshTrigger.MANUAL)
-                        message = "刷新请求已完成，请查看最新快照"
-                    } finally {
-                        loading = false
-                    }
-                }
-            },
-            enabled = !loading
-        ) {
-            Text("手动刷新")
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = pageContentPadding()
+    ) {
+        item { Text("视频详情", style = MaterialTheme.typography.titleMedium) }
+        item {
+            ExpandableText(
+                text = "标题：${video?.title ?: "未刷新"}",
+                collapsedMaxLines = 2
+            )
         }
-        if (loading) CircularProgressIndicator()
-        message?.let { Text(it) }
-        SnapshotBlock(latest)
+        item { Text("UP：${video?.authorName ?: "未知"}") }
+        item { Text("BV：$bvId") }
+        item { Text("aid：${video?.aid ?: "-"}") }
+        item { Text("发布时间：${video?.pubdate ?: "-"}") }
+        item {
+            Button(
+                onClick = {
+                    scope.launch {
+                        loading = true
+                        try {
+                            repository.refresh(bvId, RefreshTrigger.MANUAL)
+                            message = "刷新请求已完成"
+                        } finally {
+                            loading = false
+                        }
+                    }
+                },
+                enabled = !loading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("手动刷新")
+            }
+        }
+        if (loading) {
+            item { CircularProgressIndicator() }
+        }
+        message?.let { text ->
+            item { Text(text) }
+        }
+        item {
+            SnapshotBlock(latest)
+        }
     }
 }
 
@@ -297,7 +333,9 @@ private fun SnapshotBlock(snapshot: VideoSnapshotEntity?) {
             Text("最近快照", fontWeight = FontWeight.Bold)
             Text("采集时间：${snapshot.collectedAt}")
             Text("状态：${snapshot.fetchStatus}")
-            Text("错误：${snapshot.errorMessage ?: "-"}")
+            snapshot.errorMessage?.let {
+                ExpandableText(text = "错误：$it", collapsedMaxLines = 2)
+            } ?: Text("错误：-")
             Text("播放：${snapshot.viewCount ?: "-"}")
             Text("弹幕：${snapshot.danmakuCount ?: "-"}")
             Text("评论：${snapshot.replyCount ?: "-"}")
@@ -318,36 +356,51 @@ private fun HistoryPage(repository: MonitorRepository, bvId: String) {
         TrendCalculator.points(snapshots, metric, limit)
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("趋势和历史快照", style = MaterialTheme.typography.titleMedium)
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = pageContentPadding()
+    ) {
+        item { Text("趋势和历史快照", style = MaterialTheme.typography.titleMedium) }
         if (snapshots.isEmpty()) {
-            Text("暂无历史快照，请先手动刷新")
-            return@Column
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            TrendMetric.entries.forEach { item ->
-                TextButton(onClick = { metric = item }) {
-                    Text(if (metric == item) "${item.label} *" else item.label)
+            item { Text("暂无历史快照，请先手动刷新") }
+        } else {
+            item {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    items(TrendMetric.entries) { item ->
+                        if (metric == item) {
+                            Button(onClick = { metric = item }) { Text(item.label) }
+                        } else {
+                            TextButton(onClick = { metric = item }) { Text(item.label) }
+                        }
+                    }
                 }
             }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("最近")
-            TextButton(onClick = { limit = 20 }) { Text(if (limit == 20) "20 *" else "20") }
-            TextButton(onClick = { limit = 50 }) { Text(if (limit == 50) "50 *" else "50") }
-            Text("条")
-        }
-        TrendChart(trendPoints, metric)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(trendPoints.reversed()) { point ->
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("最近")
+                    if (limit == 20) {
+                        Button(onClick = { limit = 20 }) { Text("20") }
+                    } else {
+                        TextButton(onClick = { limit = 20 }) { Text("20") }
+                    }
+                    if (limit == 50) {
+                        Button(onClick = { limit = 50 }) { Text("50") }
+                    } else {
+                        TextButton(onClick = { limit = 50 }) { Text("50") }
+                    }
+                    Text("条")
+                }
+            }
+            item { TrendChart(trendPoints, metric) }
+            items(trendPoints.reversed(), key = { "${it.collectedAt}-${it.value}" }) { point ->
                 TrendPointCard(point, metric)
             }
-            items(snapshots) { snapshot ->
+            items(snapshots, key = { it.id }) { snapshot ->
                 Card {
                     Column(Modifier.fillMaxWidth().padding(12.dp)) {
                         Text(snapshot.collectedAt, fontWeight = FontWeight.Bold)
                         Text("播放 ${snapshot.viewCount ?: "-"} / 点赞 ${snapshot.likeCount ?: "-"} / 状态 ${snapshot.fetchStatus}")
-                        snapshot.errorMessage?.let { Text("错误：$it") }
+                        snapshot.errorMessage?.let { ExpandableText("错误：$it", collapsedMaxLines = 2) }
                     }
                 }
             }
@@ -415,24 +468,52 @@ private fun AdvancedPage(
     settingsStore: AutoRefreshSettingsStore,
     selectedBvId: String?
 ) {
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val logs by repository.logs.collectAsStateWithLifecycle(initialValue = emptyList())
+    var filter by rememberSaveable { mutableStateOf("全部") }
+    val filteredLogs = remember(logs, filter) {
+        logs.filter { log ->
+            when (filter) {
+                "info", "warning", "error" -> log.level == filter
+                "手动刷新" -> log.message.contains("manual") || log.detail.orEmpty().contains("manual")
+                "自动刷新" -> log.message.contains("auto") || log.detail.orEmpty().contains("auto")
+                "导出" -> log.tag == "export"
+                else -> true
+            }
+        }
+    }
+    val pageState = AdvancedPageModel.from(selectedBvId)
+
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = pageContentPadding()
+    ) {
         item {
             Text("高级", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
         item {
-            if (selectedBvId == null) {
+            if (pageState.showEmptyExportMessage) {
                 Card {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("导出", fontWeight = FontWeight.Bold)
-                        Text("请先在首页选择一个视频，随后这里会显示 JSON / CSV 导出。")
+                        Text("选择视频后可导出 JSON / CSV。")
                     }
                 }
-            } else {
+            } else if (pageState.showExportPanel && selectedBvId != null) {
                 ExportPanel(repository, settingsStore, selectedBvId)
             }
         }
         item {
-            LogsPage(repository)
+            Text("日志", style = MaterialTheme.typography.titleMedium)
+        }
+        item {
+            LogFilterRow(filter) { filter = it }
+        }
+        if (filteredLogs.isEmpty()) {
+            item { Text("暂无日志") }
+        } else {
+            items(filteredLogs, key = { it.id }) { log ->
+                LogCard(log)
+            }
         }
     }
 }
@@ -504,8 +585,7 @@ private fun ExportPanel(
     Card {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("导出 $bvId")
-        Text("首次导出会打开系统保存窗口。已设置默认目录时，可直接保存，也可本次选择其他位置。")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Button(
                 onClick = {
                     scope.launch {
@@ -531,7 +611,8 @@ private fun ExportPanel(
                         }
                     }
                 },
-                enabled = !loading
+                enabled = !loading,
+                modifier = Modifier.fillMaxWidth()
             ) { Text("导出 JSON") }
             Button(
                 onClick = {
@@ -558,7 +639,8 @@ private fun ExportPanel(
                         }
                     }
                 },
-                enabled = !loading
+                enabled = !loading,
+                modifier = Modifier.fillMaxWidth()
             ) { Text("导出 CSV") }
         }
         Button(
@@ -600,7 +682,7 @@ private fun ExportPanel(
             Text("生成并分享文件")
         }
         if (loading) CircularProgressIndicator()
-        Text(output)
+        ExpandableText(output, collapsedMaxLines = 3)
         if (askDefaultAfterSave) {
             ExportDefaultPrompt(
                 onChooseDefault = { openTreeLauncher.launch(null) },
@@ -614,42 +696,6 @@ private fun ExportPanel(
                 onDismiss = { askDefaultAfterSave = false }
             )
         }
-        }
-    }
-}
-
-@Composable
-private fun LogsPage(repository: MonitorRepository) {
-    val logs by repository.logs.collectAsStateWithLifecycle(initialValue = emptyList())
-    var filter by remember { mutableStateOf("全部") }
-    val filteredLogs = remember(logs, filter) {
-        logs.filter { log ->
-            when (filter) {
-                "info", "warning", "error" -> log.level == filter
-                "手动刷新" -> log.message.contains("manual") || log.detail.orEmpty().contains("manual")
-                "自动刷新" -> log.message.contains("auto") || log.detail.orEmpty().contains("auto")
-                "导出" -> log.tag == "export"
-                else -> true
-            }
-        }
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("最近 200 条日志，按时间倒序")
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            items(listOf("全部", "info", "warning", "error", "手动刷新", "自动刷新", "导出")) { item ->
-                TextButton(onClick = { filter = item }) {
-                    Text(if (filter == item) "$item *" else item)
-                }
-            }
-        }
-        if (filteredLogs.isEmpty()) {
-            Text("暂无日志")
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(filteredLogs) { log ->
-                    LogCard(log)
-                }
-            }
         }
     }
 }
@@ -687,13 +733,39 @@ private fun SettingsPage(
         }
     }
 
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    fun updateInterval(minutes: Long) {
+        if (minutes == settings.intervalMinutes) return
+        scope.launch {
+            settingsStore.setIntervalMinutes(minutes)
+            val result = AutoRefreshRegistrationController.changeInterval(
+                minutes,
+                settings,
+                autoRefreshScheduler
+            )
+            if (settings.enabled) {
+                val now = Instant.now().toString()
+                settingsStore.recordRegistered(now)
+                repository.writeLog(
+                    "info",
+                    "work",
+                    "auto refresh rescheduled",
+                    "selected=${minutes}m, effective=${RefreshIntervals.backgroundScheduleMinutes(minutes)}m, wifiOnly=${settings.wifiOnly}"
+                )
+            }
+            status = if (result.action == "saved") "已保存间隔：${minutesLabel(minutes)}" else result.message
+        }
+    }
+
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = pageContentPadding()
+    ) {
         item { Text("设置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
         item {
             SettingsSection("自动刷新") {
                 SettingSwitchRow(
                     title = "启用自动刷新",
-                    subtitle = "仅刷新已添加视频；Android 可能延迟后台任务。",
+                    subtitle = "只刷新已添加视频。",
                     checked = settings.enabled,
                     onCheckedChange = { enabled: Boolean ->
                         scope.launch {
@@ -706,7 +778,12 @@ private fun SettingsPage(
                             val now = Instant.now().toString()
                             if (enabled) {
                                 settingsStore.recordRegistered(now)
-                                repository.writeLog("info", "work", "auto refresh registered", "interval=${settings.intervalMinutes}m, wifiOnly=${settings.wifiOnly}")
+                                repository.writeLog(
+                                    "info",
+                                    "work",
+                                    "auto refresh registered",
+                                    "selected=${settings.intervalMinutes}m, effective=${RefreshIntervals.backgroundScheduleMinutes(settings.intervalMinutes)}m, wifiOnly=${settings.wifiOnly}"
+                                )
                             } else {
                                 settingsStore.recordCancelled(now)
                                 repository.writeLog("info", "work", "auto refresh cancelled")
@@ -715,31 +792,12 @@ private fun SettingsPage(
                         }
                     }
                 )
-                Text("间隔：${minutesLabel(settings.intervalMinutes)}")
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                    items(RefreshIntervals.allowedMinutes) { minutes: Long ->
-                        TextButton(
-                            onClick = {
-                                scope.launch {
-                                    settingsStore.setIntervalMinutes(minutes)
-                                    val result = AutoRefreshRegistrationController.changeInterval(
-                                        minutes,
-                                        settings,
-                                        autoRefreshScheduler
-                                    )
-                                    if (settings.enabled) {
-                                        val now = Instant.now().toString()
-                                        settingsStore.recordRegistered(now)
-                                        repository.writeLog("info", "work", "auto refresh rescheduled", "interval=${minutes}m, wifiOnly=${settings.wifiOnly}")
-                                    }
-                                    status = if (result.action == "saved") "已保存间隔：${minutesLabel(minutes)}" else result.message
-                                }
-                            }
-                        ) {
-                            Text(if (settings.intervalMinutes == minutes) "${minutesLabel(minutes)} *" else minutesLabel(minutes))
-                        }
-                    }
-                }
+                Text("刷新间隔：${minutesLabel(settings.intervalMinutes)}")
+                IntervalWheelPicker(
+                    selectedMinutes = settings.intervalMinutes,
+                    onSelected = { updateInterval(it) }
+                )
+                Text("后台有效间隔：${minutesLabel(RefreshIntervals.backgroundScheduleMinutes(settings.intervalMinutes))}")
                 Text("后台任务：${if (settings.workRegistered) "已注册，等待系统调度" else "未注册"}")
             }
         }
@@ -760,25 +818,33 @@ private fun SettingsPage(
                             if (settings.enabled) {
                                 val now = Instant.now().toString()
                                 settingsStore.recordRegistered(now)
-                                repository.writeLog("info", "work", "auto refresh network constraint updated", "interval=${settings.intervalMinutes}m, wifiOnly=$wifiOnly")
+                                repository.writeLog(
+                                    "info",
+                                    "work",
+                                    "auto refresh network constraint updated",
+                                    "selected=${settings.intervalMinutes}m, effective=${RefreshIntervals.backgroundScheduleMinutes(settings.intervalMinutes)}m, wifiOnly=$wifiOnly"
+                                )
                             }
                             status = result.message
                         }
                     }
                 )
                 Text("当前网络约束：${if (settings.wifiOnly) "仅 Wi-Fi" else "任意联网"}")
-                Text("网络不可用时刷新会失败并写入日志，不弹出打扰提示。")
             }
         }
         item {
             SettingsSection("导出设置") {
                 Text("默认导出格式：${settings.defaultExportFormat.uppercase()}")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    TextButton(onClick = { scope.launch { settingsStore.setDefaultExportFormat("csv") } }) {
-                        Text(if (settings.defaultExportFormat == "csv") "CSV *" else "CSV")
+                    if (settings.defaultExportFormat == "csv") {
+                        Button(onClick = { scope.launch { settingsStore.setDefaultExportFormat("csv") } }) { Text("CSV") }
+                    } else {
+                        TextButton(onClick = { scope.launch { settingsStore.setDefaultExportFormat("csv") } }) { Text("CSV") }
                     }
-                    TextButton(onClick = { scope.launch { settingsStore.setDefaultExportFormat("json") } }) {
-                        Text(if (settings.defaultExportFormat == "json") "JSON *" else "JSON")
+                    if (settings.defaultExportFormat == "json") {
+                        Button(onClick = { scope.launch { settingsStore.setDefaultExportFormat("json") } }) { Text("JSON") }
+                    } else {
+                        TextButton(onClick = { scope.launch { settingsStore.setDefaultExportFormat("json") } }) { Text("JSON") }
                     }
                 }
                 Text("默认目录：${settings.defaultExportTreeUri ?: "未设置，每次使用系统保存窗口"}")
@@ -801,16 +867,16 @@ private fun SettingsPage(
         item {
             SettingsSection("数据与存储") {
                 Text("Room 数据库版本：1")
-                Text("历史快照保存在本机应用数据库。当前版本未提供批量清库入口。")
             }
         }
         item {
             SettingsSection("通知与后台运行") {
-                Text("当前未启用前台服务通知。后台刷新由 WorkManager 调度，可能被系统延迟。")
+                Text("后台刷新由 WorkManager 调度，可能被系统延迟。")
             }
         }
         item {
-            SettingsSection("关于与诊断") {
+            ExpandableSection("关于与诊断", initiallyExpanded = false, stateKey = "settings_diagnostics") {
+                Text("版本：0.8.0")
                 AutoRefreshStatusBlock(settings)
             }
         }
@@ -936,6 +1002,142 @@ private fun SettingSwitchRow(
 }
 
 @Composable
+private fun IntervalWheelPicker(
+    selectedMinutes: Long,
+    onSelected: (Long) -> Unit
+) {
+    val options = RefreshIntervals.allowedMinutes
+    val selectedIndex = options.indexOf(selectedMinutes).takeIf { it >= 0 } ?: options.indexOf(RefreshIntervals.DEFAULT_MINUTES)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex.coerceAtLeast(0))
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(selectedIndex) {
+        if (!listState.isScrollInProgress && selectedIndex >= 0) {
+            listState.scrollToItem(selectedIndex)
+        }
+    }
+
+    LaunchedEffect(listState, selectedMinutes) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .filter { scrolling -> !scrolling }
+            .collect {
+                val layoutInfo = listState.layoutInfo
+                val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+                val targetIndex = layoutInfo.visibleItemsInfo
+                    .minByOrNull { item -> abs((item.offset + item.size / 2) - viewportCenter) }
+                    ?.index
+                    ?: listState.firstVisibleItemIndex
+                val boundedIndex = targetIndex.coerceIn(0, options.lastIndex)
+                listState.animateScrollToItem(boundedIndex)
+                val selected = options[boundedIndex]
+                if (selected != selectedMinutes) {
+                    onSelected(selected)
+                }
+            }
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(156.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        contentPadding = PaddingValues(vertical = 48.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        itemsIndexed(options) { index, minutes ->
+            val selected = minutes == selectedMinutes
+            if (selected) {
+                Button(
+                    onClick = {
+                        scope.launch { listState.animateScrollToItem(index) }
+                        onSelected(minutes)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(minutesLabel(minutes))
+                }
+            } else {
+                TextButton(
+                    onClick = {
+                        scope.launch { listState.animateScrollToItem(index) }
+                        onSelected(minutes)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(minutesLabel(minutes))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpandableSection(
+    title: String,
+    initiallyExpanded: Boolean,
+    stateKey: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    var expanded by rememberSaveable(stateKey) { mutableStateOf(initiallyExpanded) }
+    Card(modifier = Modifier.fillMaxWidth().animateContentSize()) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(title, fontWeight = FontWeight.Bold)
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "收起" else "展开")
+                }
+            }
+            AnimatedVisibility(visible = expanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpandableText(
+    text: String,
+    collapsedMaxLines: Int,
+    fontWeight: FontWeight? = null
+) {
+    var expanded by rememberSaveable(text) { mutableStateOf(false) }
+    val canCollapse = ExpandableTextPolicy.shouldOfferExpansion(text)
+    Column(modifier = Modifier.animateContentSize()) {
+        Text(
+            text = text,
+            fontWeight = fontWeight,
+            maxLines = if (expanded || !canCollapse) Int.MAX_VALUE else collapsedMaxLines,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (canCollapse) {
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(if (expanded) "收起" else "展开")
+            }
+        }
+    }
+}
+
+@Composable
+private fun LogFilterRow(filter: String, onFilterChange: (String) -> Unit) {
+    val filters = listOf("全部", "info", "warning", "error", "手动刷新", "自动刷新", "导出")
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+        items(filters) { item ->
+            if (filter == item) {
+                Button(onClick = { onFilterChange(item) }) { Text(item) }
+            } else {
+                TextButton(onClick = { onFilterChange(item) }) { Text(item) }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ExportDefaultPrompt(
     onChooseDefault: () -> Unit,
     onAskEveryTime: () -> Unit,
@@ -1028,8 +1230,8 @@ private fun LogCard(log: AppLogEntity) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Text("${log.level} / ${log.tag}", fontWeight = FontWeight.Bold)
             Text(log.time)
-            Text(log.message)
-            log.detail?.let { Text(it) }
+            ExpandableText(log.message, collapsedMaxLines = 2)
+            log.detail?.let { ExpandableText(it, collapsedMaxLines = 2) }
         }
     }
 }
@@ -1053,11 +1255,18 @@ private fun shareExport(context: Context, result: ExportResult) {
 private fun ExportResult.formatForDisplay(type: String): String =
     "$type 导出成功\n文件名：$fileName\n大小：$sizeBytes bytes\n时间：$exportedAt\n路径：$path"
 
+private fun pageContentPadding(): PaddingValues = PaddingValues(bottom = 12.dp)
+
 private fun minutesLabel(minutes: Long): String =
     when (minutes) {
+        1L -> "1m"
+        3L -> "3m"
+        5L -> "5m"
+        10L -> "10m"
+        15L -> "15m"
+        30L -> "30m"
         60L -> "1h"
-        180L -> "3h"
-        360L -> "6h"
+        120L -> "2h"
         else -> "${minutes}m"
     }
 

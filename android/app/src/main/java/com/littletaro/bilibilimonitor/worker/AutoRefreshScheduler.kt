@@ -14,7 +14,7 @@ class AutoRefreshScheduler(context: Context) : AutoRefreshRegistrationClient {
     private val appContext = context.applicationContext
 
     override fun schedule(intervalMinutes: Long, wifiOnly: Boolean) {
-        val sanitizedInterval = RefreshIntervals.sanitize(intervalMinutes)
+        val sanitizedInterval = RefreshIntervals.backgroundScheduleMinutes(intervalMinutes)
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
             .setRequiresBatteryNotLow(true)

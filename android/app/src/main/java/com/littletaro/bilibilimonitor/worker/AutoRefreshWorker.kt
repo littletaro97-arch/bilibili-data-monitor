@@ -9,6 +9,7 @@ import com.littletaro.bilibilimonitor.data.MonitorRepository
 import com.littletaro.bilibilimonitor.data.RefreshTrigger
 import com.littletaro.bilibilimonitor.data.SnapshotExporter
 import com.littletaro.bilibilimonitor.settings.AutoRefreshSettingsStore
+import com.littletaro.bilibilimonitor.settings.RefreshIntervals
 import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
 import java.time.Instant
@@ -45,7 +46,12 @@ class AutoRefreshWorker(
         return try {
             val startedAt = Instant.now().toString()
             settingsStore.recordWorkerStarted(startedAt)
-            repository.writeLog("info", "work", "auto refresh worker started", "interval=${settings.intervalMinutes}m")
+            repository.writeLog(
+                "info",
+                "work",
+                "auto refresh worker started",
+                "selected=${settings.intervalMinutes}m, effective=${RefreshIntervals.backgroundScheduleMinutes(settings.intervalMinutes)}m"
+            )
             val result = repository.refreshAllExistingVideos(RefreshTrigger.AUTO)
             val now = Instant.now().toString()
             val resultText = AutoRefreshWorkerStatus.finished(result)

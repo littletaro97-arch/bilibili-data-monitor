@@ -88,11 +88,41 @@ public class AutoRefreshRegistrationControllerTest {
     }
 
     @Test
+    public void shortIntervalKeepsSingleUniqueRegistrationRequestAndReportsEffectiveBackgroundMinimum() {
+        FakeClient client = new FakeClient();
+        AutoRefreshSettings enabled = new AutoRefreshSettings(
+                true,
+                60L,
+                true,
+                true,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0L,
+                0L,
+                null,
+                true,
+                "csv"
+        );
+
+        AutoRefreshRegistrationResult result =
+                AutoRefreshRegistrationController.INSTANCE.changeInterval(1L, enabled, client);
+
+        assertEquals("registered", result.getAction());
+        assertEquals(1, client.scheduleCalls);
+        assertEquals(1L, client.lastInterval);
+        assertTrue(result.getMessage().contains("15m"));
+    }
+
+    @Test
     public void changingWifiOnlyOnlyReschedulesWhenEnabled() {
         FakeClient client = new FakeClient();
         AutoRefreshSettings enabled = new AutoRefreshSettings(
                 true,
-                180L,
+                120L,
                 true,
                 true,
                 null,
@@ -111,7 +141,7 @@ public class AutoRefreshRegistrationControllerTest {
         AutoRefreshRegistrationController.INSTANCE.changeWifiOnly(false, enabled, client);
 
         assertEquals(1, client.scheduleCalls);
-        assertEquals(180L, client.lastInterval);
+        assertEquals(120L, client.lastInterval);
         assertFalse(client.lastWifiOnly);
 
         FakeClient disabledClient = new FakeClient();

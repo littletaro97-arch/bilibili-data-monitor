@@ -362,3 +362,22 @@ Debug APK 输出：
 ```text
 releases/android/v0.7.0/bilibili-monitor-android-v0.7.0-debug.apk
 ```
+
+## v0.8.0 Android 高级页崩溃和滚动布局修复
+
+v0.8.0 基于 v0.7.0 修复高级页闪退、详情页快照不可完整查看和设置入口冗余问题：
+
+- 修复高级页进入闪退：高级页不再把日志 `LazyColumn` 嵌套进外层 `LazyColumn`。
+- 首页、详情、历史、设置、高级页面都使用有界主滚动容器，降低内容被底部系统区域截断或无法滑动的风险。
+- 详情页“最近快照”可随页面完整纵向滚动查看。
+- 长标题、错误详情、日志详情和诊断信息增加展开 / 收起机制。
+- 首页移除“自动刷新设置”入口；自动刷新配置集中到设置页。
+- 自动刷新间隔改为滚轮式固定档位：1m、3m、5m、10m、15m、30m、1h、2h。
+- WorkManager 后台周期遵守 Android 最小周期限制：低于 15 分钟的选择会保存，但后台有效调度按 15 分钟处理。
+- 导航和筛选选中态使用 Material 按钮状态，不再依赖星号。
+
+Debug APK 输出：
+
+```text
+releases/android/v0.8.0/bilibili-monitor-android-v0.8.0-debug.apk
+```

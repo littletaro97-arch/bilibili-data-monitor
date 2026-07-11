@@ -31,12 +31,16 @@ data class AutoRefreshSettings(
 
 object RefreshIntervals {
     const val DEFAULT_MINUTES: Long = 60
-    val allowedMinutes: List<Long> = listOf(15, 30, 60, 180, 360)
+    const val MIN_WORK_MANAGER_MINUTES: Long = 15
+    val allowedMinutes: List<Long> = listOf(1, 3, 5, 10, 15, 30, 60, 120)
 
     fun isAllowed(minutes: Long): Boolean = minutes in allowedMinutes
 
     fun sanitize(minutes: Long): Long =
         if (isAllowed(minutes)) minutes else DEFAULT_MINUTES
+
+    fun backgroundScheduleMinutes(minutes: Long): Long =
+        sanitize(minutes).coerceAtLeast(MIN_WORK_MANAGER_MINUTES)
 }
 
 class AutoRefreshSettingsStore(private val context: Context) {

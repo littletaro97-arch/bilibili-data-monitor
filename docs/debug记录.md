@@ -369,3 +369,34 @@ powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
 1. 如果 `app/build/intermediates/javac/.../*Test.class` 存在，但测试报告显示所有测试类 `ClassNotFoundException`，优先怀疑 Gradle/JDK worker classpath 在中文路径下异常。
 2. 使用 `C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android` 这个 ASCII junction 重新执行同一测试。
 3. 只有 ASCII 路径下仍失败时，才按代码或测试逻辑失败处理。
+
+## Android v0.8.0 高级页和滚动布局排查
+
+### 高级页闪退
+
+1. 优先检查是否存在 `LazyColumn` 内再渲染另一个无固定高度 `LazyColumn`。
+2. v0.7.0 的风险点是 `AdvancedPage` 外层 `LazyColumn` 的 item 中调用 `LogsPage()`，而 `LogsPage()` 在有日志时又创建竖向 `LazyColumn`。
+3. Compose 典型异常是竖向可滚动组件在无限高度约束下被测量，不能用 try/catch 静默吞掉。
+4. 修复方式是让高级页只有一个主滚动列表：标题、导出、日志筛选、日志卡片全部作为同一个 `LazyColumn` 的 item。
+5. 首页、详情、历史、设置同样应避免无界父布局中嵌套竖向滚动列表。
+
+### 最近快照底部不可见
+
+1. 详情页必须是可纵向滚动页面，不要用固定 `Column` 承载所有快照字段。
+2. 根布局中页面内容区需要有明确高度约束，例如在导航下方使用 `weight(1f)`。
+3. 页面底部只保留少量内容内边距，不要叠加根安全区和页面安全区造成大空白。
+4. 字体放大时，最近快照字段应继续通过页面滚动查看，而不是被底部系统区域遮住。
+
+### 自动刷新短间隔
+
+1. UI 允许选择 1m、3m、5m、10m、15m、30m、1h、2h。
+2. WorkManager 周期任务不能承诺低于 Android 最小 15 分钟的后台稳定周期。
+3. `RefreshIntervals.backgroundScheduleMinutes()` 应把低于 15m 的选择映射到 15m 后台有效周期。
+4. 日志和状态提示应同时记录 selected interval 和 effective interval。
+
+### 折叠内容回归
+
+1. 长标题、错误详情、日志详情和诊断区可以折叠。
+2. 操作按钮不能因为折叠而默认隐藏。
+3. 折叠状态使用 `rememberSaveable`，普通重组不应丢失。
+4. 动画仅使用轻量 `animateContentSize` / `AnimatedVisibility`，不要阻塞滚动和点击。

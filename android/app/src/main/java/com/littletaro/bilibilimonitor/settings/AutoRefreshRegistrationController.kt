@@ -18,7 +18,10 @@ object AutoRefreshRegistrationController {
     ): AutoRefreshRegistrationResult {
         return if (enabled) {
             client.schedule(settings.intervalMinutes, settings.wifiOnly)
-            AutoRefreshRegistrationResult("registered", "已注册自动刷新，等待 Android 系统调度")
+            AutoRefreshRegistrationResult(
+                "registered",
+                registrationMessage(settings.intervalMinutes)
+            )
         } else {
             client.cancel()
             AutoRefreshRegistrationResult("cancelled", "已取消自动刷新")
@@ -33,7 +36,7 @@ object AutoRefreshRegistrationController {
         require(RefreshIntervals.isAllowed(minutes)) { "Unsupported interval: $minutes" }
         return if (settings.enabled) {
             client.schedule(minutes, settings.wifiOnly)
-            AutoRefreshRegistrationResult("registered", "已按新间隔重新注册自动刷新")
+            AutoRefreshRegistrationResult("registered", registrationMessage(minutes))
         } else {
             AutoRefreshRegistrationResult("saved", "已保存间隔")
         }
@@ -46,9 +49,18 @@ object AutoRefreshRegistrationController {
     ): AutoRefreshRegistrationResult {
         return if (settings.enabled) {
             client.schedule(settings.intervalMinutes, wifiOnly)
-            AutoRefreshRegistrationResult("registered", "已更新网络约束并重新注册自动刷新")
+            AutoRefreshRegistrationResult("registered", registrationMessage(settings.intervalMinutes))
         } else {
             AutoRefreshRegistrationResult("saved", "已保存网络约束")
+        }
+    }
+
+    private fun registrationMessage(minutes: Long): String {
+        val effective = RefreshIntervals.backgroundScheduleMinutes(minutes)
+        return if (effective == minutes) {
+            "已注册自动刷新，等待 Android 系统调度"
+        } else {
+            "已保存 ${minutes}m；后台任务按 Android 最小 ${effective}m 调度"
         }
     }
 }

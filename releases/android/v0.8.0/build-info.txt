@@ -1,0 +1,18 @@
+﻿Version: v0.8.0
+Git commit hash at build time: 82cf62e
+Git branch: codex/bilibili-project-setup
+Git working tree clean at build time: no
+Build time: 2026-07-11 10:57:44 +09:00
+Formal project path: C:\Users\LittleTaro\Desktop\课外项目\bilibili数据监控
+Android build path: C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android
+Used ASCII junction: yes
+ASCII junction path: C:\Users\LittleTaro\codex-bilibili-monitor-ascii
+Gradle version: 8.7
+Android Gradle Plugin version: 8.5.2
+Kotlin plugin version: 1.9.24
+minSdk: 26
+targetSdk: 35
+compileSdk: 35
+APK file name: bilibili-monitor-android-v0.8.0-debug.apk
+APK size: 10509528 bytes
+SHA256: 40F52FB62ED9B64AA49126F81BFA97ABE7266B4ECBA1B49543BFE0ED1AA0AD3B
