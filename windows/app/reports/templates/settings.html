@@ -24,7 +24,7 @@
 
 <section>
   <h2>启动窗口</h2>
-  <p class="muted">关闭 CMD 窗口后，启动错误不会直接显示在屏幕上；隐藏启动时可查看 <code>logs/launcher.log</code> 和 <code>logs/app.log</code> 排查问题。</p>
+  <p class="muted">关闭 CMD 窗口后，启动错误不会直接显示在屏幕上；隐藏启动时可查看 <code>runtime-data/logs/launcher.log</code> 和 <code>runtime-data/logs/app.log</code> 排查问题。</p>
   <form method="post" action="/settings/launcher" class="row">
     <label><input type="checkbox" name="show_console" {% if launcher_show_console %}checked{% endif %}> 启动程序时显示 CMD 调试窗口</label>
     <button type="submit">保存启动设置</button>
@@ -61,10 +61,16 @@
 
 <section>
   <h2>维护</h2>
-  <p class="muted">raw_json 只用于本地排错，默认关闭。日志清理会删除页面日志，并尝试清空 <code>logs/app.log</code>。</p>
+  <p class="muted">raw_json 只用于本地排错，默认关闭。日志清理会删除页面日志，并尝试清空 <code>runtime-data/logs/app.log</code>。</p>
   <form method="post" action="/maintenance/clear-raw-json"><button class="secondary" type="submit">清理 raw_json</button></form>
   <form method="post" action="/maintenance/export-data" style="margin-top: 10px;"><button class="secondary" type="submit">导出全部数据</button></form>
   <p class="muted">导出目录：<code>{{ export_output_dir }}</code>。导出后会生成一个按时间命名的文件夹，里面是 CSV 文件。</p>
+  <p><a class="button secondary" href="/history-exchange/export">导出跨端历史 ZIP</a></p>
+  <form method="post" action="/history-exchange/preview" enctype="multipart/form-data" style="margin-top: 10px;">
+    <label for="exchange_zip">导入 Android/Windows 历史交换包</label>
+    <input id="exchange_zip" type="file" name="exchange_zip" accept=".zip,application/zip" required>
+    <button type="submit">校验并预览</button>
+  </form>
   <form method="post" action="/maintenance/clear-logs" style="margin-top: 10px;"><button class="danger" type="submit">清理全部日志</button></form>
 </section>
 

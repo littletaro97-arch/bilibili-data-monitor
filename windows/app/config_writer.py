@@ -71,4 +71,6 @@ session_cookie = "{current.lan.session_cookie}"
 [launcher]
 show_console = {str(launcher_show_console).lower()}
 """
-    (BASE_DIR / "config.toml").write_text(content, encoding="utf-8")
+    target = BASE_DIR / "runtime-data" / "config.toml"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")

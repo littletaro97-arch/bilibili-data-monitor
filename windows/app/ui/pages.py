@@ -7,7 +7,7 @@ import socket
 import threading
 import time
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from plotly.offline import get_plotlyjs
 
@@ -27,6 +27,7 @@ from app.services.analysis_service import (
     top_words,
 )
 from app.services.history_import_service import parse_history_csv
+from app.services.history_exchange_service import MAX_ZIP_BYTES
 from app.ui.dashboard import templates
 
 
@@ -449,6 +450,50 @@ async def clear_logs(request: Request):
 async def export_data(request: Request):
     path = request.app.state.export_service.export_all()
     return _flash_redirect("/settings", f"全部数据已导出：{path}")
+
+
+@router.get("/history-exchange/export")
+async def export_history_exchange(request: Request):
+    payload = request.app.state.history_exchange_service.export_zip()
+    filename = datetime.now().astimezone().strftime("bilibili-history-v1-%Y%m%d_%H%M%S.zip")
+    return Response(
+        payload,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/history-exchange/preview", response_class=HTMLResponse)
+async def preview_history_exchange(request: Request, exchange_zip: UploadFile = File(...)):
+    payload = await exchange_zip.read(MAX_ZIP_BYTES + 1)
+    if len(payload) > MAX_ZIP_BYTES:
+        return _flash_redirect("/settings", "ZIP 超过 100MB 限制", "error")
+    try:
+        preview = request.app.state.history_exchange_service.preview(payload)
+    except ValueError as exc:
+        return _flash_redirect("/settings", f"导入校验失败：{exc}", "error")
+    token = os.urandom(16).hex()
+    previews = request.app.state.history_exchange_previews
+    previews.clear()
+    previews[token] = preview
+    return templates.TemplateResponse(
+        request,
+        "exchange_preview.html",
+        {"token": token, "preview": preview},
+    )
+
+
+@router.post("/history-exchange/confirm")
+async def confirm_history_exchange(request: Request, token: str = Form(...)):
+    preview = request.app.state.history_exchange_previews.pop(token, None)
+    if preview is None:
+        return _flash_redirect("/settings", "导入预览已失效，请重新选择 ZIP", "error")
+    try:
+        report = request.app.state.history_exchange_service.merge(preview)
+    except Exception as exc:
+        return _flash_redirect("/settings", f"导入失败，事务已回滚：{exc}", "error")
+    message = f"导入完成：视频 +{report.videos_added}，快照 +{report.snapshots_added}，重复 {report.duplicates}，冲突 {report.conflicts}"
+    return _flash_redirect("/settings", message)
 
 
 @router.post("/shutdown")

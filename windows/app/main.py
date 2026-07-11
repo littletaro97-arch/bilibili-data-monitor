@@ -8,11 +8,12 @@ from fastapi.responses import RedirectResponse
 
 from app.collectors.bilibili_client import BilibiliClient
 from app.collectors.provider import BilibiliWebProvider
-from app.config import BASE_DIR, Settings, settings
+from app.config import BASE_DIR, RUNTIME_DIR, Settings, settings
 from app.database import Database, Repository
 from app.logger import logger
 from app.services.crawl_service import CrawlService
 from app.services.export_service import ExportService
+from app.services.history_exchange_service import HistoryExchangeService
 from app.services.report_service import ReportService
 from app.services.phase2_service import Phase2Service
 from app.services.task_service import TaskScheduler
@@ -68,7 +69,8 @@ def create_app() -> FastAPI:
         max_root_comments=settings.phase2.max_root_comments,
         max_child_comments=settings.phase2.max_child_comments,
     )
-    export_service = ExportService(repository, BASE_DIR / "data" / "exports")
+    export_service = ExportService(repository, RUNTIME_DIR / "exports")
+    history_exchange_service = HistoryExchangeService(repository)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -95,6 +97,8 @@ def create_app() -> FastAPI:
     app.state.report_service = report_service
     app.state.phase2_service = phase2_service
     app.state.export_service = export_service
+    app.state.history_exchange_service = history_exchange_service
+    app.state.history_exchange_previews = {}
     app.state.scheduler = scheduler
 
     @app.middleware("http")

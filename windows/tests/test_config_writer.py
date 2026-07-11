@@ -10,7 +10,7 @@ def test_save_launcher_settings_writes_launcher_block(tmp_path, monkeypatch):
 
     config_writer.save_launcher_settings(show_console=False)
 
-    raw = tomllib.loads((tmp_path / "config.toml").read_text(encoding="utf-8"))
+    raw = tomllib.loads((tmp_path / "runtime-data" / "config.toml").read_text(encoding="utf-8"))
     assert raw["launcher"]["show_console"] is False
     assert raw["lan"]["enabled"] is False
 
@@ -23,5 +23,5 @@ def test_save_lan_settings_preserves_launcher_setting(tmp_path, monkeypatch):
 
     config_writer.save_lan_settings(enabled=False)
 
-    raw = tomllib.loads((tmp_path / "config.toml").read_text(encoding="utf-8"))
+    raw = tomllib.loads((tmp_path / "runtime-data" / "config.toml").read_text(encoding="utf-8"))
     assert raw["launcher"]["show_console"] is False

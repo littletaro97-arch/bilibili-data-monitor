@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}历史导入预览{% endblock %}
+{% block content %}
+<section>
+  <h2>跨端历史导入预览</h2>
+  <table><tbody>
+    <tr><th>来源</th><td>{{ preview.manifest.sourcePlatform }}</td></tr>
+    <tr><th>导出时间</th><td>{{ preview.manifest.exportedAt }}</td></tr>
+    <tr><th>格式版本</th><td>{{ preview.manifest.formatVersion }}</td></tr>
+    <tr><th>视频</th><td>{{ preview.videos|length }}</td></tr>
+    <tr><th>快照</th><td>{{ preview.snapshots|length }}</td></tr>
+  </tbody></table>
+  <p class="muted">导入只会合并：完全重复记录跳过，同一身份键但内容不同的记录计为冲突且不会覆盖。</p>
+  <form method="post" action="/history-exchange/confirm">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button type="submit">确认合并导入</button>
+    <a class="button secondary" href="/settings">取消</a>
+  </form>
+</section>
+{% endblock %}

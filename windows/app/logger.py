@@ -4,11 +4,11 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from app.config import BASE_DIR
+from app.config import RUNTIME_DIR
 
 
 def setup_logging() -> logging.Logger:
-    log_dir = BASE_DIR / "logs"
+    log_dir = RUNTIME_DIR / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("bilibili_local_analytics")
     logger.setLevel(logging.INFO)

@@ -9,7 +9,7 @@ import sys
 import time
 import webbrowser
 
-from app.config import BASE_DIR, load_settings
+from app.config import BASE_DIR, RUNTIME_DIR, load_settings
 
 
 def main() -> int:
@@ -61,7 +61,7 @@ def _run_hidden() -> int:
         webbrowser.open(url)
         return 0
 
-    log_path = BASE_DIR / "logs" / "launcher.log"
+    log_path = RUNTIME_DIR / "logs" / "launcher.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as log:
         process = subprocess.Popen(

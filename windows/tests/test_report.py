@@ -9,7 +9,7 @@ def make_report_service(tmp_path):
     db = Database(tmp_path / "test.db")
     db.initialize()
     repo = Repository(db)
-    template_dir = Path(__file__).resolve().parents[1] / "reports" / "templates"
+    template_dir = Path(__file__).resolve().parents[1] / "app" / "reports" / "templates"
     return repo, ReportService(repo, tmp_path / "reports", template_dir)
 
 

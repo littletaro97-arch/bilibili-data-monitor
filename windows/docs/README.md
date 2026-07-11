@@ -18,6 +18,7 @@
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\activate
+cd windows
 pip install -r requirements.txt
 ```
 
@@ -71,8 +72,8 @@ netstat -ano | findstr :7860
 3. 如果通过 `run.bat` 启动且窗口被隐藏，查看：
 
 ```text
-logs/launcher.log
-logs/app.log
+runtime-data/logs/launcher.log
+runtime-data/logs/app.log
 ```
 
 4. 如果 LAN 已开启但无法访问，确认：
@@ -90,4 +91,3 @@ python -m pytest
 ```
 
 当前测试使用 mock 响应和临时 SQLite，不依赖真实 B 站网络请求。
-

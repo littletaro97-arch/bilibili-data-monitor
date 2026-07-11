@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import shutil
 import tomllib
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = BASE_DIR.parent
+RUNTIME_DIR = BASE_DIR / "runtime-data"
 
 
 @dataclass(frozen=True)
@@ -81,11 +84,39 @@ def _resolve(value: str) -> Path:
     path = Path(value)
     if path.is_absolute():
         return path
-    return BASE_DIR / path
+    return RUNTIME_DIR / path
+
+
+def migrate_legacy_runtime_data() -> list[str]:
+    """Copy legacy root runtime files once; never overwrite or delete the originals."""
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    migrated: list[str] = []
+    mappings = {
+        PROJECT_ROOT / "config.toml": RUNTIME_DIR / "config.toml",
+        PROJECT_ROOT / "data": RUNTIME_DIR / "data",
+        PROJECT_ROOT / "logs": RUNTIME_DIR / "logs",
+        PROJECT_ROOT / "reports": RUNTIME_DIR / "reports",
+    }
+    for source, target in mappings.items():
+        if not source.exists() or target.exists():
+            continue
+        if source.is_dir():
+            shutil.copytree(source, target)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+        migrated.append(f"{source.name}->{target.relative_to(BASE_DIR)}")
+    if migrated:
+        (RUNTIME_DIR / "migration.log").write_text(
+            "Legacy runtime data copied; original files were retained.\n" + "\n".join(migrated) + "\n",
+            encoding="utf-8",
+        )
+    return migrated
 
 
 def load_settings(path: str | Path | None = None) -> Settings:
-    config_path = Path(path) if path else BASE_DIR / "config.toml"
+    migrate_legacy_runtime_data()
+    config_path = Path(path) if path else RUNTIME_DIR / "config.toml"
     raw: dict = {}
     if config_path.exists():
         raw = tomllib.loads(config_path.read_text(encoding="utf-8"))

@@ -96,6 +96,8 @@ class Database:
                     online_text TEXT,
                     source_type TEXT NOT NULL DEFAULT 'collected',
                     source_note TEXT,
+                    collection_source TEXT NOT NULL DEFAULT 'UNKNOWN',
+                    exchange_digest TEXT,
                     raw_json TEXT,
                     FOREIGN KEY (bvid) REFERENCES videos(bvid)
                 );
@@ -150,6 +152,9 @@ class Database:
             _ensure_column(conn, "video_stats_snapshot", "source_note", "TEXT")
             _ensure_column(conn, "video_stats_snapshot", "online_count", "INTEGER")
             _ensure_column(conn, "video_stats_snapshot", "online_text", "TEXT")
+            _ensure_column(conn, "video_stats_snapshot", "collection_source", "TEXT NOT NULL DEFAULT 'UNKNOWN'")
+            _ensure_column(conn, "video_stats_snapshot", "exchange_digest", "TEXT")
+            conn.execute("PRAGMA user_version = 1")
 
 
 class Repository:
@@ -356,6 +361,7 @@ class Repository:
         captured_at: str | None = None,
         source_type: str = "collected",
         source_note: str | None = None,
+        collection_source: str = "UNKNOWN",
     ) -> None:
         captured_at = captured_at or iso_now()
         with self.database.connect() as conn:
@@ -364,8 +370,8 @@ class Repository:
                 INSERT INTO video_stats_snapshot (
                     bvid, captured_at, view_count, danmaku_count, reply_count,
                     favorite_count, coin_count, share_count, like_count, online_count, online_text,
-                    source_type, source_note, raw_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    source_type, source_note, raw_json, collection_source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     stats.bvid,
@@ -382,6 +388,7 @@ class Repository:
                     source_type,
                     source_note,
                     stats.raw_json,
+                    collection_source if collection_source in {"MANUAL", "AUTO", "UNKNOWN"} else "UNKNOWN",
                 ),
             )
 
@@ -395,8 +402,8 @@ class Repository:
                 INSERT INTO video_stats_snapshot (
                     bvid, captured_at, view_count, danmaku_count, reply_count,
                     favorite_count, coin_count, share_count, like_count, online_count, online_text,
-                    source_type, source_note, raw_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'imported', ?, NULL)
+                    source_type, source_note, raw_json, collection_source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'imported', ?, NULL, 'UNKNOWN')
                 """,
                 [
                     (

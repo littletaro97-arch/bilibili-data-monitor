@@ -26,7 +26,7 @@ class CrawlService:
         self.schedule_jitter_seconds = schedule_jitter_seconds
         self._semaphore = asyncio.Semaphore(max_concurrency)
 
-    async def collect_once(self, bvid: str) -> None:
+    async def collect_once(self, bvid: str, collection_source: str = "MANUAL") -> None:
         task = self.repository.get_task_by_bvid(bvid)
         if not task or task["status"] == "stopped":
             return
@@ -34,7 +34,7 @@ class CrawlService:
         async with self._semaphore:
             try:
                 stats = await self.provider.fetch_video_stats(bvid)
-                self.repository.insert_snapshot(stats)
+                self.repository.insert_snapshot(stats, collection_source=collection_source)
                 jitter = random.randint(0, self.schedule_jitter_seconds)
                 self.repository.mark_success(bvid, int(task["interval_seconds"]), jitter)
                 self.repository.add_log("INFO", "采集成功", bvid=bvid)
@@ -76,7 +76,7 @@ class CrawlService:
         if not tasks:
             return
         results = await asyncio.gather(
-            *(self.collect_once(task["bvid"]) for task in tasks),
+            *(self.collect_once(task["bvid"], collection_source="AUTO") for task in tasks),
             return_exceptions=True,
         )
         for result in results:
