@@ -66,6 +66,7 @@ import androidx.core.content.ContextCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.littletaro.bilibilimonitor.data.AppLogEntity
+import com.littletaro.bilibilimonitor.data.DeviceTime
 import com.littletaro.bilibilimonitor.data.ExportPayload
 import com.littletaro.bilibilimonitor.data.ExportResult
 import com.littletaro.bilibilimonitor.data.MonitorRepository
@@ -88,7 +89,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import java.io.File
-import java.time.Instant
 import kotlin.math.abs
 
 private enum class Page {
@@ -421,7 +421,7 @@ private fun SnapshotBlock(snapshot: VideoSnapshotEntity?) {
     Card {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("最近快照", fontWeight = FontWeight.Bold)
-            Text("采集时间：${snapshot.collectedAt}")
+            Text("采集时间：${DeviceTime.formatForDisplay(snapshot.collectedAt)}")
             Text("状态：${snapshot.fetchStatus}")
             snapshot.errorMessage?.let {
                 ExpandableText(text = "错误：$it", collapsedMaxLines = 2)
@@ -488,7 +488,7 @@ private fun HistoryPage(repository: MonitorRepository, bvId: String) {
             items(snapshots, key = { it.id }) { snapshot ->
                 Card {
                     Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                        Text(snapshot.collectedAt, fontWeight = FontWeight.Bold)
+                        Text(DeviceTime.formatForDisplay(snapshot.collectedAt), fontWeight = FontWeight.Bold)
                         Text("播放 ${snapshot.viewCount ?: "-"} / 点赞 ${snapshot.likeCount ?: "-"} / 状态 ${snapshot.fetchStatus}")
                         snapshot.errorMessage?.let { ExpandableText("错误：$it", collapsedMaxLines = 2) }
                     }
@@ -546,7 +546,7 @@ private fun TrendChart(points: List<TrendPoint>, metric: TrendMetric) {
 private fun TrendPointCard(point: TrendPoint, metric: TrendMetric) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(point.collectedAt, fontWeight = FontWeight.Bold)
+            Text(DeviceTime.formatForDisplay(point.collectedAt), fontWeight = FontWeight.Bold)
             Text("${metric.label}：${point.value ?: "-"} / 增量：${point.delta?.toString() ?: "-"}")
         }
     }
@@ -851,7 +851,7 @@ private fun SettingsPage(
                 autoRefreshScheduler
             )
             if (settings.enabled) {
-                val now = Instant.now().toString()
+                val now = DeviceTime.nowIsoString()
                 settingsStore.recordRegistered(now)
                 repository.writeLog(
                     "info",
@@ -888,7 +888,7 @@ private fun SettingsPage(
                                 settings,
                                 autoRefreshScheduler
                             )
-                            val now = Instant.now().toString()
+                            val now = DeviceTime.nowIsoString()
                             if (enabled) {
                                 settingsStore.recordRegistered(now)
                                 repository.writeLog(
@@ -905,11 +905,17 @@ private fun SettingsPage(
                         }
                     }
                 )
-                Text("刷新间隔：${minutesLabel(settings.intervalMinutes)}")
-                IntervalWheelPicker(
-                    selectedMinutes = settings.intervalMinutes,
-                    onSelected = { updateInterval(it) }
-                )
+                TimeWheelSetting(
+                    title = "检测间隔",
+                    selectedLabel = minutesLabel(settings.intervalMinutes),
+                    enabledLabel = if (settings.enabled) "已启用" else "未启用",
+                    stateKey = "auto_refresh_interval_editor"
+                ) {
+                    IntervalWheelPicker(
+                        selectedMinutes = settings.intervalMinutes,
+                        onSelected = { updateInterval(it) }
+                    )
+                }
                 Text("后台有效间隔：${minutesLabel(RefreshIntervals.backgroundScheduleMinutes(settings.intervalMinutes))}")
                 Text("后台任务：${if (settings.workRegistered) "已注册，等待系统调度" else "未注册"}")
             }
@@ -929,7 +935,7 @@ private fun SettingsPage(
                                 autoRefreshScheduler
                             )
                             if (settings.enabled) {
-                                val now = Instant.now().toString()
+                                val now = DeviceTime.nowIsoString()
                                 settingsStore.recordRegistered(now)
                                 repository.writeLog(
                                     "info",
@@ -1032,17 +1038,23 @@ private fun SettingsPage(
                     }
                 }
                 if (settings.notificationMode == NotificationModes.SUMMARY) {
-                    Text("汇总间隔：${minutesLabel(settings.notificationIntervalMinutes)}")
-                    NotificationIntervalWheelPicker(
-                        selectedMinutes = settings.notificationIntervalMinutes,
-                        detectionMinutes = settings.intervalMinutes,
-                        onSelected = { minutes ->
-                            scope.launch {
-                                settingsStore.setNotificationIntervalMinutes(minutes, settings.intervalMinutes)
-                                status = "通知汇总间隔已保存：${minutesLabel(minutes)}"
+                    TimeWheelSetting(
+                        title = "通知汇总间隔",
+                        selectedLabel = minutesLabel(settings.notificationIntervalMinutes),
+                        enabledLabel = if (settings.notificationsEnabled && notificationPermissionGranted) "已启用" else "未启用",
+                        stateKey = "notification_interval_editor"
+                    ) {
+                        NotificationIntervalWheelPicker(
+                            selectedMinutes = settings.notificationIntervalMinutes,
+                            detectionMinutes = settings.intervalMinutes,
+                            onSelected = { minutes ->
+                                scope.launch {
+                                    settingsStore.setNotificationIntervalMinutes(minutes, settings.intervalMinutes)
+                                    status = "通知汇总间隔已保存：${minutesLabel(minutes)}"
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                     Text("下限：不能短于当前后台检测间隔 ${minutesLabel(NotificationIntervals.lowerBoundMinutes(settings.intervalMinutes))}")
                 }
                 Button(
@@ -1056,7 +1068,7 @@ private fun SettingsPage(
                 ) {
                     Text("打开系统通知设置")
                 }
-                Text("最近通知：${settings.lastNotificationSentAt ?: "-"}")
+                Text("最近通知：${DeviceTime.formatForDisplay(settings.lastNotificationSentAt)}")
             }
         }
         item {
@@ -1066,7 +1078,7 @@ private fun SettingsPage(
                 Text("电池优化：${BackgroundRunStatus.batteryOptimizationLabel(context)}")
                 Text("通知权限：${if (notificationPermissionGranted) "已授权" else "未授权"}")
                 Text("后台权限：需要用户在系统设置中确认")
-                Text("最近执行：${settings.lastAutoRefreshFinishedAt ?: "-"}")
+                Text("最近执行：${DeviceTime.formatForDisplay(settings.lastAutoRefreshFinishedAt)}")
                 Text("最近结果：${settings.lastAutoRefreshResult ?: "-"}")
                 Button(
                     onClick = {
@@ -1100,7 +1112,7 @@ private fun SettingsPage(
         }
         item {
             ExpandableSection("关于与诊断", initiallyExpanded = false, stateKey = "settings_diagnostics") {
-                Text("版本：0.9.0")
+                Text("版本：0.9.1")
                 AutoRefreshStatusBlock(settings)
             }
         }
@@ -1111,14 +1123,14 @@ private fun SettingsPage(
                 onClick = {
                     scope.launch {
                         testRunning = true
-                        val startedAt = Instant.now().toString()
+                        val startedAt = DeviceTime.nowIsoString()
                         settingsStore.recordWorkerStarted(startedAt)
                         repository.writeLog("info", "work", "manual auto refresh test started")
                         try {
                             val result = repository.refreshAllExistingVideos(RefreshTrigger.AUTO)
                             val resultText = "total=${result.total}, success=${result.success}, failed=${result.failed}"
                             settingsStore.recordWorkerFinished(
-                                Instant.now().toString(),
+                                DeviceTime.nowIsoString(),
                                 resultText,
                                 successDelta = result.success.toLong(),
                                 failureDelta = result.failed.toLong()
@@ -1128,7 +1140,7 @@ private fun SettingsPage(
                         } catch (exc: Exception) {
                             val error = "${exc.javaClass.simpleName}: ${exc.message}"
                             settingsStore.recordWorkerFinished(
-                                Instant.now().toString(),
+                                DeviceTime.nowIsoString(),
                                 "failed",
                                 error,
                                 failureDelta = 1
@@ -1180,10 +1192,10 @@ private fun AutoRefreshStatusBlock(settings: AutoRefreshSettings) {
             Text("注册：${if (settings.workRegistered) "已注册" else "未注册"}")
             Text("间隔：${minutesLabel(settings.intervalMinutes)}")
             Text("网络约束：${if (settings.wifiOnly) "仅 Wi-Fi" else "任意联网"}")
-            Text("最近注册：${settings.lastRegisteredAt ?: "-"}")
-            Text("最近取消：${settings.lastCancelledAt ?: "-"}")
-            Text("最近开始：${settings.lastAutoRefreshStartedAt ?: "-"}")
-            Text("最近结束：${settings.lastAutoRefreshFinishedAt ?: "-"}")
+            Text("最近注册：${DeviceTime.formatForDisplay(settings.lastRegisteredAt)}")
+            Text("最近取消：${DeviceTime.formatForDisplay(settings.lastCancelledAt)}")
+            Text("最近开始：${DeviceTime.formatForDisplay(settings.lastAutoRefreshStartedAt)}")
+            Text("最近结束：${DeviceTime.formatForDisplay(settings.lastAutoRefreshFinishedAt)}")
             Text("最近结果：${settings.lastAutoRefreshResult ?: "-"}")
             Text("最近错误：${settings.lastAutoRefreshError ?: "-"}")
             Text("累计成功：${settings.autoRefreshSuccessCount}")
@@ -1222,6 +1234,45 @@ private fun SettingSwitchRow(
             Text(subtitle, style = MaterialTheme.typography.bodySmall)
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun TimeWheelSetting(
+    title: String,
+    selectedLabel: String,
+    enabledLabel: String,
+    stateKey: String,
+    content: @Composable () -> Unit
+) {
+    var expanded by rememberSaveable(stateKey) { mutableStateOf(WheelEditorPolicy.defaultExpanded()) }
+    Card(modifier = Modifier.fillMaxWidth().animateContentSize()) {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = true },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(title, fontWeight = FontWeight.Bold)
+                    Text(WheelEditorPolicy.summary(title, selectedLabel, enabledLabel), style = MaterialTheme.typography.bodySmall)
+                }
+                TextButton(onClick = { expanded = WheelEditorPolicy.toggle(expanded) }) {
+                    Text(if (expanded) "收起" else "编辑")
+                }
+            }
+            AnimatedVisibility(visible = expanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("当前选择：$selectedLabel")
+                    content()
+                    Button(onClick = { expanded = WheelEditorPolicy.complete() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("完成")
+                    }
+                }
+            }
+        }
     }
 }
 
