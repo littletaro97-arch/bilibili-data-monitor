@@ -12,8 +12,8 @@ android {
         applicationId = "com.littletaro.bilibilimonitor"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17
-        versionName = "0.11.0"
+        versionCode = 18
+        versionName = "0.11.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

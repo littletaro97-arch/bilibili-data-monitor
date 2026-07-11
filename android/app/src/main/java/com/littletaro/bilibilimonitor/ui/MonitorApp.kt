@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -71,6 +72,7 @@ import com.littletaro.bilibilimonitor.data.ExportPayload
 import com.littletaro.bilibilimonitor.data.ExportResult
 import com.littletaro.bilibilimonitor.data.HistoryExchangeCodec
 import com.littletaro.bilibilimonitor.data.HistoryImportPreview
+import com.littletaro.bilibilimonitor.data.HistoryImportReport
 import com.littletaro.bilibilimonitor.data.MonitorRepository
 import com.littletaro.bilibilimonitor.data.RefreshAllResult
 import com.littletaro.bilibilimonitor.data.SnapshotSources
@@ -140,6 +142,18 @@ fun MonitorApp(
                     !MonitorNotificationManager.permissionGranted(context) &&
                     !appSettings.notificationPermissionPrompted
             val shouldShowBackgroundGuide = !appSettings.backgroundGuideSeen && !shouldShowNotificationIntro
+
+            BackHandler(enabled = shouldShowNotificationIntro || shouldShowBackgroundGuide || page != Page.Home) {
+                when (NavigationBackPolicy.action(shouldShowNotificationIntro || shouldShowBackgroundGuide, page == Page.Home)) {
+                    BackAction.CLOSE_OVERLAY -> if (shouldShowNotificationIntro) {
+                        scope.launch { settingsStore.setNotificationPermissionPrompted(true) }
+                    } else {
+                        scope.launch { settingsStore.setBackgroundGuideSeen(true) }
+                    }
+                    BackAction.GO_HOME -> page = Page.Home
+                    BackAction.SYSTEM_DEFAULT -> Unit
+                }
+            }
 
             LaunchedEffect(videos, selectedBvId) {
                 if (selectedBvId != null && TopNavigationModel.resolveSelection(selectedBvId, videos.map { it.bvId }) == null) {
@@ -632,6 +646,7 @@ private fun AdvancedPage(
     selectedBvId: String?
 ) {
     val logs by repository.logs.collectAsStateWithLifecycle(initialValue = emptyList())
+    val settings by settingsStore.settings.collectAsStateWithLifecycle(initialValue = AutoRefreshSettings())
     var filter by rememberSaveable { mutableStateOf("全部") }
     val filteredLogs = remember(logs, filter) {
         logs.filter { log ->
@@ -663,6 +678,14 @@ private fun AdvancedPage(
                 }
             } else if (pageState.showExportPanel && selectedBvId != null) {
                 ExportPanel(repository, settingsStore, selectedBvId)
+            }
+        }
+        item {
+            ExpandableSection("技术诊断", initiallyExpanded = false, stateKey = "advanced_diagnostics") {
+                Text("应用版本：0.11.1")
+                Text("数据库版本：3")
+                Text("交换格式版本：1")
+                AutoRefreshStatusBlock(settings, null, null)
             }
         }
         item {
@@ -878,6 +901,7 @@ private fun SettingsPage(
     var bulkRunning by remember { mutableStateOf(false) }
     var pendingExchangeExport by remember { mutableStateOf<ByteArray?>(null) }
     var exchangePreview by remember { mutableStateOf<HistoryImportPreview?>(null) }
+    var exchangeResult by remember { mutableStateOf<HistoryImportReport?>(null) }
     var exchangeImportRunning by remember { mutableStateOf(false) }
     var notificationPermissionGranted by remember {
         mutableStateOf(MonitorNotificationManager.permissionGranted(context))
@@ -934,9 +958,13 @@ private fun SettingsPage(
     val openExchangeLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
-        if (uri != null) scope.launch {
+        if (uri == null) {
+            exchangeImportRunning = false
+            status = null
+        } else scope.launch {
             exchangeImportRunning = true
-            status = runCatching {
+            status = "正在读取历史记录"
+            val previewResult = runCatching {
                 val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
                     val output = java.io.ByteArrayOutputStream()
                     val buffer = ByteArray(8192)
@@ -950,9 +978,16 @@ private fun SettingsPage(
                     }
                     output.toByteArray()
                 } ?: error("无法读取所选文件")
-                exchangePreview = repository.previewHistoryExchange(bytes)
-                "交换包校验通过，等待确认导入"
-            }.getOrElse { "导入预览失败：${it.message}" }
+                status = "正在校验历史记录"
+                repository.previewHistoryExchange(bytes)
+            }
+            previewResult.onSuccess {
+                exchangePreview = it
+                status = null
+            }.onFailure {
+                exchangePreview = null
+                status = "无法导入：${it.message ?: "文件无效"}"
+            }
             exchangeImportRunning = false
         }
     }
@@ -996,10 +1031,42 @@ private fun SettingsPage(
         contentPadding = pageContentPadding()
     ) {
         item { Text("设置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+        item { Text("系统权限", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
         item {
-            SettingsSection("自动刷新") {
+            SettingsSection("权限与后台运行") {
+                Text("通知权限：${if (notificationPermissionGranted) "已开启" else "未开启"}")
+                Text("后台运行：${if (settings.continuousMonitoringRunning) "监控运行中" else userFacingWorkState(settings, workInfo?.state?.name)}")
+                Text("电池使用限制：${BackgroundRunStatus.batteryOptimizationLabel(context)}")
+                Text("手机后台设置：需要确认")
+                Button(
+                    onClick = {
+                        openSystemSettings(
+                            BackgroundRunStatus.batteryOptimizationSettingsIntent(),
+                            "无法打开电池设置，请在系统设置中手动查看。"
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("减少系统限制") }
+                Button(
+                    onClick = {
+                        openSystemSettings(
+                            BackgroundRunStatus.appSettingsIntent(context),
+                            "无法打开应用系统设置。"
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("检查手机后台设置") }
+                Button(
+                    onClick = { scope.launch { settingsStore.setBackgroundGuideSeen(false) } },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("重新查看后台运行说明") }
+            }
+        }
+        item { Text("抓取策略", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+        item {
+            SettingsSection("自动抓取") {
                 SettingSwitchRow(
-                    title = "启用自动刷新",
+                    title = "自动抓取",
                     subtitle = "只刷新已添加视频。",
                     checked = settings.enabled,
                     onCheckedChange = { enabled: Boolean ->
@@ -1030,7 +1097,7 @@ private fun SettingsPage(
                     }
                 )
                 TimeWheelSetting(
-                    title = "检测间隔",
+                    title = "抓取间隔",
                     selectedLabel = minutesLabel(settings.intervalMinutes),
                     enabledLabel = if (settings.enabled) "已启用" else "未启用",
                     stateKey = "auto_refresh_interval_editor"
@@ -1045,11 +1112,11 @@ private fun SettingsPage(
                         "${minutesLabel(settings.intervalMinutes)}（前台）；后台最低按 15 分钟调度"
                     else "${minutesLabel(settings.intervalMinutes)}（后台可调度）"
                 )
-                Text("后台任务：${if (settings.workRegistered) "已注册，等待系统调度" else "未注册"}")
+                Text("当前状态：${userFacingWorkState(settings, workInfo?.state?.name)}")
                 if (settings.intervalMinutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES) {
                     SettingSwitchRow(
-                        title = "持续监控模式",
-                        subtitle = "息屏时使用前台服务继续采集，会显示持续通知并增加耗电；系统仍可能延迟或限制运行。",
+                        title = "允许息屏时持续抓取",
+                        subtitle = "会显示后台运行通知，并增加耗电。",
                         checked = settings.continuousMonitoringEnabled,
                         onCheckedChange = { enabled ->
                             scope.launch {
@@ -1069,9 +1136,9 @@ private fun SettingsPage(
             }
         }
         item {
-            SettingsSection("网络约束") {
+            SettingsSection("网络") {
                 SettingSwitchRow(
-                    title = "仅 Wi-Fi",
+                    title = "仅在 Wi-Fi 下抓取",
                     subtitle = if (settings.wifiOnly) "移动网络下不会执行自动刷新。" else "允许任意联网状态下执行自动刷新。",
                     checked = settings.wifiOnly,
                     onCheckedChange = { wifiOnly: Boolean ->
@@ -1096,9 +1163,9 @@ private fun SettingsPage(
                         }
                     }
                 )
-                Text("当前网络约束：${if (settings.wifiOnly) "仅 Wi-Fi" else "任意联网"}")
             }
         }
+        item { Text("历史数据管理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
         item {
             SettingsSection("导出设置") {
                 Text("默认导出格式：${settings.defaultExportFormat.uppercase()}")
@@ -1114,7 +1181,7 @@ private fun SettingsPage(
                         TextButton(onClick = { scope.launch { settingsStore.setDefaultExportFormat("json") } }) { Text("JSON") }
                     }
                 }
-                Text("默认目录：${settings.defaultExportTreeUri ?: "未设置，每次使用系统保存窗口"}")
+                Text("保存位置：${if (settings.defaultExportTreeUri == null) "每次选择" else "已设置默认位置"}")
                 Button(onClick = { defaultTreeLauncher.launch(null) }, modifier = Modifier.fillMaxWidth()) {
                     Text("选择默认导出目录")
                 }
@@ -1132,13 +1199,12 @@ private fun SettingsPage(
             }
         }
         item {
-            SettingsSection("数据与存储") {
-                Text("Room 数据库版本：3")
+            SettingsSection("跨端导入与导出") {
                 Button(
                     onClick = {
                         scope.launch {
                             status = "正在生成历史交换包"
-                            runCatching { repository.exportHistoryExchange("0.11.0") }
+                            runCatching { repository.exportHistoryExchange("0.11.1") }
                                 .onSuccess {
                                     pendingExchangeExport = it
                                     createExchangeLauncher.launch("bilibili-history-v1-${System.currentTimeMillis()}.zip")
@@ -1147,19 +1213,18 @@ private fun SettingsPage(
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("导出跨端历史 ZIP") }
+                ) { Text("导出历史记录") }
                 Button(
                     onClick = { openExchangeLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
                     enabled = !exchangeImportRunning,
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("导入跨端历史 ZIP") }
+                ) { Text(if (exchangeImportRunning) "正在处理" else "导入历史记录") }
             }
         }
         item {
-            SettingsSection("通知与后台运行") {
-                Text("通知用于显示监控检测结果，可随时关闭，不影响数据查看。")
+            SettingsSection("数据提醒") {
                 SettingSwitchRow(
-                    title = "通知提醒",
+                    title = "抓取完成后提醒",
                     subtitle = if (notificationPermissionGranted) {
                         if (settings.notificationsEnabled) "已开启，检测完成后按所选模式提醒。" else "已授权，当前未开启通知。"
                     } else {
@@ -1183,8 +1248,8 @@ private fun SettingsPage(
                         }
                     }
                 )
-                Text("权限状态：${if (notificationPermissionGranted) "已授权" else "未授权"}")
-                Text("渠道状态：${if (MonitorNotificationManager.channelEnabled(context)) "可用" else "已关闭"}")
+                if (!notificationPermissionGranted) Text("通知未开启")
+                else if (!MonitorNotificationManager.channelEnabled(context)) Text("数据提醒被系统关闭")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     if (settings.notificationMode == NotificationModes.EACH_REFRESH) {
                         Button(onClick = { scope.launch { settingsStore.setNotificationMode(NotificationModes.EACH_REFRESH) } }, modifier = Modifier.weight(1f)) {
@@ -1207,7 +1272,7 @@ private fun SettingsPage(
                 }
                 if (settings.notificationMode == NotificationModes.SUMMARY) {
                     TimeWheelSetting(
-                        title = "通知汇总间隔",
+                        title = "提醒频率",
                         selectedLabel = minutesLabel(settings.notificationIntervalMinutes),
                         enabledLabel = if (settings.notificationsEnabled && notificationPermissionGranted) "已启用" else "未启用",
                         stateKey = "notification_interval_editor"
@@ -1223,7 +1288,7 @@ private fun SettingsPage(
                             }
                         )
                     }
-                    Text("下限：不能短于当前后台检测间隔 ${minutesLabel(NotificationIntervals.lowerBoundMinutes(settings.intervalMinutes))}")
+                    Text("提醒频率不能快于抓取频率。")
                 }
                 Button(
                     onClick = {
@@ -1251,56 +1316,13 @@ private fun SettingsPage(
                 ) {
                     Text("打开系统通知设置")
                 }
-                Text("当前模式：${if (settings.notificationMode == NotificationModes.EACH_REFRESH) "每次检测" else "定时汇总"}")
-                Text("当前间隔：${minutesLabel(settings.notificationIntervalMinutes)}")
+                Text("提醒方式：${if (settings.notificationMode == NotificationModes.EACH_REFRESH) "每次抓取" else "定时汇总"}")
                 Text("最近尝试：${DeviceTime.formatForDisplay(settings.lastNotificationAttemptAt)}")
                 Text("最近结果：${settings.lastNotificationResult ?: "-"}")
             }
         }
         item {
-            SettingsSection("后台运行") {
-                Text("后台检测由 WorkManager 调度，执行时间可能被系统延迟。")
-                Text("后台任务：${if (settings.workRegistered) "已注册，等待系统调度" else "未注册"}")
-                Text("电池优化：${BackgroundRunStatus.batteryOptimizationLabel(context)}")
-                Text("通知权限：${if (notificationPermissionGranted) "已授权" else "未授权"}")
-                Text("后台权限：需要用户在系统设置中确认")
-                Text("最近执行：${DeviceTime.formatForDisplay(settings.lastAutoRefreshFinishedAt)}")
-                Text("最近结果：${settings.lastAutoRefreshResult ?: "-"}")
-                Button(
-                    onClick = {
-                        openSystemSettings(
-                            BackgroundRunStatus.batteryOptimizationSettingsIntent(),
-                            "无法打开电池优化设置，请在系统设置中手动查看。"
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("打开电池优化设置")
-                }
-                Button(
-                    onClick = {
-                        openSystemSettings(
-                            BackgroundRunStatus.appSettingsIntent(context),
-                            "无法打开应用系统设置。"
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("打开应用系统设置")
-                }
-                Button(
-                    onClick = { scope.launch { settingsStore.setBackgroundGuideSeen(false) } },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("重新查看后台运行说明")
-                }
-            }
-        }
-        item {
-            ExpandableSection("关于与诊断", initiallyExpanded = false, stateKey = "settings_diagnostics") {
-                Text("版本：0.11.0")
-                AutoRefreshStatusBlock(settings, workInfo?.id?.toString(), workInfo?.state?.name)
-            }
+            Text("版本：0.11.1", style = MaterialTheme.typography.bodySmall)
         }
         item {
         status?.let { Text(it) }
@@ -1367,25 +1389,46 @@ private fun SettingsPage(
         }
     }
     exchangePreview?.let { preview ->
+        BackHandler { if (!exchangeImportRunning) exchangePreview = null }
         AlertDialog(
-            onDismissRequest = { exchangePreview = null },
+            onDismissRequest = { if (!exchangeImportRunning) exchangePreview = null },
             title = { Text("确认合并历史") },
             text = { Text("来源：${preview.sourcePlatform}\n导出时间：${preview.exportedAt}\n视频：${preview.videoCount}\n快照：${preview.snapshotCount}\n重复会跳过，冲突不会覆盖。") },
             confirmButton = {
-                Button(onClick = {
-                    scope.launch {
-                        exchangeImportRunning = true
-                        val report = runCatching { repository.importHistoryExchange(preview.packageData) }
-                        status = report.fold(
-                            onSuccess = { "导入完成：视频 +${it.videosAdded}，快照 +${it.snapshotsAdded}，重复 ${it.duplicates}，冲突 ${it.conflicts}" },
-                            onFailure = { "导入失败，数据库已回滚：${it.message}" }
-                        )
-                        exchangeImportRunning = false
-                        exchangePreview = null
+                Button(
+                    enabled = !exchangeImportRunning,
+                    onClick = {
+                        scope.launch {
+                            exchangeImportRunning = true
+                            status = "正在导入历史记录"
+                            val result = runCatching { repository.importHistoryExchange(preview.packageData) }
+                            result.onSuccess {
+                                exchangePreview = null
+                                exchangeResult = it
+                                status = null
+                            }.onFailure {
+                                exchangePreview = null
+                                status = "导入失败，原有数据未改变：${it.message ?: "未知错误"}"
+                            }
+                            exchangeImportRunning = false
+                        }
                     }
-                }) { Text("合并导入") }
+                ) { Text(if (exchangeImportRunning) "正在导入" else "合并导入") }
             },
-            dismissButton = { TextButton(onClick = { exchangePreview = null }) { Text("取消") } }
+            dismissButton = {
+                TextButton(onClick = { exchangePreview = null }, enabled = !exchangeImportRunning) { Text("取消") }
+            }
+        )
+    }
+    exchangeResult?.let { report ->
+        BackHandler { exchangeResult = null }
+        AlertDialog(
+            onDismissRequest = { exchangeResult = null },
+            title = { Text(if (HistoryImportFeedback.isComplete(report)) "导入完成" else "部分数据已导入") },
+            text = {
+                Text(HistoryImportFeedback.message(report))
+            },
+            confirmButton = { Button(onClick = { exchangeResult = null }) { Text("知道了") } }
         )
     }
 }
@@ -1416,6 +1459,15 @@ private fun AutoRefreshStatusBlock(settings: AutoRefreshSettings, workId: String
             Text("累计失败：${settings.autoRefreshFailureCount}")
         }
     }
+}
+
+private fun userFacingWorkState(settings: AutoRefreshSettings, workState: String?): String = when {
+    settings.continuousMonitoringRunning -> "后台监控运行中"
+    workState == "RUNNING" -> "正在抓取"
+    workState == "FAILED" || settings.autoRefreshFailureCount >= 3 -> "上次抓取失败"
+    settings.workRegistered || workState == "ENQUEUED" -> "等待下次抓取"
+    settings.enabled -> "后台运行可能受限"
+    else -> "未开启"
 }
 
 @Composable
@@ -1460,6 +1512,7 @@ private fun TimeWheelSetting(
     content: @Composable () -> Unit
 ) {
     var expanded by rememberSaveable(stateKey) { mutableStateOf(WheelEditorPolicy.defaultExpanded()) }
+    BackHandler(enabled = expanded) { expanded = false }
     Card(modifier = Modifier.fillMaxWidth().animateContentSize()) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
