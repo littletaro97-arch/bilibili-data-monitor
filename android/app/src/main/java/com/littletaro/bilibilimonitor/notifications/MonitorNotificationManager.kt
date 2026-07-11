@@ -21,11 +21,19 @@ import java.time.Instant
 object MonitorNotificationManager {
     const val CHANNEL_ID = "bilibili_monitor_results"
     private const val NOTIFICATION_ID_REFRESH_SUMMARY = 2001
+    private const val NOTIFICATION_ID_TEST = 2002
+
+    enum class SendResult(val value: String) {
+        SENT("已发送"), PERMISSION_DENIED("权限未开启"), CHANNEL_DISABLED("通知渠道关闭"),
+        INTERVAL_NOT_REACHED("未达到通知间隔"), NO_RESULT("没有新的检测结果"),
+        DISABLED("程序内通知已关闭"), FAILED("发送失败")
+    }
 
     fun permissionGranted(context: Context): Boolean {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        val runtimeGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
+        return runtimeGranted && NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
 
     fun ensureChannel(context: Context) {
@@ -45,16 +53,26 @@ object MonitorNotificationManager {
         manager.createNotificationChannel(channel)
     }
 
+    fun channelEnabled(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+        ensureChannel(context)
+        return context.getSystemService(NotificationManager::class.java)
+            .getNotificationChannel(CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
     @SuppressLint("MissingPermission")
     fun maybeNotifyRefreshResult(
         context: Context,
         settings: AutoRefreshSettings,
         result: RefreshAllResult,
         now: Instant
-    ): Boolean {
-        if (result.total == 0) return false
-        if (!MonitorNotificationPolicy.shouldSend(settings, permissionGranted(context), now)) return false
+    ): SendResult {
+        if (!settings.notificationsEnabled) return SendResult.DISABLED
+        if (!permissionGranted(context)) return SendResult.PERMISSION_DENIED
+        if (result.total == 0 || result.success == 0) return SendResult.NO_RESULT
         ensureChannel(context)
+        if (!channelEnabled(context)) return SendResult.CHANNEL_DISABLED
+        if (!MonitorNotificationPolicy.shouldSend(settings, true, now)) return SendResult.INTERVAL_NOT_REACHED
         val detectedAt = now.toString()
         val body = MonitorNotificationPolicy.body(result, detectedAt)
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -69,10 +87,31 @@ object MonitorNotificationManager {
             .build()
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_REFRESH_SUMMARY, notification)
-        } catch (_: SecurityException) {
-            return false
+        } catch (_: Exception) {
+            return SendResult.FAILED
         }
-        return true
+        return SendResult.SENT
+    }
+
+    @SuppressLint("MissingPermission")
+    fun sendTestNotification(context: Context): SendResult {
+        if (!permissionGranted(context)) return SendResult.PERMISSION_DENIED
+        ensureChannel(context)
+        if (!channelEnabled(context)) return SendResult.CHANNEL_DISABLED
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setContentTitle("B站数据监控测试通知")
+            .setContentText("通知权限与通知渠道工作正常")
+            .setContentIntent(openAppPendingIntent(context))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        return try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_TEST, notification)
+            SendResult.SENT
+        } catch (_: Exception) {
+            SendResult.FAILED
+        }
     }
 
     fun notificationSettingsIntent(context: Context): Intent {

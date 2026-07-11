@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.map
 
 private val Context.autoRefreshDataStore by preferencesDataStore(name = "auto_refresh_settings")
 
-data class AutoRefreshSettings(
+data class AutoRefreshSettings @JvmOverloads constructor(
     val enabled: Boolean = false,
     val intervalMinutes: Long = RefreshIntervals.DEFAULT_MINUTES,
     val wifiOnly: Boolean = true,
@@ -32,7 +32,9 @@ data class AutoRefreshSettings(
     val notificationMode: String = NotificationModes.EACH_REFRESH,
     val notificationIntervalMinutes: Long = NotificationIntervals.DEFAULT_MINUTES,
     val lastNotificationSentAt: String? = null,
-    val backgroundGuideSeen: Boolean = false
+    val backgroundGuideSeen: Boolean = false,
+    val lastNotificationAttemptAt: String? = null,
+    val lastNotificationResult: String? = null
 )
 
 object RefreshIntervals {
@@ -118,6 +120,8 @@ class AutoRefreshSettingsStore(private val context: Context) {
                 intervalMinutes
             ),
             lastNotificationSentAt = preferences[Keys.LAST_NOTIFICATION_SENT_AT],
+            lastNotificationAttemptAt = preferences[Keys.LAST_NOTIFICATION_ATTEMPT_AT],
+            lastNotificationResult = preferences[Keys.LAST_NOTIFICATION_RESULT],
             backgroundGuideSeen = preferences[Keys.BACKGROUND_GUIDE_SEEN] ?: false
         )
     }
@@ -246,6 +250,14 @@ class AutoRefreshSettingsStore(private val context: Context) {
         }
     }
 
+    suspend fun recordNotificationAttempt(time: String, result: String) {
+        context.autoRefreshDataStore.edit { preferences ->
+            preferences[Keys.LAST_NOTIFICATION_ATTEMPT_AT] = time
+            preferences[Keys.LAST_NOTIFICATION_RESULT] = result
+            if (result == "已发送") preferences[Keys.LAST_NOTIFICATION_SENT_AT] = time
+        }
+    }
+
     suspend fun setBackgroundGuideSeen(seen: Boolean) {
         context.autoRefreshDataStore.edit { preferences ->
             preferences[Keys.BACKGROUND_GUIDE_SEEN] = seen
@@ -273,6 +285,8 @@ class AutoRefreshSettingsStore(private val context: Context) {
         val NOTIFICATION_MODE = stringPreferencesKey("notification_mode")
         val NOTIFICATION_INTERVAL_MINUTES = longPreferencesKey("notification_interval_minutes")
         val LAST_NOTIFICATION_SENT_AT = stringPreferencesKey("last_notification_sent_at")
+        val LAST_NOTIFICATION_ATTEMPT_AT = stringPreferencesKey("last_notification_attempt_at")
+        val LAST_NOTIFICATION_RESULT = stringPreferencesKey("last_notification_result")
         val BACKGROUND_GUIDE_SEEN = booleanPreferencesKey("background_guide_seen")
     }
 }

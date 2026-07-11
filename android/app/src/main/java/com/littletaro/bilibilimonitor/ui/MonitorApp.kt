@@ -70,6 +70,8 @@ import com.littletaro.bilibilimonitor.data.DeviceTime
 import com.littletaro.bilibilimonitor.data.ExportPayload
 import com.littletaro.bilibilimonitor.data.ExportResult
 import com.littletaro.bilibilimonitor.data.MonitorRepository
+import com.littletaro.bilibilimonitor.data.RefreshAllResult
+import com.littletaro.bilibilimonitor.data.SnapshotSources
 import com.littletaro.bilibilimonitor.data.RefreshTrigger
 import com.littletaro.bilibilimonitor.data.TrendCalculator
 import com.littletaro.bilibilimonitor.data.TrendMetric
@@ -88,6 +90,8 @@ import com.littletaro.bilibilimonitor.worker.AutoRefreshScheduler
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import java.io.File
 import kotlin.math.abs
 
@@ -141,6 +145,20 @@ fun MonitorApp(
                 }
             }
 
+            LaunchedEffect(appSettings.enabled, appSettings.intervalMinutes) {
+                if (!appSettings.enabled || appSettings.intervalMinutes >= RefreshIntervals.MIN_WORK_MANAGER_MINUTES) return@LaunchedEffect
+                repository.writeLog("info", "work", "foreground refresh loop started", "interval=${appSettings.intervalMinutes}m")
+                while (true) {
+                    delay(appSettings.intervalMinutes * 60_000L)
+                    val result = repository.refreshAllExistingVideos(RefreshTrigger.AUTO)
+                    val outcome = MonitorNotificationManager.maybeNotifyRefreshResult(
+                        context, appSettings, result, DeviceTime.nowInstant()
+                    )
+                    settingsStore.recordNotificationAttempt(DeviceTime.nowIsoString(), outcome.value)
+                    repository.writeLog("info", "work", "foreground auto refresh finished", "total=${result.total}, notification=${outcome.value}")
+                }
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -159,11 +177,11 @@ fun MonitorApp(
                 Spacer(Modifier.height(12.dp))
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     when (page) {
-                        Page.Home -> HomePage(repository) {
+                        Page.Home -> HomePage(repository, settingsStore) {
                             selectedBvId = it
                             page = Page.Detail
                         }
-                        Page.Detail -> if (hasValidSelection) DetailPage(repository, selectedBvId!!) else EmptySelection()
+                        Page.Detail -> if (hasValidSelection) DetailPage(repository, settingsStore, selectedBvId!!) else EmptySelection()
                         Page.History -> if (hasValidSelection) HistoryPage(repository, selectedBvId!!) else EmptySelection()
                         Page.Settings -> SettingsPage(repository, settingsStore, autoRefreshScheduler)
                         Page.Advanced -> AdvancedPage(repository, settingsStore, selectedBvId.takeIf { hasValidSelection })
@@ -261,8 +279,10 @@ private fun NavRow(current: Page, hasSelection: Boolean, onSelect: (Page) -> Uni
 @Composable
 private fun HomePage(
     repository: MonitorRepository,
+    settingsStore: AutoRefreshSettingsStore,
     onOpenVideo: (String) -> Unit
 ) {
+    val context = LocalContext.current
     val videos by repository.videos.collectAsStateWithLifecycle(initialValue = emptyList())
     val scope = rememberCoroutineScope()
     var input by remember { mutableStateOf("") }
@@ -312,6 +332,7 @@ private fun HomePage(
                                 status = runCatching {
                                     val bvId = repository.addVideo(input)
                                     repository.refresh(bvId, RefreshTrigger.MANUAL)
+                                    notifyManualRefresh(repository, settingsStore, context)
                                     onOpenVideo(bvId)
                                     "刷新完成 $bvId"
                                 }.getOrElse { it.message ?: "刷新失败" }
@@ -342,6 +363,8 @@ private fun HomePage(
 
 @Composable
 private fun VideoCard(video: VideoEntity, onOpenVideo: (String) -> Unit) {
+    val context = LocalContext.current
+    var openError by remember { mutableStateOf<String?>(null) }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ExpandableText(
@@ -351,15 +374,18 @@ private fun VideoCard(video: VideoEntity, onOpenVideo: (String) -> Unit) {
             )
             Text("BV: ${video.bvId}")
             Text("UP: ${video.authorName ?: "未知"}")
-            Button(onClick = { onOpenVideo(video.bvId) }) {
-                Text("打开")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onOpenVideo(video.bvId) }) { Text("详情") }
+                Button(onClick = { openError = openBilibiliVideo(context, video.bvId) }) { Text("打开") }
             }
+            openError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }
 }
 
 @Composable
-private fun DetailPage(repository: MonitorRepository, bvId: String) {
+private fun DetailPage(repository: MonitorRepository, settingsStore: AutoRefreshSettingsStore, bvId: String) {
+    val context = LocalContext.current
     val videos by repository.videos.collectAsStateWithLifecycle(initialValue = emptyList())
     val latest by repository.latestSnapshot(bvId).collectAsStateWithLifecycle(initialValue = null)
     val video = videos.firstOrNull { it.bvId == bvId }
@@ -388,6 +414,7 @@ private fun DetailPage(repository: MonitorRepository, bvId: String) {
                         loading = true
                         try {
                             repository.refresh(bvId, RefreshTrigger.MANUAL)
+                            notifyManualRefresh(repository, settingsStore, context)
                             message = "刷新请求已完成"
                         } finally {
                             loading = false
@@ -482,14 +509,14 @@ private fun HistoryPage(repository: MonitorRepository, bvId: String) {
                 }
             }
             item { TrendChart(trendPoints, metric) }
-            items(trendPoints.reversed(), key = { "${it.collectedAt}-${it.value}" }) { point ->
-                TrendPointCard(point, metric)
-            }
             items(snapshots, key = { it.id }) { snapshot ->
                 Card {
-                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                        Text(DeviceTime.formatForDisplay(snapshot.collectedAt), fontWeight = FontWeight.Bold)
-                        Text("播放 ${snapshot.viewCount ?: "-"} / 点赞 ${snapshot.likeCount ?: "-"} / 状态 ${snapshot.fetchStatus}")
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(DeviceTime.formatForDisplay(snapshot.collectedAt), fontWeight = FontWeight.Bold)
+                            Text(snapshotSourceLabel(snapshot.captureSource))
+                        }
+                        Text("播放 ${snapshot.viewCount ?: "-"} · 点赞 ${snapshot.likeCount ?: "-"} · 评论 ${snapshot.replyCount ?: "-"} · 投币 ${snapshot.coinCount ?: "-"} · 收藏 ${snapshot.favoriteCount ?: "-"}")
                         snapshot.errorMessage?.let { ExpandableText("错误：$it", collapsedMaxLines = 2) }
                     }
                 }
@@ -511,7 +538,8 @@ private fun TrendChart(points: List<TrendPoint>, metric: TrendMetric) {
                 Text("暂无可绘制数据")
                 return@Column
             }
-            Canvas(modifier = Modifier.fillMaxWidth().height(160.dp)) {
+            Text("数据点：${validPoints.size} · 最近：${DeviceTime.formatForDisplay(validPoints.last().collectedAt)}")
+            Canvas(modifier = Modifier.fillMaxWidth().height(200.dp)) {
                 val minValue = validPoints.minOf { it.value ?: 0L }
                 val maxValue = validPoints.maxOf { it.value ?: 0L }
                 val valueRange = (maxValue - minValue).coerceAtLeast(1L).toFloat()
@@ -533,13 +561,21 @@ private fun TrendChart(points: List<TrendPoint>, metric: TrendMetric) {
                 offsets.zipWithNext().forEach { (start, end) ->
                     drawLine(lineColor, start, end, strokeWidth = 4f, cap = StrokeCap.Round)
                 }
-                offsets.forEach { offset ->
-                    drawCircle(pointColor, radius = 5f, center = offset)
+                offsets.forEachIndexed { index, offset ->
+                    val source = validPoints[index].captureSource
+                    if (source == SnapshotSources.MANUAL) drawCircle(pointColor, radius = 7f, center = offset)
+                    else drawCircle(pointColor, radius = 4f, center = offset)
                 }
             }
             Text("最小 ${minValueText(validPoints)} / 最大 ${maxValueText(validPoints)}")
         }
     }
+}
+
+private fun snapshotSourceLabel(source: String): String = when (source) {
+    SnapshotSources.MANUAL -> "手动采集"
+    SnapshotSources.AUTO -> "自动采集"
+    else -> "历史数据"
 }
 
 @Composable
@@ -916,7 +952,11 @@ private fun SettingsPage(
                         onSelected = { updateInterval(it) }
                     )
                 }
-                Text("后台有效间隔：${minutesLabel(RefreshIntervals.backgroundScheduleMinutes(settings.intervalMinutes))}")
+                Text(
+                    if (settings.intervalMinutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES)
+                        "${minutesLabel(settings.intervalMinutes)}（前台）；后台最低按 15 分钟调度"
+                    else "${minutesLabel(settings.intervalMinutes)}（后台可调度）"
+                )
                 Text("后台任务：${if (settings.workRegistered) "已注册，等待系统调度" else "未注册"}")
             }
         }
@@ -985,7 +1025,7 @@ private fun SettingsPage(
         }
         item {
             SettingsSection("数据与存储") {
-                Text("Room 数据库版本：1")
+                Text("Room 数据库版本：2")
             }
         }
         item {
@@ -1017,6 +1057,7 @@ private fun SettingsPage(
                     }
                 )
                 Text("权限状态：${if (notificationPermissionGranted) "已授权" else "未授权"}")
+                Text("渠道状态：${if (MonitorNotificationManager.channelEnabled(context)) "可用" else "已关闭"}")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     if (settings.notificationMode == NotificationModes.EACH_REFRESH) {
                         Button(onClick = { scope.launch { settingsStore.setNotificationMode(NotificationModes.EACH_REFRESH) } }, modifier = Modifier.weight(1f)) {
@@ -1059,6 +1100,21 @@ private fun SettingsPage(
                 }
                 Button(
                     onClick = {
+                        notificationPermissionGranted = MonitorNotificationManager.permissionGranted(context)
+                        val result = MonitorNotificationManager.sendTestNotification(context)
+                        scope.launch {
+                            val now = DeviceTime.nowIsoString()
+                            settingsStore.recordNotificationAttempt(now, result.value)
+                            repository.writeLog("info", "notification", "test notification attempt", result.value)
+                            status = if (result == MonitorNotificationManager.SendResult.CHANNEL_DISABLED) {
+                                "通知渠道已关闭，请打开系统通知设置"
+                            } else result.value
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("发送测试通知") }
+                Button(
+                    onClick = {
                         openSystemSettings(
                             MonitorNotificationManager.notificationSettingsIntent(context),
                             "无法打开系统通知设置，请在系统设置中手动查找本应用。"
@@ -1068,7 +1124,10 @@ private fun SettingsPage(
                 ) {
                     Text("打开系统通知设置")
                 }
-                Text("最近通知：${DeviceTime.formatForDisplay(settings.lastNotificationSentAt)}")
+                Text("当前模式：${if (settings.notificationMode == NotificationModes.EACH_REFRESH) "每次检测" else "定时汇总"}")
+                Text("当前间隔：${minutesLabel(settings.notificationIntervalMinutes)}")
+                Text("最近尝试：${DeviceTime.formatForDisplay(settings.lastNotificationAttemptAt)}")
+                Text("最近结果：${settings.lastNotificationResult ?: "-"}")
             }
         }
         item {
@@ -1534,6 +1593,43 @@ private fun uniqueDocumentName(tree: DocumentFile, fileName: String): String {
         index += 1
     }
     return candidate
+}
+
+private suspend fun notifyManualRefresh(
+    repository: MonitorRepository,
+    settingsStore: AutoRefreshSettingsStore,
+    context: Context
+) {
+    val settings = settingsStore.settings.first()
+    val outcome = MonitorNotificationManager.maybeNotifyRefreshResult(
+        context,
+        settings,
+        RefreshAllResult(total = 1, success = 1, failed = 0),
+        DeviceTime.nowInstant()
+    )
+    settingsStore.recordNotificationAttempt(DeviceTime.nowIsoString(), outcome.value)
+    repository.writeLog("info", "notification", "manual refresh notification attempt", outcome.value)
+}
+
+private fun openBilibiliVideo(context: Context, bvId: String): String? {
+    val uri = Uri.parse("https://www.bilibili.com/video/$bvId/")
+    val bilibiliIntent = Intent(Intent.ACTION_VIEW, uri).setPackage("tv.danmaku.bili")
+    val fallbackIntent = Intent(Intent.ACTION_VIEW, uri)
+    return try {
+        val intent = if (bilibiliIntent.resolveActivity(context.packageManager) != null) {
+            bilibiliIntent
+        } else {
+            fallbackIntent
+        }
+        if (intent.resolveActivity(context.packageManager) == null) {
+            "没有可打开视频链接的应用"
+        } else {
+            context.startActivity(intent)
+            null
+        }
+    } catch (_: Exception) {
+        "无法打开视频链接"
+    }
 }
 
 private fun ExportPayload.formatSaved(location: String): String =

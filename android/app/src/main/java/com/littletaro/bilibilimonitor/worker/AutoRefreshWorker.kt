@@ -69,10 +69,12 @@ class AutoRefreshWorker(
                 "auto refresh worker finished",
                 "$resultText, time=$now"
             )
-            if (MonitorNotificationManager.maybeNotifyRefreshResult(applicationContext, settings, result, finishedAt)) {
-                settingsStore.recordNotificationSent(now)
-                repository.writeLog("info", "notification", "auto refresh notification sent", resultText)
-            }
+            val notificationResult = MonitorNotificationManager.maybeNotifyRefreshResult(applicationContext, settings, result, finishedAt)
+            settingsStore.recordNotificationAttempt(now, notificationResult.value)
+            repository.writeLog(
+                if (notificationResult == MonitorNotificationManager.SendResult.SENT) "info" else "warning",
+                "notification", "auto refresh notification attempt", notificationResult.value
+            )
             Result.success()
         } catch (exc: Exception) {
             val error = AutoRefreshWorkerStatus.failed(exc)
