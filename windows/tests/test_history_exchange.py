@@ -112,3 +112,18 @@ def test_zip_slip_entry_is_rejected(tmp_path):
     service = HistoryExchangeService(_repository(tmp_path / "source.db"))
     with pytest.raises(ValueError, match="结构|非法"):
         service.preview(output.getvalue())
+
+
+def test_export_orders_snapshots_by_canonical_utc_time(tmp_path):
+    repository = _repository(tmp_path / "source.db")
+    with repository.database.connect() as conn:
+        conn.execute(
+            "INSERT INTO video_stats_snapshot (bvid,captured_at,view_count,source_type,collection_source) VALUES (?,?,?,?,?)",
+            ("BV1xx411c7mD", "2025-12-31T19:30:00-05:00", 90, "collected", "AUTO"),
+        )
+    service = HistoryExchangeService(repository)
+    preview = service.preview(service.export_zip())
+
+    assert [item["viewCount"] for item in preview.snapshots] == [100, 90]
+    assert preview.snapshots[0]["collectedAt"] == "2026-01-01T00:00:00Z"
+    assert preview.snapshots[1]["collectedAt"] == "2026-01-01T00:30:00Z"

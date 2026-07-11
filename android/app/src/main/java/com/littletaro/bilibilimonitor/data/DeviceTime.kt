@@ -13,7 +13,7 @@ object DeviceTime {
 
     @JvmStatic
     fun nowIsoString(): String =
-        OffsetDateTime.now().truncatedTo(ChronoUnit.SECONDS).toString()
+        Instant.now().truncatedTo(ChronoUnit.SECONDS).toString()
 
     @JvmStatic
     fun nowInstant(): Instant = Instant.now()
@@ -36,6 +36,18 @@ object DeviceTime {
             } catch (_: DateTimeParseException) {
                 null
             }
+        }
+    }
+
+    @JvmStatic
+    fun compareAbsolute(left: String?, right: String?): Int {
+        val leftInstant = parseToInstant(left)
+        val rightInstant = parseToInstant(right)
+        return when {
+            leftInstant != null && rightInstant != null -> leftInstant.compareTo(rightInstant)
+            leftInstant != null -> 1
+            rightInstant != null -> -1
+            else -> (left ?: "").compareTo(right ?: "")
         }
     }
 }

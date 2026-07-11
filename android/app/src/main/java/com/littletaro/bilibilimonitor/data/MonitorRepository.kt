@@ -2,6 +2,7 @@ package com.littletaro.bilibilimonitor.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 enum class RefreshTrigger(val logLabel: String) {
@@ -23,9 +24,11 @@ class MonitorRepository(
     val videos: Flow<List<VideoEntity>> = dao.observeVideos()
     val logs: Flow<List<AppLogEntity>> = dao.observeLogs()
 
-    fun latestSnapshot(bvId: String): Flow<VideoSnapshotEntity?> = dao.observeLatestSnapshot(bvId)
+    fun latestSnapshot(bvId: String): Flow<VideoSnapshotEntity?> =
+        snapshots(bvId).map { it.firstOrNull() }
 
     fun snapshots(bvId: String): Flow<List<VideoSnapshotEntity>> = dao.observeSnapshots(bvId)
+        .map { rows -> rows.sortedWith(snapshotNewestFirst) }
 
     suspend fun addVideo(input: String): String {
         val bvId = try {
@@ -131,7 +134,7 @@ class MonitorRepository(
     suspend fun exportJson(bvId: String): ExportResult = withContext(Dispatchers.IO) {
         try {
             val video = dao.videoByBvId(bvId) ?: throw IllegalArgumentException("视频不存在")
-            val snapshots = dao.snapshotsForExport(bvId)
+            val snapshots = dao.snapshotsForExport(bvId).sortedWith(snapshotOldestFirst)
             val result = exporter.exportJson(video, snapshots)
             writeLog("info", "export", "JSON 导出成功", "${result.fileName}, ${result.sizeBytes} bytes, ${result.path}")
             result
@@ -144,7 +147,7 @@ class MonitorRepository(
     suspend fun exportCsv(bvId: String): ExportResult = withContext(Dispatchers.IO) {
         try {
             val video = dao.videoByBvId(bvId) ?: throw IllegalArgumentException("视频不存在")
-            val snapshots = dao.snapshotsForExport(bvId)
+            val snapshots = dao.snapshotsForExport(bvId).sortedWith(snapshotOldestFirst)
             val result = exporter.exportCsv(video, snapshots)
             writeLog("info", "export", "CSV 导出成功", "${result.fileName}, ${result.sizeBytes} bytes, ${result.path}")
             result
@@ -156,16 +159,20 @@ class MonitorRepository(
 
     suspend fun jsonPayload(bvId: String): ExportPayload = withContext(Dispatchers.IO) {
         val video = dao.videoByBvId(bvId) ?: throw IllegalArgumentException("视频不存在")
-        exporter.jsonPayload(video, dao.snapshotsForExport(bvId))
+        exporter.jsonPayload(video, dao.snapshotsForExport(bvId).sortedWith(snapshotOldestFirst))
     }
 
     suspend fun csvPayload(bvId: String): ExportPayload = withContext(Dispatchers.IO) {
         val video = dao.videoByBvId(bvId) ?: throw IllegalArgumentException("视频不存在")
-        exporter.csvPayload(video, dao.snapshotsForExport(bvId))
+        exporter.csvPayload(video, dao.snapshotsForExport(bvId).sortedWith(snapshotOldestFirst))
     }
 
     suspend fun exportHistoryExchange(sourceVersion: String): ByteArray = withContext(Dispatchers.IO) {
-        HistoryExchangeCodec.export(dao.allVideosForExchange(), dao.allSnapshotsForExchange(), sourceVersion)
+        HistoryExchangeCodec.export(
+            dao.allVideosForExchange(),
+            dao.allSnapshotsForExchange().sortedWith(compareBy<VideoSnapshotEntity> { it.bvId }.then(snapshotOldestFirst)),
+            sourceVersion
+        )
     }
 
     suspend fun previewHistoryExchange(bytes: ByteArray): HistoryImportPreview = withContext(Dispatchers.IO) {
@@ -188,5 +195,13 @@ class MonitorRepository(
                 detail = detail
             )
         )
+    }
+
+    private companion object {
+        val snapshotOldestFirst = Comparator<VideoSnapshotEntity> { left, right ->
+            DeviceTime.compareAbsolute(left.collectedAt, right.collectedAt).takeIf { it != 0 }
+                ?: left.id.compareTo(right.id)
+        }
+        val snapshotNewestFirst = snapshotOldestFirst.reversed()
     }
 }

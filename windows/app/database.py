@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sqlite3
 from typing import Any, Iterator
@@ -15,6 +15,14 @@ def local_now() -> datetime:
 
 def iso_now() -> str:
     return local_now().isoformat()
+
+
+def absolute_time_key(value: str) -> datetime:
+    """Parse UTC/offset values for ordering; legacy naive values use the current system zone."""
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.astimezone()
+    return parsed.astimezone(timezone.utc)
 
 
 def parse_iso(value: str | None) -> datetime | None:
@@ -427,7 +435,7 @@ class Repository:
 
     def list_snapshots(self, bvid: str) -> list[sqlite3.Row]:
         with self.database.connect() as conn:
-            return conn.execute(
+            rows = conn.execute(
                 """
                 SELECT * FROM video_stats_snapshot
                 WHERE bvid=?
@@ -435,18 +443,11 @@ class Repository:
                 """,
                 (bvid,),
             ).fetchall()
+        return sorted(rows, key=lambda row: (absolute_time_key(row["captured_at"]), row["id"]))
 
     def latest_snapshot(self, bvid: str) -> sqlite3.Row | None:
-        with self.database.connect() as conn:
-            return conn.execute(
-                """
-                SELECT * FROM video_stats_snapshot
-                WHERE bvid=?
-                ORDER BY captured_at DESC, id DESC
-                LIMIT 1
-                """,
-                (bvid,),
-            ).fetchone()
+        rows = self.list_snapshots(bvid)
+        return rows[-1] if rows else None
 
     def delete_snapshots_before(self, bvid: str, before_time: str) -> int:
         with self.database.connect() as conn:
@@ -458,6 +459,7 @@ class Repository:
                 (bvid, before_time),
             )
             return int(cursor.rowcount)
+
 
     def add_log(self, level: str, message: str, bvid: str | None = None, detail: str | None = None) -> None:
         with self.database.connect() as conn:

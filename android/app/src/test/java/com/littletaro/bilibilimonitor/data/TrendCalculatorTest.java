@@ -52,6 +52,21 @@ public class TrendCalculatorTest {
         assertNull(single.get(0).getDelta());
     }
 
+    @Test
+    public void sortsByAbsoluteTimeAcrossOffsetsAndDaylightSaving() {
+        List<VideoSnapshotEntity> snapshots = Arrays.asList(
+                snapshot(2L, "2026-03-08T03:30:00-04:00", 200L, 2L),
+                snapshot(1L, "2026-03-08T07:00:00Z", 100L, 1L),
+                snapshot(3L, "2026-03-08T16:45:00+09:00", 300L, 3L)
+        );
+
+        List<TrendPoint> points = TrendCalculator.INSTANCE.points(snapshots, TrendMetric.VIEW, 20);
+
+        assertEquals(Long.valueOf(100L), points.get(0).getValue());
+        assertEquals(Long.valueOf(200L), points.get(1).getValue());
+        assertEquals(Long.valueOf(300L), points.get(2).getValue());
+    }
+
     private static VideoSnapshotEntity snapshot(long id, String time, Long view, Long like) {
         return new VideoSnapshotEntity(
                 id,

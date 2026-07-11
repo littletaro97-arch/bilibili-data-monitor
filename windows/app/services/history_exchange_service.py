@@ -40,14 +40,15 @@ class ImportReport:
 
 
 class HistoryExchangeService:
-    def __init__(self, repository: Repository, app_version: str = "0.11.0"):
+    def __init__(self, repository: Repository, app_version: str = "0.11.1"):
         self.repository = repository
         self.app_version = app_version
 
     def export_zip(self) -> bytes:
         with self.repository.database.connect() as conn:
             videos = [self._video_row(dict(row)) for row in conn.execute("SELECT * FROM videos ORDER BY bvid")]
-            snapshots = [self._snapshot_row(dict(row)) for row in conn.execute("SELECT * FROM video_stats_snapshot ORDER BY bvid, captured_at, id")]
+            snapshots = [self._snapshot_row(dict(row)) for row in conn.execute("SELECT * FROM video_stats_snapshot")]
+            snapshots.sort(key=lambda item: (item["bvId"], item["collectedAt"], item["contentSha256"]))
         exported_at = _utc_now()
         manifest = {
             "formatName": FORMAT_NAME,

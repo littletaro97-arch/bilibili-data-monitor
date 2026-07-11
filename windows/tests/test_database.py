@@ -116,3 +116,16 @@ def test_delete_snapshots_before(tmp_path):
     assert deleted == 1
     assert len(rows) == 1
     assert rows[0]["view_count"] == 2
+
+
+def test_snapshot_order_uses_absolute_time_across_offsets(tmp_path):
+    repo = make_repo(tmp_path)
+    repo.upsert_video(VideoInfo(bvid="BV1xx411c7mD"))
+    repo.insert_snapshot(VideoStats(bvid="BV1xx411c7mD", view_count=2), "2026-07-12T09:30:00+09:00")
+    repo.insert_snapshot(VideoStats(bvid="BV1xx411c7mD", view_count=1), "2026-07-12T00:00:00Z")
+    repo.insert_snapshot(VideoStats(bvid="BV1xx411c7mD", view_count=3), "2026-07-11T20:45:00-04:00")
+
+    rows = repo.list_snapshots("BV1xx411c7mD")
+
+    assert [row["view_count"] for row in rows] == [1, 2, 3]
+    assert repo.latest_snapshot("BV1xx411c7mD")["view_count"] == 3

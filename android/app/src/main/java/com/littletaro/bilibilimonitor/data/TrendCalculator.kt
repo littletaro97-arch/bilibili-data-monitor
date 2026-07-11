@@ -26,7 +26,10 @@ object TrendCalculator {
             else -> 20
         }
         val chronological = snapshots
-            .sortedWith(compareBy<VideoSnapshotEntity> { it.collectedAt }.thenBy { it.id })
+            .sortedWith { left, right ->
+                DeviceTime.compareAbsolute(left.collectedAt, right.collectedAt).takeIf { it != 0 }
+                    ?: left.id.compareTo(right.id)
+            }
             .takeLast(safeLimit)
 
         var previous: Long? = null
