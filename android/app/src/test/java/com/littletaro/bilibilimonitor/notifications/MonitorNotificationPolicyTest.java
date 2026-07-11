@@ -32,6 +32,14 @@ public class MonitorNotificationPolicyTest {
         assertTrue(MonitorNotificationPolicy.shouldSend(enabled, true, Instant.parse("2026-07-11T00:30:00Z")));
     }
 
+    @Test
+    public void summaryModeAcceptsLocalOffsetStoredTime() {
+        AutoRefreshSettings enabled = settings(true, NotificationModes.SUMMARY, 30L, "2026-07-11T09:00:00+09:00");
+
+        assertFalse(MonitorNotificationPolicy.shouldSend(enabled, true, Instant.parse("2026-07-11T00:20:00Z")));
+        assertTrue(MonitorNotificationPolicy.shouldSend(enabled, true, Instant.parse("2026-07-11T00:30:00Z")));
+    }
+
     private AutoRefreshSettings settings(
             boolean notificationsEnabled,
             String mode,

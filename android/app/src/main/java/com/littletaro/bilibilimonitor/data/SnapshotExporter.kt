@@ -4,7 +4,6 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.time.Instant
 
 data class ExportResult(
     val fileName: String,
@@ -42,7 +41,7 @@ class SnapshotExporter(context: Context) {
     }
 
     fun jsonPayload(video: VideoEntity, snapshots: List<VideoSnapshotEntity>): ExportPayload {
-        val exportedAt = Instant.now().toString()
+        val exportedAt = DeviceTime.nowIsoString()
         val root = JSONObject()
             .put("platform", "bilibili")
             .put("bv_id", video.bvId)
@@ -64,7 +63,7 @@ class SnapshotExporter(context: Context) {
     }
 
     fun csvPayload(video: VideoEntity, snapshots: List<VideoSnapshotEntity>): ExportPayload {
-        val exportedAt = Instant.now().toString()
+        val exportedAt = DeviceTime.nowIsoString()
         val lines = buildList {
             add(CSV_HEADER.joinToString(","))
             snapshots.forEach { snapshot ->

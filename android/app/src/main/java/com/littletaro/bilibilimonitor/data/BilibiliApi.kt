@@ -6,11 +6,12 @@ import okhttp3.Request
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
+import java.net.URI
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
-import java.time.Instant
+import java.util.concurrent.TimeUnit
 
-class BilibiliApi(private val client: OkHttpClient) {
+class BilibiliApi(internal val client: OkHttpClient) {
     fun fetchSnapshot(bvId: String): VideoSnapshotRecord {
         val url = VIEW_URL.toHttpUrl().newBuilder()
             .addQueryParameter("bvid", bvId)
@@ -33,7 +34,7 @@ class BilibiliApi(private val client: OkHttpClient) {
                     throw IOException("网络请求失败：HTTP ${response.code}")
                 }
                 val body = response.body?.string() ?: throw IOException("响应为空")
-                return mapViewResponse(bvId, body, Instant.now().toString())
+                return mapViewResponse(bvId, body, DeviceTime.nowIsoString())
             }
         } catch (exc: UnknownHostException) {
             throw IOException("无法连接网络或 DNS 解析失败，请检查网络", exc)
@@ -48,6 +49,60 @@ class BilibiliApi(private val client: OkHttpClient) {
         private const val VIEW_URL = "https://api.bilibili.com/x/web-interface/view"
         private const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+        private const val MAX_REDIRECTS = 5
+
+        fun resolveSharedBvId(input: String, client: OkHttpClient): String {
+            val startUrl = BvParser.firstResolvableUrl(input)
+                ?: throw IllegalArgumentException("未找到有效的哔哩哔哩视频链接")
+            if (!BvParser.isBilibiliShortUrl(startUrl) && BvParser.isBilibiliUrl(startUrl)) {
+                return BvParser.parse(startUrl)
+            }
+            val finalUrl = resolveRedirectTarget(startUrl, client)
+            return BvParser.parse(finalUrl)
+        }
+
+        fun resolveRedirectTarget(startUrl: String, client: OkHttpClient): String {
+            var current = startUrl
+            val redirectClient = client.newBuilder()
+                .followRedirects(false)
+                .followSslRedirects(false)
+                .callTimeout(10, TimeUnit.SECONDS)
+                .build()
+            repeat(MAX_REDIRECTS + 1) { step ->
+                if (!BvParser.isBilibiliUrl(current) && !BvParser.isBilibiliShortUrl(current)) {
+                    throw IOException("短链接跳转到了非哔哩哔哩地址")
+                }
+                val request = Request.Builder()
+                    .url(current)
+                    .header("User-Agent", USER_AGENT)
+                    .build()
+                try {
+                    redirectClient.newCall(request).execute().use { response ->
+                        if (response.isRedirect) {
+                            if (step >= MAX_REDIRECTS) throw IOException("短链接跳转次数过多")
+                            val location = response.header("Location")
+                                ?: throw IOException("短链接跳转缺少目标地址")
+                            current = resolveLocation(current, location)
+                            return@repeat
+                        }
+                        if (!response.isSuccessful) {
+                            throw IOException("短链接解析失败：HTTP ${response.code}")
+                        }
+                        return response.request.url.toString()
+                    }
+                } catch (exc: UnknownHostException) {
+                    throw IOException("短链接解析失败，请检查网络", exc)
+                } catch (exc: SocketTimeoutException) {
+                    throw IOException("短链接解析超时，请稍后重试", exc)
+                }
+            }
+            throw IOException("短链接解析失败：跳转次数过多")
+        }
+
+        private fun resolveLocation(baseUrl: String, location: String): String {
+            val base = URI(baseUrl)
+            return base.resolve(location).toString()
+        }
 
         fun mapViewResponse(bvId: String, json: String, collectedAt: String): VideoSnapshotRecord {
             val root = JSONObject(json)

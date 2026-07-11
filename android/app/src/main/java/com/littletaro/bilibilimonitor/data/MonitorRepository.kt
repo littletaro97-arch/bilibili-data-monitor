@@ -3,7 +3,6 @@ package com.littletaro.bilibilimonitor.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
-import java.time.Instant
 
 enum class RefreshTrigger(val logLabel: String) {
     MANUAL("manual"),
@@ -32,11 +31,17 @@ class MonitorRepository(
         val bvId = try {
             BvParser.parse(input)
         } catch (exc: IllegalArgumentException) {
-            writeLog("warning", "parser", "BV 解析失败", exc.message)
-            throw exc
+            try {
+                withContext(Dispatchers.IO) {
+                    BilibiliApi.resolveSharedBvId(input, api.client)
+                }
+            } catch (resolveExc: Exception) {
+                writeLog("warning", "parser", "BV 解析失败", resolveExc.message ?: exc.message)
+                throw IllegalArgumentException(resolveExc.message ?: exc.message ?: "未找到有效的哔哩哔哩视频链接")
+            }
         }
         return try {
-            val now = Instant.now().toString()
+            val now = DeviceTime.nowIsoString()
             val existing = dao.videoByBvId(bvId)
             if (existing == null) {
                 dao.upsertVideo(
@@ -76,7 +81,7 @@ class MonitorRepository(
                 writeLog("info", "database", "${trigger.logLabel} 快照写入成功", "status=${record.snapshot.fetchStatus}, bvId=$bvId")
                 writeLog("info", "network", "${trigger.logLabel} 刷新请求成功", "status=${record.snapshot.fetchStatus}, bvId=$bvId")
             } catch (exc: Exception) {
-                val now = Instant.now().toString()
+                val now = DeviceTime.nowIsoString()
                 val message = exc.message ?: "未知错误"
                 try {
                     dao.insertSnapshot(
@@ -161,7 +166,7 @@ class MonitorRepository(
     suspend fun writeLog(level: String, tag: String, message: String, detail: String? = null) {
         dao.insertLog(
             AppLogEntity(
-                time = Instant.now().toString(),
+                time = DeviceTime.nowIsoString(),
                 level = level,
                 tag = tag,
                 message = message,

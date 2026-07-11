@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.littletaro.bilibilimonitor.data.AppDatabase
 import com.littletaro.bilibilimonitor.data.BilibiliApi
+import com.littletaro.bilibilimonitor.data.DeviceTime
 import com.littletaro.bilibilimonitor.data.MonitorRepository
 import com.littletaro.bilibilimonitor.data.RefreshTrigger
 import com.littletaro.bilibilimonitor.data.SnapshotExporter
@@ -13,7 +14,6 @@ import com.littletaro.bilibilimonitor.settings.AutoRefreshSettingsStore
 import com.littletaro.bilibilimonitor.settings.RefreshIntervals
 import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
-import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 class AutoRefreshWorker(
@@ -37,7 +37,7 @@ class AutoRefreshWorker(
 
         if (!settings.enabled) {
             settingsStore.recordWorkerFinished(
-                Instant.now().toString(),
+                DeviceTime.nowIsoString(),
                 "skipped: settings disabled"
             )
             repository.writeLog("info", "work", "auto refresh skipped", "settings disabled")
@@ -45,7 +45,7 @@ class AutoRefreshWorker(
         }
 
         return try {
-            val startedAt = Instant.now().toString()
+            val startedAt = DeviceTime.nowIsoString()
             settingsStore.recordWorkerStarted(startedAt)
             repository.writeLog(
                 "info",
@@ -54,8 +54,8 @@ class AutoRefreshWorker(
                 "selected=${settings.intervalMinutes}m, effective=${RefreshIntervals.backgroundScheduleMinutes(settings.intervalMinutes)}m"
             )
             val result = repository.refreshAllExistingVideos(RefreshTrigger.AUTO)
-            val finishedAt = Instant.now()
-            val now = finishedAt.toString()
+            val finishedAt = DeviceTime.nowInstant()
+            val now = DeviceTime.nowIsoString()
             val resultText = AutoRefreshWorkerStatus.finished(result)
             settingsStore.recordWorkerFinished(
                 now,
@@ -77,7 +77,7 @@ class AutoRefreshWorker(
         } catch (exc: Exception) {
             val error = AutoRefreshWorkerStatus.failed(exc)
             settingsStore.recordWorkerFinished(
-                Instant.now().toString(),
+                DeviceTime.nowIsoString(),
                 "failed",
                 error,
                 failureDelta = 1

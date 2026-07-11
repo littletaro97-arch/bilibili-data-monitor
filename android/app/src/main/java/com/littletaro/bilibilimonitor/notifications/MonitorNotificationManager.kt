@@ -55,11 +55,13 @@ object MonitorNotificationManager {
         if (result.total == 0) return false
         if (!MonitorNotificationPolicy.shouldSend(settings, permissionGranted(context), now)) return false
         ensureChannel(context)
+        val detectedAt = now.toString()
+        val body = MonitorNotificationPolicy.body(result, detectedAt)
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentTitle(MonitorNotificationPolicy.title(result))
-            .setContentText(MonitorNotificationPolicy.body(result))
-            .setStyle(NotificationCompat.BigTextStyle().bigText(MonitorNotificationPolicy.body(result)))
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(openAppPendingIntent(context))
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
