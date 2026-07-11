@@ -87,7 +87,8 @@ class SnapshotExporter(context: Context) {
                         snapshot.likeCount,
                         snapshot.sourceUrl,
                         snapshot.fetchStatus,
-                        snapshot.errorMessage
+                        snapshot.errorMessage,
+                        snapshot.captureSource
                     ).joinToString(",") { csvCell(it) }
                 )
             }
@@ -120,7 +121,8 @@ class SnapshotExporter(context: Context) {
             "like_count",
             "source_url",
             "fetch_status",
-            "error_message"
+            "error_message",
+            "capture_source"
         )
 
         fun csvCell(value: Any?): String {
@@ -154,5 +156,6 @@ class SnapshotExporter(context: Context) {
                 .put("source_url", snapshot.sourceUrl)
                 .put("fetch_status", snapshot.fetchStatus)
                 .put("error_message", snapshot.errorMessage)
+                .put("capture_source", snapshot.captureSource)
     }
 }

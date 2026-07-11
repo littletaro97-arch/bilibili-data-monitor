@@ -22,7 +22,7 @@ data class VideoEntity(
     tableName = "video_snapshots",
     indices = [Index(value = ["bvId", "collectedAt"])]
 )
-data class VideoSnapshotEntity(
+data class VideoSnapshotEntity @JvmOverloads constructor(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val bvId: String,
     val collectedAt: String,
@@ -35,8 +35,18 @@ data class VideoSnapshotEntity(
     val likeCount: Long?,
     val sourceUrl: String?,
     val fetchStatus: String,
-    val errorMessage: String?
+    val errorMessage: String?,
+    val captureSource: String = SnapshotSources.UNKNOWN
 )
+
+object SnapshotSources {
+    const val MANUAL = "MANUAL"
+    const val AUTO = "AUTO"
+    const val UNKNOWN = "UNKNOWN"
+
+    fun from(trigger: RefreshTrigger): String =
+        if (trigger == RefreshTrigger.AUTO) AUTO else MANUAL
+}
 
 @Entity(tableName = "app_logs")
 data class AppLogEntity(

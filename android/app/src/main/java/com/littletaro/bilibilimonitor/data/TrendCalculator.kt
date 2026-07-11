@@ -11,7 +11,8 @@ enum class TrendMetric(val label: String) {
 data class TrendPoint(
     val collectedAt: String,
     val value: Long?,
-    val delta: Long?
+    val delta: Long?,
+    val captureSource: String = SnapshotSources.UNKNOWN
 )
 
 object TrendCalculator {
@@ -33,7 +34,7 @@ object TrendCalculator {
             val value = valueOf(snapshot, metric)
             val delta = if (value != null && previous != null) value - previous!! else null
             if (value != null) previous = value
-            TrendPoint(snapshot.collectedAt, value, delta)
+            TrendPoint(snapshot.collectedAt, value, delta, snapshot.captureSource)
         }
     }
 

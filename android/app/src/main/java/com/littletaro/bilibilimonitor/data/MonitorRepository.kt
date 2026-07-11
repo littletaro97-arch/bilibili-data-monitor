@@ -77,7 +77,7 @@ class MonitorRepository(
                 val record = api.fetchSnapshot(bvId)
                 val existing = dao.videoByBvId(bvId)
                 dao.upsertVideo(record.video.copy(createdAt = existing?.createdAt ?: record.video.createdAt))
-                dao.insertSnapshot(record.snapshot)
+                dao.insertSnapshot(record.snapshot.copy(captureSource = SnapshotSources.from(trigger)))
                 writeLog("info", "database", "${trigger.logLabel} 快照写入成功", "status=${record.snapshot.fetchStatus}, bvId=$bvId")
                 writeLog("info", "network", "${trigger.logLabel} 刷新请求成功", "status=${record.snapshot.fetchStatus}, bvId=$bvId")
             } catch (exc: Exception) {
@@ -97,7 +97,8 @@ class MonitorRepository(
                             likeCount = null,
                             sourceUrl = "https://www.bilibili.com/video/$bvId/",
                             fetchStatus = "failed",
-                            errorMessage = message
+                            errorMessage = message,
+                            captureSource = SnapshotSources.from(trigger)
                         )
                     )
                     writeLog("warning", "database", "${trigger.logLabel} 失败快照已写入", bvId)

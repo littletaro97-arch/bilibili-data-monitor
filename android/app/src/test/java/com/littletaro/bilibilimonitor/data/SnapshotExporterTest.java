@@ -29,7 +29,8 @@ public class SnapshotExporterTest {
                         "like_count",
                         "source_url",
                         "fetch_status",
-                        "error_message"
+                        "error_message",
+                        "capture_source"
                 ),
                 SnapshotExporter.Companion.getCSV_HEADER()
         );
