@@ -1,0 +1,15 @@
+﻿Version: v0.11.0
+Git commit hash at build time: 3de4ecd
+Git branch: codex/bilibili-project-setup
+Git working tree clean at build time: no
+Build time: 2026-07-11 20:48:50 +09:00
+Used ASCII junction: yes
+Gradle version: 8.7
+Android Gradle Plugin version: 8.5.2
+Kotlin plugin version: 1.9.24
+minSdk: 26
+targetSdk: 35
+compileSdk: 35
+APK file name: bilibili-monitor-android-v0.11.0-debug.apk
+APK size: 10676173 bytes
+SHA256: 6641F76F49E05CCBA9C58B19A987AEF9ED80016734E5864887C9DEF863DD5C34

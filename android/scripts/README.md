@@ -9,10 +9,10 @@
 
 ## Android 构建脚本
 
-`android-build-ascii.ps1` 用于固定 Android 测试、打包和 APK 复制流程。
+`build-ascii.ps1` 用于固定 Android 测试、打包和 APK 复制流程。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
+powershell -ExecutionPolicy Bypass -File .\android\scripts\build-ascii.ps1
 ```
 
 脚本会检查或创建：

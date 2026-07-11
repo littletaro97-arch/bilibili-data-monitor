@@ -1,5 +1,13 @@
 # Android 端
 
+## v0.11.0
+
+- 外部视频打开会真实尝试 B站 App，再以无包名 HTTPS Intent 降级到浏览器，不依赖 `resolveActivity()` 预查询结果。
+- 1/3/5/10 分钟可由用户主动开启前台持续监控；持续通知提供停止入口，不使用长期 WakeLock，也不承诺绝对准时。
+- 15 分钟以上继续使用唯一周期 WorkManager；持续服务与 WorkManager 互斥。
+- Room 数据库版本为3，历史交换格式为独立的 formatVersion 1。
+- 设置页通过 SAF 导入、导出 Windows/Android 通用历史 ZIP。
+
 本目录是 Android 原生应用工程，和根目录 `app/` 的 Windows/Python 端隔离维护。
 
 - 根目录 `app/`：Windows/Python 后端、页面、采集与测试。
@@ -35,7 +43,7 @@ cd android
 正式打包优先使用根目录脚本：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
+powershell -ExecutionPolicy Bypass -File .\android\scripts\build-ascii.ps1
 ```
 
 该脚本会通过 `C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android` 执行测试和构建，并把 Debug APK 复制到对应版本的 `releases/android/` 目录。

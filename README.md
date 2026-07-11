@@ -1,383 +1,67 @@
-# B站公开视频本地分析工具
+# B站数据监控
 
-## 当前正式目录
+本仓库在同一根目录内维护两个彼此隔离的客户端，以及一套只包含数据契约的共享历史交换规范。
 
-本目录是 B 站数据监控项目的正式工作目录：
+## 目录
 
-```text
-C:\Users\LittleTaro\Desktop\课外项目\bilibili数据监控
-```
+- `windows/`：Windows/Python/FastAPI 应用、测试、依赖和运行入口。
+- `android/`：Android/Compose/Room 应用和 Gradle 工程。
+- `shared/history-exchange/`：双端历史交换格式 v1、JSON Schema 和测试向量；不放平台私有源码。
+- `releases/windows/`、`releases/android/`：按平台和版本归档发布记录。
+- `docs/`：仓库级总览、版本、迁移和测试记录。
 
-历史来源目录为：
+## Windows
 
-```text
-C:\Users\LittleTaro\Desktop\课外项目\迭代版本
-```
-
-迁移前已在来源仓库创建 Git tag：`pre-formal-dir-20260707`。后续开发、debug、文档和 Android 端规划应优先基于本目录继续，不再把 `迭代版本` 作为长期工作目录。
-
-当前 Windows 端源码仍保留在项目根的 `app/` 下。暂不移动到 `windows/app/`，因为现有配置、数据库、报告输出和测试路径都以项目根为基准，强行移动会引入不必要的路径回归风险。
-
-关键文档：
-
-- `docs/当前项目审计报告.md`
-- `docs/版本迭代记录.md`
-- `docs/debug记录.md`
-- `docs/实机测试记录.md`
-- `docs/Android端规划.md`
-- `docs/抓取边界与合规说明.md`
-
-这是一个运行在 Windows 本机的 B站公开视频公开互动数据采集与分析工具。当前版本提供本地 Web 面板、SQLite 存储、定时采集、趋势图、HTML 报告导出，以及第二版的评论/弹幕数据表和手动弹幕采集入口。
-
-## 功能范围
-
-- 输入 BV 号或 B站视频链接添加采集任务
-- 保存视频基础信息和公开互动统计字段
-- 采集播放、弹幕数、评论数、收藏、投币、分享、点赞
-- 支持暂停、恢复、删除任务和手动立即采集
-- 本地页面展示趋势图
-- 导出 HTML 报告
-- 页面日志自动刷新
-- 视频详情页支持折叠/展开单项趋势图，并提供双轴指标对比图
-- 视频详情页新增比值趋势图：左轴显示两个指标的实际数量，右轴显示两个指标的比值
-- 视频详情页支持导入历史快照 CSV，并在图表底部标注历史导入数据
-- 视频详情页会记忆图表折叠状态和双轴/比值图的指标选择
-- 视频详情页最新数据卡会按最低采集间隔自动刷新，不需要手动刷新整页
-- 固定采集 `x/player/online/total` 当前观看人数；保留 `online_text` 原始显示文本，并用 `online_count` 参与数值图表
-- 视频详情页提供 B 站原视频直达入口
-- 设置页支持导出全部数据到 `data/exports/时间戳/`，便于直接从文件夹复制 CSV
-- 退出程序前会弹出确认窗口，避免误点
-- 首页以紧凑方式显示其它设备访问地址，运行日志统一移动到设置页
-- 手机端页面会优先纵向排布控件，宽表格在局部横向滚动
-- 非首页页面提供固定“返回首页”入口，不依赖浏览器历史记录
-- 设置页可选择下次通过 `run.bat` 启动时是否显示 CMD 调试窗口
-- 双击 `run.bat` 后自动打开本地面板
-- 可在设置页清理页面日志和日志文件
-- 使用本机本地时间记录采集、日志和报告时间
-- 第二版新增 `comments` 和 `danmaku` 表，详情页展示近期评论/弹幕
-- 第二版弹幕采集为手动触发，不加入默认定时任务
-- 第三版新增默认关闭的局域网访问配置，启用后要求访问密码
-- 设置页显示本机访问地址和其它设备访问地址
-- 设置页提供退出程序按钮
-- 视频详情页支持删除某个时间点以前的图表快照数据
-- 局域网端图表使用本机提供的 Plotly 脚本，不依赖外网 CDN
-- 新增本地文本分析：评论高频词、弹幕高频词、弹幕密度时间轴
-- 视频详情页支持生成演示评论/弹幕数据
-- 视频详情页支持粘贴导入评论文本和弹幕文本
-
-## 不支持内容
-
-Windows 端不内嵌 Android App、不实现鸿蒙 App、自动登录、多账号、Cookie、代理池、验证码绕过、设备指纹伪造、高频抓取和 exe 打包。Android 原生 App 位于 `android/`，和根目录 Windows/Python 端 `app/` 隔离维护。
-
-评论真实采集需要明确、稳定的公开数据源后才启用。当前不会临时搜索、拼接或切换评论接口。
-
-## 安装方法
-
-```bash
+```powershell
+cd windows
 python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+.\.venv\Scripts\pip install -r requirements.txt
+.\run.bat
 ```
 
-如果没有 `.venv`，`run.bat` 会使用系统 Python。
+也可以从仓库根目录运行兼容入口 `run.bat`。业务入口只有 `windows/run.bat`；根入口只负责转发。
 
-`config.toml` 是本机配置文件，可能包含局域网访问密码哈希，不会进入版本库。需要参考默认配置时查看 `config.example.toml`。
+测试：
 
-## 启动方法
-
-```bash
-python -m app.main
-```
-
-或双击 `run.bat`。服务地址固定为：
-
-```text
-http://127.0.0.1:7860
-```
-
-默认只监听 `127.0.0.1`。本机调试推荐保持：
-
-```toml
-[app]
-host = "127.0.0.1"
-
-[lan]
-enabled = false
-```
-
-不要通过把 `host` 改成 `0.0.0.0` 来开放访问。需要局域网访问时，只能在设置页手动开启 LAN 模式并设置访问密码；重启后程序会监听 `0.0.0.0`，启动日志会输出风险提示。
-
-关闭 LAN 模式：进入设置页取消“启用局域网访问”，保存后重启；也可以在本机 `config.toml` 中把 `[lan].enabled` 改为 `false`。
-
-LAN 模式只适合同一可信局域网内临时查看。不要在公共 Wi-Fi、公司网络或不可信路由器环境中开启。
-
-`run.bat` 会读取设置页里的启动窗口选项。隐藏 CMD 后，启动错误需要查看 `logs/launcher.log` 和 `logs/app.log`。
-
-如果启动失败：
-
-- 先确认依赖已安装：`pip install -r requirements.txt`
-- 检查端口占用：`netstat -ano | findstr :7860`
-- 如果 `run.bat` 隐藏窗口启动失败，查看 `logs/launcher.log`
-- 如果应用已进入启动流程但报错，查看 `logs/app.log`
-
-## 添加视频
-
-在首页输入 BV 号或 `https://www.bilibili.com/video/BV...` 链接。采集间隔默认 300 秒，最低 60 秒。超过 10 个 running 任务会拒绝新增。
-
-## 第二版说明
-
-视频详情页提供：
-
-- 手动采集评论：当前会明确提示评论数据源未配置
-- 手动采集弹幕：使用视频 `cid` 请求固定公开 XML 数据源
-- 近期评论/弹幕表格展示
-
-第二版内容不会默认进入定时任务，避免在用户未明确触发时采集全文类数据。
-
-## 第三版说明
-
-设置页提供局域网访问开关。默认关闭；启用前必须设置访问密码。保存后需要重启程序，重启后服务监听 `0.0.0.0`，手机可访问设置页显示的局域网地址。
-
-非本机访问会被要求输入访问密码。本机 `127.0.0.1` 访问不需要密码。
-
-如果不确定局域网环境是否安全，不要启用此功能。
-
-已保存的访问密码不会以明文显示。忘记密码时，在本机电脑输入新密码并保存即可重置。设置新密码时可以勾选“显示正在输入的密码”检查输入内容。
-
-其它设备访问步骤：
-
-1. 电脑和其它设备连接到同一个 Wi-Fi 或局域网。
-2. 在设置页设置访问密码并勾选启用局域网访问。
-3. 点击保存后，退出程序并重新运行 `run.bat`。
-4. 在其它设备浏览器地址栏输入设置页显示的“其它设备打开”地址。
-5. 输入访问密码。
-
-## 生成报告
-
-进入视频详情页，点击“生成 HTML 报告”。输出目录：
-
-```text
-reports/output
-```
-
-## 数据位置
-
-```text
-data/bilibili_local.db
-```
-
-## 历史记录导入
-
-视频详情页可以导入历史快照 CSV。第一行必须是表头，必须包含 `captured_at`，并至少填写一个指标字段。
-支持字段：
-
-```text
-captured_at,view_count,like_count,coin_count,favorite_count,reply_count,danmaku_count,share_count,online_count,online_text
-```
-
-示例：
-
-```csv
-captured_at,view_count,like_count
-2026-06-01T10:00:00+08:00,1000,50
-2026-06-01T11:00:00+08:00,1200,70
-```
-
-导入的数据会标记为 `imported`，和程序自动采集的 `collected` 数据区分。图表包含历史导入数据时，会在图表底部显示说明。
-
-## 数据导出
-
-设置页提供“导出全部数据”。每次导出会生成一个新目录：
-
-```text
-data/exports/YYYYMMDD_HHMMSS
-```
-
-目录中包含 `videos.csv`、`crawl_tasks.csv`、`video_stats_snapshot.csv`、`comments.csv`、`danmaku.csv`、`crawl_logs.csv` 和说明文件。CSV 使用 UTF-8 with BOM，方便 Excel 直接打开。
-
-## 日志位置
-
-```text
-logs/app.log
-```
-
-设置页可以清理页面日志，并尝试清空 `logs/app.log`。视频详情页可以只清理当前视频相关日志。
-
-视频详情页还可以删除指定时间点以前的快照数据。删除后趋势图和报告不会再使用这些旧快照。
-
-## 本地文本分析
-
-视频详情页会基于已经保存到本机 SQLite 的评论和弹幕数据生成：
-
-- 评论高频词
-- 弹幕高频词
-- 弹幕密度时间轴
-
-这些分析不新增网络请求，不启用评论真实采集，也不上传任何数据。
-
-如果当前没有真实评论或弹幕数据，可以在视频详情页使用：
-
-- 生成演示数据：立即写入几条本地评论和弹幕，用于验证高频词和弹幕密度图
-- 导入评论文本：每行一条评论
-- 导入弹幕文本：每行一条弹幕，推荐格式为 `秒数,内容`，例如 `12.5,这里弹幕很密集`
-
-“自动采集弹幕”会尝试使用视频 `cid` 获取公开 XML 弹幕；评论真实采集仍未启用，因为文档没有指定稳定评论数据源。
-如果没有官方或稳定公开接口，当前支持的手动路径是：从浏览器页面复制可见评论后粘贴导入、导入你自己整理的文本文件、使用公开 XML 弹幕、或生成演示数据测试分析链路。程序不会绕过登录、验证码、风控、反爬或伪装客户端来抓取内容。
-
-## 数据源说明
-
-第一版固定使用一个公开网页数据源 provider，不自动搜索、拼接、切换备用接口。公开网页接口可能变化，数据可能不稳定，使用者需要自行遵守平台规则。遇到 403、412、验证码、风控或登录要求时，任务会进入错误或冷却状态，不会尝试绕过。
-
-第二版评论数据源尚未配置，不会假装可用。弹幕采集使用固定 XML 地址，不做备用接口和绕过逻辑。
-
-## raw_json
-
-`config.toml` 中 `save_raw_json = false`，默认不保存完整原始响应。设置页提供清理 raw_json 的维护按钮。导出的报告不会包含完整 raw_json。
-
-## 常见问题
-
-- 添加失败：可能是 BV 号格式错误、视频不可访问、网络超时或接口返回异常。
-- 图表显示数据不足：至少需要 2 条快照才能生成趋势。
-- 采集间隔不能低于 60 秒：这是硬限制。
-- 重复添加同一 BV：程序会提示已存在，不重复创建任务。
-- 点击评论采集失败：当前没有文档指定的稳定评论数据源，这是有意限制。
-
-## 测试
-
-```bash
+```powershell
+cd windows
 python -m pytest
 ```
 
-测试使用 mock 响应和临时 SQLite，不依赖真实 B站接口。
+Windows 运行数据位于 `windows/runtime-data/`：
 
-## v0.2.0 基线说明
+- `config.toml`
+- `data/bilibili_local.db`
+- `logs/`
+- `reports/`
+- `exports/`
 
-v0.2.0 的目标是 Windows 端稳定性、文档、测试和共享 schema 基线：
+首次运行会在新位置不存在时复制旧根目录 `config.toml`、`data/`、`logs/`、`reports/`，校验后继续使用新位置；不会删除或覆盖旧数据。
 
-- 保持 Windows 端源码仍在 `app/`，暂不移动到 `windows/app/`。
-- 默认本机安全：LAN 关闭时只允许监听 `127.0.0.1`。
-- `shared/data_schema/` 固化 Android MVP 需要遵守的 JSON 字段。
-- Android 端仍处于规划阶段，不包含业务代码。
-
-## v0.3.0 Android MVP 说明
-
-v0.3.0 新增 Android 原生 MVP 工程，代码位于 `android/`，不移动、不混入根目录 Windows/Python 端 `app/`。
-
-- `app/`：Windows/Python 后端、页面、采集、导出与测试。
-- `android/app/`：Android 原生应用模块。
-- `shared/`：继续只放共享 schema 和文档。
-
-Android MVP 支持 BV/链接输入、BV 解析、手动刷新公开视频基础数据、Room 本地保存、历史快照、日志页、JSON/CSV 导出和 Debug APK 打包。本版本不做登录、Cookie、验证码处理、代理池、风控绕过或高频后台采集。
-
-Debug APK 本地输出：
-
-```text
-releases/android/v0.3.0/bilibili-monitor-android-v0.3.0-debug.apk
-```
-
-注意：本机原始路径包含中文字符，Android unit test 在该路径下触发 Gradle/JDK worker `@argfile` classpath 加载问题。v0.3.0 的 Android 测试和 APK 构建通过临时 ASCII junction 指向同一仓库执行；代码和产物仍在正式项目目录内。
-
-## v0.4.0 Android 构建流程说明
-
-v0.4.0 固化 Android ASCII 构建脚本：
+## Android
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
+cd android
+.\gradlew.bat clean test lintDebug assembleDebug
 ```
 
-脚本会检查或创建 `C:\Users\LittleTaro\codex-bilibili-monitor-ascii`，通过该 ASCII junction 执行 `gradlew.bat test` 和 `gradlew.bat assembleDebug`，并复制 APK 到：
+中文正式路径下推荐使用：
 
-```text
-releases/android/v0.4.0/bilibili-monitor-android-v0.4.0-debug.apk
+```powershell
+powershell -ExecutionPolicy Bypass -File .\android\scripts\build-ascii.ps1
 ```
 
-v0.4.0 只做稳定化和可用性修复：导出结果显示文件名/路径/时间，网络错误提示更明确，日志级别统一为 `info/warning/error`，详情页刷新和导出按钮增加 loading 防重复点击。不引入后台高频采集、登录、Cookie、验证码、代理池或风控绕过。
+脚本通过 ASCII junction 构建，并把 Debug APK 复制到对应 `releases/android/<版本>/`。
 
-## v0.5.0 Android 低频刷新和趋势增强
+## 历史交换
 
-v0.5.0 在 Android 端新增默认关闭的低频自动刷新：
+Windows 设置页和 Android 设置页均可导入、导出 `bilibili-history-exchange` v1 ZIP。v1 只交换视频和统计快照；评论、弹幕、Cookie、Token、设备信息、日志和原始数据库不进入交换包。
 
-- 设置页手动开启，支持 15 分钟、30 分钟、1 小时、3 小时、6 小时间隔。
-- 使用 WorkManager 调度，Android 系统可能延迟或合并后台任务；它只适合趋势补点，不是实时监控。
-- 自动刷新只刷新已经添加的视频，不发现新视频，不采集评论/弹幕，不处理登录、验证码或风控。
-- 设置使用 DataStore，不写入 Room 快照表；Room schema 未变化。
-- 日志页继续只显示最近 200 条，并区分手动刷新、自动刷新注册/取消、Worker 执行和失败。
-- 历史页增加本地快照趋势图和增量表，支持播放、点赞、评论、投币、收藏，最近 20/50 条。
-- 导出页显示文件名、路径、大小和时间，并可通过 Android Sharesheet 分享 JSON/CSV；不申请宽泛存储权限。
+交换采用合并导入：完全重复记录跳过，身份相同但内容不同的记录报告冲突且不覆盖。详细规范见 `shared/history-exchange/HISTORY_EXCHANGE_SPEC.md`。
 
-Debug APK 输出：
+## 版本与安全
 
-```text
-releases/android/v0.5.0/bilibili-monitor-android-v0.5.0-debug.apk
-```
-
-## v0.5.1 Android 自动刷新热修复
-
-v0.5.1 修复 v0.5.0 实机反馈的设置页不可见问题：
-
-- 顶部导航改为可横向滚动，窄屏手机也能看到“设置”入口。
-- 首页新增明确的“自动刷新设置”按钮，用户不需要猜入口位置。
-- 设置页显示自动刷新开关、刷新间隔、仅 Wi-Fi、后台调度说明。
-- 设置页显示 WorkManager 注册状态、最近注册/取消、最近开始/结束、最近结果和最近错误。
-- 开启、关闭、修改间隔或网络约束时会写入 DataStore 状态，并写入日志页。
-- 自动刷新仍只刷新已添加视频，不做高频后台采集，不绕过登录、验证码或风控。
-
-Debug APK 输出：
-
-```text
-releases/android/v0.5.1/bilibili-monitor-android-v0.5.1-debug.apk
-```
-
-## v0.6.0 Android 自动刷新诊断增强
-
-v0.6.0 在 v0.5.1 基础上增加实机诊断工具：
-
-- 设置页诊断区显示 WorkManager unique work name、开关、注册状态、间隔、网络约束、最近注册/取消/开始/结束、最近结果、最近错误、累计成功/失败次数。
-- 新增“测试自动刷新一次”按钮，手动执行一次与自动刷新同范围的刷新逻辑，用于实机 debug。
-- 新增“刷新所有已添加视频”按钮，用户手动批量刷新本地已添加视频。
-- 日志页增加筛选：全部、info、warning、error、手动刷新、自动刷新、导出。
-- 这些按钮不循环执行，不做高频后台采集，不处理登录、验证码、Cookie 或风控绕过。
-
-Debug APK 输出：
-
-```text
-releases/android/v0.6.0/bilibili-monitor-android-v0.6.0-debug.apk
-```
-
-## v0.7.0 Android 导航、导出和设置页修复
-
-v0.7.0 修复前几版在真机使用中的布局和导出流程问题，不扩大采集边界：
-
-- App 外层使用安全绘制区域，适配状态栏、刘海屏和挖孔屏，避免顶部内容贴边或遮挡。
-- 顶部导航改为动态项：未选中视频时只显示“首页 / 设置 / 高级”，选中视频后显示“首页 / 详情 / 历史 / 设置 / 高级”。
-- 当前选中视频被删除或不再存在时，会清理详情/历史入口并回到首页。
-- 直接导出改用 Android 系统保存窗口；首次导出必须由用户选择文件名、类型和位置。
-- 成功导出后可选择一个默认目录授权，后续导出可直接保存到该目录；也可以继续每次询问或本次另选位置。
-- 保留原有 Android Sharesheet 分享导出文件能力。
-- 设置页按自动刷新、网络约束、导出设置、数据存储、通知后台、诊断分类整理；网络约束开关整行可点。
-- 不新增登录、Cookie、验证码、代理池、风控绕过、高频后台采集或评论/弹幕采集。
-
-Debug APK 输出：
-
-```text
-releases/android/v0.7.0/bilibili-monitor-android-v0.7.0-debug.apk
-```
-
-## v0.8.0 Android 高级页崩溃和滚动布局修复
-
-v0.8.0 基于 v0.7.0 修复高级页闪退、详情页快照不可完整查看和设置入口冗余问题：
-
-- 修复高级页进入闪退：高级页不再把日志 `LazyColumn` 嵌套进外层 `LazyColumn`。
-- 首页、详情、历史、设置、高级页面都使用有界主滚动容器，降低内容被底部系统区域截断或无法滑动的风险。
-- 详情页“最近快照”可随页面完整纵向滚动查看。
-- 长标题、错误详情、日志详情和诊断信息增加展开 / 收起机制。
-- 首页移除“自动刷新设置”入口；自动刷新配置集中到设置页。
-- 自动刷新间隔改为滚轮式固定档位：1m、3m、5m、10m、15m、30m、1h、2h。
-- WorkManager 后台周期遵守 Android 最小周期限制：低于 15 分钟的选择会保存，但后台有效调度按 15 分钟处理。
-- 导航和筛选选中态使用 Material 按钮状态，不再依赖星号。
-
-Debug APK 输出：
-
-```text
-releases/android/v0.8.0/bilibili-monitor-android-v0.8.0-debug.apk
-```
+- Git commit、branch 和 tag 是源码回档依据。
+- 不覆盖旧 APK、旧 Tag 或历史发布目录。
+- `config.toml`、SQLite、运行日志、用户导出 ZIP、虚拟环境、Gradle 缓存、签名文件和设备信息不得提交。
+- 当前采集仅使用公开数据范围，不处理登录 Cookie、验证码、代理池或风控绕过。

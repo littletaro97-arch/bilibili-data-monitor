@@ -13,12 +13,16 @@ reports/*.png
 .env
 *.local
 config.toml
+windows/runtime-data/
+windows/.venv/
 
 # Android local/build artifacts
 android/.gradle/
 android/local.properties
 android/**/build/
 android/.idea/
+windows/**/__pycache__/
+windows/.pytest_cache/
 
 # Release APKs are kept as local deliverables, not Git history.
 releases/**/*.apk

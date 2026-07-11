@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "v0.10.0",
+    [string]$Version = "v0.11.0",
     [string]$ProjectRoot = "",
     [string]$AsciiRoot = "C:\Users\LittleTaro\codex-bilibili-monitor-ascii"
 )
@@ -48,7 +48,7 @@ function Get-GradleVersion {
 }
 
 if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
-    $ProjectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+    $ProjectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 } else {
     $ProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
 }
@@ -103,10 +103,7 @@ $buildInfoLines.Add("Git commit hash at build time: $commit")
 $buildInfoLines.Add("Git branch: $branch")
 $buildInfoLines.Add("Git working tree clean at build time: $workingTreeClean")
 $buildInfoLines.Add("Build time: $buildTime")
-$buildInfoLines.Add("Formal project path: $ProjectRoot")
-$buildInfoLines.Add("Android build path: $androidRoot")
 $buildInfoLines.Add("Used ASCII junction: yes")
-$buildInfoLines.Add("ASCII junction path: $AsciiRoot")
 $buildInfoLines.Add("Gradle version: $gradleVersion")
 $buildInfoLines.Add("Android Gradle Plugin version: 8.5.2")
 $buildInfoLines.Add("Kotlin plugin version: 1.9.24")
@@ -182,8 +179,12 @@ $testReportLines.Add("- Codex did not perform real-device installation testing. 
 $testReport = [string]::Join([Environment]::NewLine, $testReportLines)
 
 Set-Content -LiteralPath (Join-Path $releaseDir "build-info.txt") -Value $buildInfo -Encoding UTF8
-Set-Content -LiteralPath (Join-Path $releaseDir "changelog.md") -Value $changelog -Encoding UTF8
-Set-Content -LiteralPath (Join-Path $releaseDir "test-report.md") -Value $testReport -Encoding UTF8
+if (-not (Test-Path -LiteralPath (Join-Path $releaseDir "changelog.md"))) {
+    Set-Content -LiteralPath (Join-Path $releaseDir "changelog.md") -Value $changelog -Encoding UTF8
+}
+if (-not (Test-Path -LiteralPath (Join-Path $releaseDir "test-report.md"))) {
+    Set-Content -LiteralPath (Join-Path $releaseDir "test-report.md") -Value $testReport -Encoding UTF8
+}
 
 Write-Step "APK copied to: $apkTarget"
 Write-Step "APK size: $($apkItem.Length) bytes"

@@ -1,0 +1,8 @@
+Version: v0.11.0
+Source entry: windows/app/main.py
+Launcher: windows/run.bat
+Dependencies: windows/requirements.txt (range-based requirements; no lock file)
+SQLite PRAGMA user_version: 1
+History exchange formatVersion: 1
+Packaged executable: no
+Rollback source tag: v0.10.0
