@@ -21,3 +21,8 @@ object HistoryImportFeedback {
         if (skipped > 0) append("\n另有 $skipped 条数据未导入。")
     }
 }
+
+object HistoryExpansionPolicy {
+    fun stateKey(snapshotId: Long): Long = snapshotId
+    fun defaultExpanded(): Boolean = false
+}

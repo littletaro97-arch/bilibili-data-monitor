@@ -25,4 +25,10 @@ public class InteractionPoliciesTest {
         assertFalse(HistoryImportFeedback.INSTANCE.isComplete(partial));
         assertTrue(HistoryImportFeedback.INSTANCE.message(partial).contains("另有 2 条数据未导入"));
     }
+
+    @Test
+    public void historyExpansionUsesStableSnapshotIdAndStartsCollapsed() {
+        assertEquals(42L, HistoryExpansionPolicy.INSTANCE.stateKey(42L));
+        assertFalse(HistoryExpansionPolicy.INSTANCE.defaultExpanded());
+    }
 }

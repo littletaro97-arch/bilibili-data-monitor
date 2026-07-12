@@ -37,6 +37,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -92,6 +93,9 @@ import com.littletaro.bilibilimonitor.settings.BackgroundRunStatus
 import com.littletaro.bilibilimonitor.settings.NotificationIntervals
 import com.littletaro.bilibilimonitor.settings.NotificationModes
 import com.littletaro.bilibilimonitor.settings.RefreshIntervals
+import com.littletaro.bilibilimonitor.settings.CheckStates
+import com.littletaro.bilibilimonitor.settings.MonitoringRuntime
+import com.littletaro.bilibilimonitor.settings.ScheduleModes
 import com.littletaro.bilibilimonitor.worker.AutoRefreshScheduler
 import com.littletaro.bilibilimonitor.worker.ContinuousMonitoringService
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -100,6 +104,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import java.io.File
+import java.time.Instant
 import kotlin.math.abs
 
 private enum class Page {
@@ -126,6 +131,7 @@ fun MonitorApp(
             val scope = rememberCoroutineScope()
             val videos by repository.videos.collectAsStateWithLifecycle(initialValue = emptyList())
             val appSettings by settingsStore.settings.collectAsStateWithLifecycle(initialValue = AutoRefreshSettings())
+            val autoWorkInfo by autoRefreshScheduler.workInfoFlow().collectAsStateWithLifecycle(initialValue = null)
             var page by rememberSaveable { mutableStateOf(Page.Home) }
             var selectedBvId by rememberSaveable { mutableStateOf<String?>(null) }
             val hasValidSelection = selectedBvId != null && videos.any { it.bvId == selectedBvId }
@@ -164,14 +170,55 @@ fun MonitorApp(
                 }
             }
 
+            LaunchedEffect(
+                autoWorkInfo?.id,
+                autoWorkInfo?.state,
+                autoWorkInfo?.nextScheduleTimeMillis,
+                appSettings.enabled,
+                appSettings.intervalMinutes
+            ) {
+                if (appSettings.enabled && appSettings.intervalMinutes >= RefreshIntervals.MIN_WORK_MANAGER_MINUTES) {
+                    val effective = RefreshIntervals.backgroundScheduleMinutes(appSettings.intervalMinutes)
+                    val nextMillis = autoWorkInfo?.nextScheduleTimeMillis?.takeIf { it > 0L }
+                    val state = when (autoWorkInfo?.state?.name) {
+                        "RUNNING" -> CheckStates.RUNNING
+                        "FAILED", "CANCELLED" -> CheckStates.FAILED
+                        else -> CheckStates.WAITING
+                    }
+                    settingsStore.recordRuntimeSchedule(
+                        effective, ScheduleModes.WORK_MANAGER,
+                        nextMillis?.let { Instant.ofEpochMilli(it).toString() }
+                            ?: MonitoringRuntime.nextAt(DeviceTime.nowInstant(), effective),
+                        state, DeviceTime.nowIsoString()
+                    )
+                }
+            }
+
             LaunchedEffect(appSettings.enabled, appSettings.intervalMinutes, appSettings.continuousMonitoringEnabled) {
                 if (!appSettings.enabled || appSettings.continuousMonitoringEnabled || appSettings.intervalMinutes >= RefreshIntervals.MIN_WORK_MANAGER_MINUTES) return@LaunchedEffect
                 repository.writeLog("info", "work", "foreground refresh loop started", "interval=${appSettings.intervalMinutes}m")
+                settingsStore.recordRuntimeSchedule(
+                    appSettings.intervalMinutes, ScheduleModes.FOREGROUND,
+                    MonitoringRuntime.nextAt(DeviceTime.nowInstant(), appSettings.intervalMinutes),
+                    CheckStates.WAITING, DeviceTime.nowIsoString()
+                )
                 while (true) {
                     delay(appSettings.intervalMinutes * 60_000L)
+                    settingsStore.recordWorkerStarted(DeviceTime.nowIsoString())
                     val result = repository.refreshAllExistingVideos(RefreshTrigger.AUTO)
+                    val finishedAt = DeviceTime.nowInstant()
+                    settingsStore.recordWorkerFinished(
+                        finishedAt.toString(),
+                        "total=${result.total}, success=${result.success}, failed=${result.failed}",
+                        successDelta = result.success.toLong(), failureDelta = result.failed.toLong()
+                    )
+                    settingsStore.recordRuntimeSchedule(
+                        appSettings.intervalMinutes, ScheduleModes.FOREGROUND,
+                        MonitoringRuntime.nextAt(finishedAt, appSettings.intervalMinutes),
+                        CheckStates.WAITING, finishedAt.toString()
+                    )
                     val outcome = MonitorNotificationManager.maybeNotifyRefreshResult(
-                        context, appSettings, result, DeviceTime.nowInstant()
+                        context, appSettings, result, finishedAt
                     )
                     settingsStore.recordNotificationAttempt(DeviceTime.nowIsoString(), outcome.value)
                     repository.writeLog("info", "work", "foreground auto refresh finished", "total=${result.total}, notification=${outcome.value}")
@@ -206,7 +253,7 @@ fun MonitorApp(
                             selectedBvId = it
                             page = Page.Detail
                         }
-                        Page.Detail -> if (hasValidSelection) DetailPage(repository, settingsStore, selectedBvId!!) else EmptySelection()
+                        Page.Detail -> if (hasValidSelection) DetailPage(repository, settingsStore, selectedBvId!!) { page = Page.Settings } else EmptySelection()
                         Page.History -> if (hasValidSelection) HistoryPage(repository, selectedBvId!!) else EmptySelection()
                         Page.Settings -> SettingsPage(repository, settingsStore, autoRefreshScheduler)
                         Page.Advanced -> AdvancedPage(repository, settingsStore, selectedBvId.takeIf { hasValidSelection })
@@ -435,10 +482,16 @@ private fun VideoCard(repository: MonitorRepository, video: VideoEntity, onOpenV
 }
 
 @Composable
-private fun DetailPage(repository: MonitorRepository, settingsStore: AutoRefreshSettingsStore, bvId: String) {
+private fun DetailPage(
+    repository: MonitorRepository,
+    settingsStore: AutoRefreshSettingsStore,
+    bvId: String,
+    onOpenSettings: () -> Unit
+) {
     val context = LocalContext.current
     val videos by repository.videos.collectAsStateWithLifecycle(initialValue = emptyList())
     val latest by repository.latestSnapshot(bvId).collectAsStateWithLifecycle(initialValue = null)
+    val settings by settingsStore.settings.collectAsStateWithLifecycle(initialValue = AutoRefreshSettings())
     val video = videos.firstOrNull { it.bvId == bvId }
     val scope = rememberCoroutineScope()
     var message by remember { mutableStateOf<String?>(null) }
@@ -447,17 +500,18 @@ private fun DetailPage(repository: MonitorRepository, settingsStore: AutoRefresh
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = pageContentPadding()
     ) {
-        item { Text("视频详情", style = MaterialTheme.typography.titleMedium) }
         item {
-            ExpandableText(
-                text = "标题：${video?.title ?: "未刷新"}",
-                collapsedMaxLines = 2
-            )
+            Card {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("视频信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    ExpandableText("标题：${video?.title ?: "未刷新"}", collapsedMaxLines = 2)
+                    Text("UP：${video?.authorName ?: "未知"} · BV：$bvId")
+                    Text("aid：${video?.aid ?: "-"} · 发布时间：${video?.pubdate ?: "-"}", style = MaterialTheme.typography.bodySmall)
+                    Text("状态：${latest?.fetchStatus ?: "尚未检查"}", style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
-        item { Text("UP：${video?.authorName ?: "未知"}") }
-        item { Text("BV：$bvId") }
-        item { Text("aid：${video?.aid ?: "-"}") }
-        item { Text("发布时间：${video?.pubdate ?: "-"}") }
+        item { CheckTimerCard(settings, onOpenSettings) }
         item {
             Button(
                 onClick = {
@@ -486,6 +540,32 @@ private fun DetailPage(repository: MonitorRepository, settingsStore: AutoRefresh
         }
         item {
             SnapshotBlock(latest)
+        }
+    }
+}
+
+@Composable
+private fun CheckTimerCard(settings: AutoRefreshSettings, onOpenSettings: () -> Unit) {
+    var now by remember { mutableStateOf(DeviceTime.nowInstant()) }
+    LaunchedEffect(settings.nextScheduledCheckAt, settings.checkState, settings.enabled) {
+        while (true) {
+            now = DeviceTime.nowInstant()
+            delay(1_000L)
+        }
+    }
+    val countdown = remember(settings, now) { MonitoringRuntime.countdown(settings, now) }
+    Card {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("检查计时", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("状态：${MonitoringRuntime.modeLabel(settings.scheduleMode)}")
+            Text("有效间隔：${minutesLabel(settings.effectiveIntervalMinutes)}")
+            Text(countdown.headline, fontWeight = FontWeight.Bold)
+            countdown.progress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
+            Text(countdown.nextLabel, style = MaterialTheme.typography.bodySmall)
+            if (!settings.enabled) TextButton(onClick = onOpenSettings) { Text("前往设置") }
+            settings.lastAutoRefreshError?.takeIf { settings.checkState == CheckStates.FAILED }?.let {
+                ExpandableText("错误：$it", collapsedMaxLines = 2)
+            }
         }
     }
 }
@@ -561,14 +641,26 @@ private fun HistoryPage(repository: MonitorRepository, bvId: String) {
             }
             item { TrendChart(trendPoints, metric) }
             items(snapshots, key = { it.id }) { snapshot ->
-                Card {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp)) {
+                var expanded by rememberSaveable(HistoryExpansionPolicy.stateKey(snapshot.id)) {
+                    mutableStateOf(HistoryExpansionPolicy.defaultExpanded())
+                }
+                Card(modifier = Modifier.fillMaxWidth().animateContentSize()) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(DeviceTime.formatForDisplay(snapshot.collectedAt), fontWeight = FontWeight.Bold)
                             Text(snapshotSourceLabel(snapshot.captureSource))
                         }
                         Text("播放 ${snapshot.viewCount ?: "-"} · 点赞 ${snapshot.likeCount ?: "-"} · 评论 ${snapshot.replyCount ?: "-"} · 投币 ${snapshot.coinCount ?: "-"} · 收藏 ${snapshot.favoriteCount ?: "-"}")
-                        snapshot.errorMessage?.let { ExpandableText("错误：$it", collapsedMaxLines = 2) }
+                        AnimatedVisibility(expanded) {
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("状态：${snapshot.fetchStatus}")
+                                Text("弹幕：${snapshot.danmakuCount ?: "-"} · 分享：${snapshot.shareCount ?: "-"}")
+                                Text("来源链接：${snapshot.sourceUrl ?: "-"}", style = MaterialTheme.typography.bodySmall)
+                                snapshot.errorMessage?.let { ExpandableText("错误：$it", collapsedMaxLines = 2) }
+                                    ?: Text("错误：-", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "收起" else "展开") }
                     }
                 }
             }
@@ -682,7 +774,7 @@ private fun AdvancedPage(
         }
         item {
             ExpandableSection("技术诊断", initiallyExpanded = false, stateKey = "advanced_diagnostics") {
-                Text("应用版本：0.11.1")
+                Text("应用版本：0.11.2")
                 Text("数据库版本：3")
                 Text("交换格式版本：1")
                 AutoRefreshStatusBlock(settings, null, null)
@@ -995,29 +1087,69 @@ private fun SettingsPage(
     fun updateInterval(minutes: Long) {
         if (minutes == settings.intervalMinutes) return
         scope.launch {
-            settingsStore.setIntervalMinutes(minutes)
-            val continuousStillActive = settings.continuousMonitoringEnabled && minutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES
-            if (settings.continuousMonitoringEnabled && !continuousStillActive) {
-                settingsStore.setContinuousMonitoringEnabled(false)
-                ContinuousMonitoringService.stop(context)
-            }
-            val result = if (continuousStillActive) {
-                autoRefreshScheduler.cancel()
-                settingsStore.recordCancelled(DeviceTime.nowIsoString())
-                null
-            } else AutoRefreshRegistrationController.changeInterval(minutes, settings, autoRefreshScheduler)
-            if (settings.enabled) {
-                val now = DeviceTime.nowIsoString()
-                if (!continuousStillActive) settingsStore.recordRegistered(now)
-                repository.writeLog(
-                    "info",
-                    "work",
-                    "auto refresh rescheduled",
-                    "selected=${minutes}m, effective=${RefreshIntervals.backgroundScheduleMinutes(minutes)}m, wifiOnly=${settings.wifiOnly}"
+            val oldMinutes = settings.intervalMinutes
+            try {
+                settingsStore.setIntervalMinutes(minutes)
+                val continuousStillActive = settings.continuousMonitoringEnabled && minutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES
+                if (settings.continuousMonitoringEnabled && !continuousStillActive) {
+                    settingsStore.setContinuousMonitoringEnabled(false)
+                    ContinuousMonitoringService.stopForReconfigure(context)
+                }
+                val shortForeground = minutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES && !continuousStillActive
+                val result = if (continuousStillActive || shortForeground) {
+                    autoRefreshScheduler.cancelAndAwait()
+                    settingsStore.recordCancelled(DeviceTime.nowIsoString())
+                    if (continuousStillActive) ContinuousMonitoringService.reconfigure(context)
+                    null
+                } else {
+                    if (settings.enabled) {
+                        autoRefreshScheduler.scheduleAndAwait(minutes, settings.wifiOnly)
+                        com.littletaro.bilibilimonitor.settings.AutoRefreshRegistrationResult(
+                            "registered", "已更新后台调度"
+                        )
+                    } else AutoRefreshRegistrationController.changeInterval(minutes, settings, autoRefreshScheduler)
+                }
+                val applied = settings.copy(intervalMinutes = minutes, continuousMonitoringEnabled = continuousStillActive)
+                val mode = if (settings.enabled) MonitoringRuntime.mode(applied) else ScheduleModes.OFF
+                val effective = MonitoringRuntime.effectiveInterval(applied)
+                val now = DeviceTime.nowInstant()
+                settingsStore.recordRuntimeSchedule(
+                    effective, mode,
+                    if (settings.enabled) MonitoringRuntime.nextAt(now, effective) else null,
+                    if (settings.enabled) CheckStates.WAITING else CheckStates.IDLE,
+                    now.toString()
                 )
+                if (settings.enabled) {
+                    if (!continuousStillActive) settingsStore.recordRegistered(now.toString())
+                    repository.writeLog(
+                        "info", "work", "auto refresh rescheduled",
+                        "old=${oldMinutes}m, selected=${minutes}m, effective=${effective}m, mode=$mode, next=${MonitoringRuntime.nextAt(now, effective)}"
+                    )
+                }
+                status = if (continuousStillActive) "持续监控已更新：${minutesLabel(minutes)}"
+                else if (result?.action == "saved") "已保存间隔：${minutesLabel(minutes)}" else result?.message
+            } catch (exc: Exception) {
+                runCatching {
+                    settingsStore.setIntervalMinutes(oldMinutes)
+                    if (settings.enabled) {
+                        when {
+                            settings.continuousMonitoringEnabled && oldMinutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES ->
+                                ContinuousMonitoringService.reconfigure(context)
+                            oldMinutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES -> autoRefreshScheduler.cancel()
+                            else -> autoRefreshScheduler.scheduleAndAwait(oldMinutes, settings.wifiOnly)
+                        }
+                        val oldEffective = MonitoringRuntime.effectiveInterval(settings)
+                        val oldMode = MonitoringRuntime.mode(settings)
+                        val rollbackAt = DeviceTime.nowInstant()
+                        settingsStore.recordRuntimeSchedule(
+                            oldEffective, oldMode, MonitoringRuntime.nextAt(rollbackAt, oldEffective),
+                            CheckStates.WAITING, rollbackAt.toString()
+                        )
+                    }
+                }
+                repository.writeLog("error", "work", "interval update failed", "old=${oldMinutes}m, requested=${minutes}m, ${exc.javaClass.simpleName}")
+                status = "设置未生效，已保留原间隔"
             }
-            status = if (continuousStillActive) "持续监控间隔已保存：${minutesLabel(minutes)}"
-            else if (result?.action == "saved") "已保存间隔：${minutesLabel(minutes)}" else result?.message
         }
     }
 
@@ -1072,14 +1204,35 @@ private fun SettingsPage(
                     onCheckedChange = { enabled: Boolean ->
                         scope.launch {
                             settingsStore.setEnabled(enabled)
-                            val result = AutoRefreshRegistrationController.changeEnabled(
-                                enabled,
-                                settings,
-                                autoRefreshScheduler
-                            )
+                            val shortForeground = enabled && settings.intervalMinutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES
+                            val result = if (shortForeground) {
+                                autoRefreshScheduler.cancelAndAwait()
+                                com.littletaro.bilibilimonitor.settings.AutoRefreshRegistrationResult(
+                                    "foreground", "已开启前台自动抓取"
+                                )
+                            } else if (enabled) {
+                                autoRefreshScheduler.scheduleAndAwait(settings.intervalMinutes, settings.wifiOnly)
+                                com.littletaro.bilibilimonitor.settings.AutoRefreshRegistrationResult(
+                                    "registered", "已开启后台自动抓取"
+                                )
+                            } else {
+                                autoRefreshScheduler.cancelAndAwait()
+                                com.littletaro.bilibilimonitor.settings.AutoRefreshRegistrationResult(
+                                    "cancelled", "已取消自动抓取"
+                                )
+                            }
                             val now = DeviceTime.nowIsoString()
                             if (enabled) {
-                                settingsStore.recordRegistered(now)
+                                if (shortForeground) settingsStore.recordCancelled(now)
+                                else settingsStore.recordRegistered(now)
+                                val enabledSettings = settings.copy(enabled = true)
+                                val mode = MonitoringRuntime.mode(enabledSettings)
+                                val effective = MonitoringRuntime.effectiveInterval(enabledSettings)
+                                settingsStore.recordRuntimeSchedule(
+                                    effective, mode,
+                                    MonitoringRuntime.nextAt(DeviceTime.nowInstant(), effective),
+                                    CheckStates.WAITING, now
+                                )
                                 repository.writeLog(
                                     "info",
                                     "work",
@@ -1090,6 +1243,10 @@ private fun SettingsPage(
                                 settingsStore.setContinuousMonitoringEnabled(false)
                                 ContinuousMonitoringService.stop(context)
                                 settingsStore.recordCancelled(now)
+                                settingsStore.recordRuntimeSchedule(
+                                    settings.intervalMinutes, ScheduleModes.OFF, null,
+                                    CheckStates.IDLE, now
+                                )
                                 repository.writeLog("info", "work", "auto refresh cancelled")
                             }
                             status = result.message
@@ -1108,9 +1265,7 @@ private fun SettingsPage(
                     )
                 }
                 Text(
-                    if (settings.intervalMinutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES)
-                        "${minutesLabel(settings.intervalMinutes)}（前台）；后台最低按 15 分钟调度"
-                    else "${minutesLabel(settings.intervalMinutes)}（后台可调度）"
+                    "当前生效：${minutesLabel(settings.effectiveIntervalMinutes)} · ${MonitoringRuntime.modeLabel(settings.scheduleMode)}"
                 )
                 Text("当前状态：${userFacingWorkState(settings, workInfo?.state?.name)}")
                 if (settings.intervalMinutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES) {
@@ -1204,7 +1359,7 @@ private fun SettingsPage(
                     onClick = {
                         scope.launch {
                             status = "正在生成历史交换包"
-                            runCatching { repository.exportHistoryExchange("0.11.1") }
+                            runCatching { repository.exportHistoryExchange("0.11.2") }
                                 .onSuccess {
                                     pendingExchangeExport = it
                                     createExchangeLauncher.launch("bilibili-history-v1-${System.currentTimeMillis()}.zip")
@@ -1322,7 +1477,7 @@ private fun SettingsPage(
             }
         }
         item {
-            Text("版本：0.11.1", style = MaterialTheme.typography.bodySmall)
+            Text("版本：0.11.2", style = MaterialTheme.typography.bodySmall)
         }
         item {
         status?.let { Text(it) }
@@ -1441,10 +1596,13 @@ private fun AutoRefreshStatusBlock(settings: AutoRefreshSettings, workId: String
             Text("任务名称：${AutoRefreshScheduler.UNIQUE_WORK_NAME}")
             Text("任务 ID：${workId ?: "-"}")
             Text("系统任务状态：${workState ?: "未注册或尚未读取"}")
-            Text("实际调度：${if (settings.continuousMonitoringRunning) "前台持续服务" else "WorkManager / 前台机会性刷新"}")
+            Text("实际调度：${MonitoringRuntime.modeLabel(settings.scheduleMode)}")
             Text("开关：${if (settings.enabled) "已开启" else "已关闭"}")
             Text("注册：${if (settings.workRegistered) "已注册" else "未注册"}")
-            Text("间隔：${minutesLabel(settings.intervalMinutes)}")
+            Text("用户间隔：${minutesLabel(settings.intervalMinutes)}")
+            Text("有效间隔：${minutesLabel(settings.effectiveIntervalMinutes)}")
+            Text("下次计划：${DeviceTime.formatForDisplay(settings.nextScheduledCheckAt)}")
+            Text("检查状态：${settings.checkState}")
             Text("网络约束：${if (settings.wifiOnly) "仅 Wi-Fi" else "任意联网"}")
             Text("最近注册：${DeviceTime.formatForDisplay(settings.lastRegisteredAt)}")
             Text("最近计划：${DeviceTime.formatForDisplay(settings.lastRegisteredAt)}")
