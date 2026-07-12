@@ -20,6 +20,14 @@ class AutoRefreshScheduler(context: Context) : AutoRefreshRegistrationClient {
     private val appContext = context.applicationContext
 
     override fun schedule(intervalMinutes: Long, wifiOnly: Boolean) {
+        enqueue(intervalMinutes, wifiOnly)
+    }
+
+    suspend fun scheduleAndAwait(intervalMinutes: Long, wifiOnly: Boolean) {
+        withContext(Dispatchers.IO) { enqueue(intervalMinutes, wifiOnly).result.get() }
+    }
+
+    private fun enqueue(intervalMinutes: Long, wifiOnly: Boolean): androidx.work.Operation {
         val sanitizedInterval = RefreshIntervals.backgroundScheduleMinutes(intervalMinutes)
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
@@ -33,7 +41,7 @@ class AutoRefreshScheduler(context: Context) : AutoRefreshRegistrationClient {
             .addTag(WORK_TAG)
             .build()
 
-        WorkManager.getInstance(appContext).enqueueUniquePeriodicWork(
+        return WorkManager.getInstance(appContext).enqueueUniquePeriodicWork(
             UNIQUE_WORK_NAME,
             ExistingPeriodicWorkPolicy.UPDATE,
             request
@@ -44,8 +52,10 @@ class AutoRefreshScheduler(context: Context) : AutoRefreshRegistrationClient {
         WorkManager.getInstance(appContext).cancelUniqueWork(UNIQUE_WORK_NAME)
     }
 
-    fun cancelAndAwait() {
-        WorkManager.getInstance(appContext).cancelUniqueWork(UNIQUE_WORK_NAME).result.get()
+    suspend fun cancelAndAwait() {
+        withContext(Dispatchers.IO) {
+            WorkManager.getInstance(appContext).cancelUniqueWork(UNIQUE_WORK_NAME).result.get()
+        }
     }
 
     fun workInfoFlow(): Flow<WorkInfo?> = flow {

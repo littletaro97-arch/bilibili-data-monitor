@@ -39,8 +39,27 @@ data class AutoRefreshSettings @JvmOverloads constructor(
     val continuousMonitoringRunning: Boolean = false,
     val continuousMonitoringLastStartedAt: String? = null,
     val continuousMonitoringLastStoppedAt: String? = null,
-    val continuousMonitoringLastResult: String? = null
+    val continuousMonitoringLastResult: String? = null,
+    val effectiveIntervalMinutes: Long = RefreshIntervals.DEFAULT_MINUTES,
+    val scheduleMode: String = ScheduleModes.OFF,
+    val nextScheduledCheckAt: String? = null,
+    val checkState: String = CheckStates.IDLE,
+    val runtimeUpdatedAt: String? = null
 )
+
+object ScheduleModes {
+    const val OFF = "off"
+    const val FOREGROUND = "foreground"
+    const val CONTINUOUS = "continuous"
+    const val WORK_MANAGER = "work_manager"
+}
+
+object CheckStates {
+    const val IDLE = "idle"
+    const val WAITING = "waiting"
+    const val RUNNING = "running"
+    const val FAILED = "failed"
+}
 
 object RefreshIntervals {
     const val DEFAULT_MINUTES: Long = 60
@@ -132,6 +151,12 @@ class AutoRefreshSettingsStore(private val context: Context) {
             continuousMonitoringLastStartedAt = preferences[Keys.CONTINUOUS_MONITORING_LAST_STARTED_AT],
             continuousMonitoringLastStoppedAt = preferences[Keys.CONTINUOUS_MONITORING_LAST_STOPPED_AT],
             continuousMonitoringLastResult = preferences[Keys.CONTINUOUS_MONITORING_LAST_RESULT],
+            effectiveIntervalMinutes = preferences[Keys.EFFECTIVE_INTERVAL_MINUTES]
+                ?: RefreshIntervals.backgroundScheduleMinutes(intervalMinutes),
+            scheduleMode = preferences[Keys.SCHEDULE_MODE] ?: ScheduleModes.OFF,
+            nextScheduledCheckAt = preferences[Keys.NEXT_SCHEDULED_CHECK_AT],
+            checkState = preferences[Keys.CHECK_STATE] ?: CheckStates.IDLE,
+            runtimeUpdatedAt = preferences[Keys.RUNTIME_UPDATED_AT],
             backgroundGuideSeen = preferences[Keys.BACKGROUND_GUIDE_SEEN] ?: false
         )
     }
@@ -179,6 +204,8 @@ class AutoRefreshSettingsStore(private val context: Context) {
             preferences[Keys.LAST_AUTO_REFRESH_STARTED_AT] = time
             preferences[Keys.LAST_AUTO_REFRESH_RESULT] = "running"
             preferences.remove(Keys.LAST_AUTO_REFRESH_ERROR)
+            preferences[Keys.CHECK_STATE] = CheckStates.RUNNING
+            preferences[Keys.RUNTIME_UPDATED_AT] = time
         }
     }
 
@@ -198,9 +225,12 @@ class AutoRefreshSettingsStore(private val context: Context) {
                 (preferences[Keys.AUTO_REFRESH_FAILURE_COUNT] ?: 0) + failureDelta
             if (error == null) {
                 preferences.remove(Keys.LAST_AUTO_REFRESH_ERROR)
+                preferences[Keys.CHECK_STATE] = CheckStates.WAITING
             } else {
                 preferences[Keys.LAST_AUTO_REFRESH_ERROR] = error
+                preferences[Keys.CHECK_STATE] = CheckStates.FAILED
             }
+            preferences[Keys.RUNTIME_UPDATED_AT] = time
         }
     }
 
@@ -294,6 +324,23 @@ class AutoRefreshSettingsStore(private val context: Context) {
         }
     }
 
+    suspend fun recordRuntimeSchedule(
+        effectiveIntervalMinutes: Long,
+        scheduleMode: String,
+        nextScheduledCheckAt: String?,
+        state: String,
+        updatedAt: String
+    ) {
+        context.autoRefreshDataStore.edit {
+            it[Keys.EFFECTIVE_INTERVAL_MINUTES] = effectiveIntervalMinutes
+            it[Keys.SCHEDULE_MODE] = scheduleMode
+            if (nextScheduledCheckAt == null) it.remove(Keys.NEXT_SCHEDULED_CHECK_AT)
+            else it[Keys.NEXT_SCHEDULED_CHECK_AT] = nextScheduledCheckAt
+            it[Keys.CHECK_STATE] = state
+            it[Keys.RUNTIME_UPDATED_AT] = updatedAt
+        }
+    }
+
     private object Keys {
         val ENABLED = booleanPreferencesKey("enabled")
         val INTERVAL_MINUTES = longPreferencesKey("interval_minutes")
@@ -323,5 +370,10 @@ class AutoRefreshSettingsStore(private val context: Context) {
         val CONTINUOUS_MONITORING_LAST_STARTED_AT = stringPreferencesKey("continuous_monitoring_last_started_at")
         val CONTINUOUS_MONITORING_LAST_STOPPED_AT = stringPreferencesKey("continuous_monitoring_last_stopped_at")
         val CONTINUOUS_MONITORING_LAST_RESULT = stringPreferencesKey("continuous_monitoring_last_result")
+        val EFFECTIVE_INTERVAL_MINUTES = longPreferencesKey("effective_interval_minutes")
+        val SCHEDULE_MODE = stringPreferencesKey("schedule_mode")
+        val NEXT_SCHEDULED_CHECK_AT = stringPreferencesKey("next_scheduled_check_at")
+        val CHECK_STATE = stringPreferencesKey("check_state")
+        val RUNTIME_UPDATED_AT = stringPreferencesKey("runtime_updated_at")
     }
 }

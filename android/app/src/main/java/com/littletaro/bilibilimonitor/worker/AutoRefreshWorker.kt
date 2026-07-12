@@ -12,6 +12,9 @@ import com.littletaro.bilibilimonitor.data.SnapshotExporter
 import com.littletaro.bilibilimonitor.notifications.MonitorNotificationManager
 import com.littletaro.bilibilimonitor.settings.AutoRefreshSettingsStore
 import com.littletaro.bilibilimonitor.settings.RefreshIntervals
+import com.littletaro.bilibilimonitor.settings.CheckStates
+import com.littletaro.bilibilimonitor.settings.MonitoringRuntime
+import com.littletaro.bilibilimonitor.settings.ScheduleModes
 import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -40,6 +43,10 @@ class AutoRefreshWorker(
                 DeviceTime.nowIsoString(),
                 "skipped: settings disabled"
             )
+            settingsStore.recordRuntimeSchedule(
+                settings.intervalMinutes, ScheduleModes.OFF, null,
+                CheckStates.IDLE, DeviceTime.nowIsoString()
+            )
             repository.writeLog("info", "work", "auto refresh skipped", "settings disabled")
             return Result.success()
         }
@@ -62,6 +69,12 @@ class AutoRefreshWorker(
                 resultText,
                 successDelta = result.success.toLong(),
                 failureDelta = result.failed.toLong()
+            )
+            val effective = RefreshIntervals.backgroundScheduleMinutes(settings.intervalMinutes)
+            settingsStore.recordRuntimeSchedule(
+                effective, ScheduleModes.WORK_MANAGER,
+                MonitoringRuntime.nextAt(finishedAt, effective),
+                CheckStates.WAITING, finishedAt.toString()
             )
             repository.writeLog(
                 "info",
