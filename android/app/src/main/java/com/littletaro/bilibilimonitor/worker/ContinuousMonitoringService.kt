@@ -17,6 +17,9 @@ import com.littletaro.bilibilimonitor.data.DeviceTime
 import com.littletaro.bilibilimonitor.data.RefreshTrigger
 import com.littletaro.bilibilimonitor.notifications.MonitorNotificationManager
 import com.littletaro.bilibilimonitor.settings.RefreshIntervals
+import com.littletaro.bilibilimonitor.settings.CheckStates
+import com.littletaro.bilibilimonitor.settings.MonitoringRuntime
+import com.littletaro.bilibilimonitor.settings.ScheduleModes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,16 +38,29 @@ class ContinuousMonitoringService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val reconfiguring = intent?.action == ACTION_RECONFIGURE
         if (intent?.action == ACTION_STOP) {
             stopWithResult("stopped by user", disablePreference = true)
             return START_NOT_STICKY
         }
-        if (loopJob?.isActive == true) return START_NOT_STICKY
+        if (intent?.action == ACTION_STOP_FOR_RECONFIGURE) {
+            stopWithResult("stopped for schedule change", restorePeriodic = false)
+            return START_NOT_STICKY
+        }
+        if (reconfiguring) {
+            loopJob?.cancel()
+            loopJob = null
+        } else if (loopJob?.isActive == true) return START_NOT_STICKY
         if (!MonitorNotificationManager.permissionGranted(this) || !channelEnabled()) {
             stopWithResult("notification permission or channel unavailable")
             return START_NOT_STICKY
         }
-        startForegroundNotification(null)
+        if (!reconfiguring) startForegroundNotification(null)
+        launchLoop()
+        return START_NOT_STICKY
+    }
+
+    private fun launchLoop() {
         loopJob = scope.launch {
             val settings = app.settingsStore.settings.first()
             if (!settings.enabled || !settings.continuousMonitoringEnabled || settings.intervalMinutes >= RefreshIntervals.MIN_WORK_MANAGER_MINUTES) {
@@ -55,6 +71,11 @@ class ContinuousMonitoringService : Service() {
             app.autoRefreshScheduler.cancelAndAwait()
             app.settingsStore.recordCancelled(DeviceTime.nowIsoString())
             app.settingsStore.recordContinuousMonitoringStarted(DeviceTime.nowIsoString())
+            val initialNext = MonitoringRuntime.nextAt(DeviceTime.nowInstant(), settings.intervalMinutes)
+            app.settingsStore.recordRuntimeSchedule(
+                settings.intervalMinutes, ScheduleModes.CONTINUOUS, initialNext,
+                CheckStates.WAITING, DeviceTime.nowIsoString()
+            )
             app.repository.writeLog("info", "work", "continuous monitoring started", "interval=${settings.intervalMinutes}m")
             try {
                 while (true) {
@@ -62,12 +83,23 @@ class ContinuousMonitoringService : Service() {
                     delay(latestBeforeDelay.intervalMinutes * 60_000L)
                     val latest = app.settingsStore.settings.first()
                     if (!latest.enabled || !latest.continuousMonitoringEnabled || latest.intervalMinutes >= RefreshIntervals.MIN_WORK_MANAGER_MINUTES) break
+                    app.settingsStore.recordWorkerStarted(DeviceTime.nowIsoString())
                     val result = app.repository.refreshAllExistingVideos(RefreshTrigger.AUTO)
                     if (result.total == 0) {
                         stopWithResult("stopped: no videos")
                         return@launch
                     }
                     val finishedAt = DeviceTime.nowInstant()
+                    app.settingsStore.recordWorkerFinished(
+                        finishedAt.toString(),
+                        "total=${result.total}, success=${result.success}, failed=${result.failed}",
+                        successDelta = result.success.toLong(), failureDelta = result.failed.toLong()
+                    )
+                    app.settingsStore.recordRuntimeSchedule(
+                        latest.intervalMinutes, ScheduleModes.CONTINUOUS,
+                        MonitoringRuntime.nextAt(finishedAt, latest.intervalMinutes),
+                        CheckStates.WAITING, finishedAt.toString()
+                    )
                     val notificationResult = MonitorNotificationManager.maybeNotifyRefreshResult(this@ContinuousMonitoringService, latest, result, finishedAt)
                     app.settingsStore.recordNotificationAttempt(finishedAt.toString(), notificationResult.value)
                     app.repository.writeLog(
@@ -85,7 +117,6 @@ class ContinuousMonitoringService : Service() {
                 stopWithResult("failed: ${exc.javaClass.simpleName}")
             }
         }
-        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -105,7 +136,7 @@ class ContinuousMonitoringService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentTitle("B站数据监控正在后台运行")
-            .setContentText(intervalMinutes?.let { "当前间隔：$it 分钟；系统可能延迟执行" } ?: "正在启动持续监控")
+            .setContentText(foregroundNotificationText(intervalMinutes))
             .setContentIntent(openIntent)
             .addAction(0, "停止", stopIntent)
             .setOngoing(true)
@@ -132,10 +163,15 @@ class ContinuousMonitoringService : Service() {
             getSystemService(NotificationManager::class.java).getNotificationChannel(CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
     }
 
-    private fun stopWithResult(result: String, disablePreference: Boolean = false) {
+    private fun stopWithResult(
+        result: String,
+        disablePreference: Boolean = false,
+        restorePeriodic: Boolean = true
+    ) {
         scope.launch {
             if (disablePreference) app.settingsStore.setContinuousMonitoringEnabled(false)
-            restorePeriodicWork(result)
+            if (restorePeriodic) restorePeriodicWork(result)
+            else app.settingsStore.recordContinuousMonitoringStopped(DeviceTime.nowIsoString(), result)
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
@@ -145,7 +181,21 @@ class ContinuousMonitoringService : Service() {
         app.settingsStore.recordContinuousMonitoringStopped(DeviceTime.nowIsoString(), result)
         val settings = app.settingsStore.settings.first()
         if (settings.enabled) {
-            app.autoRefreshScheduler.schedule(settings.intervalMinutes, settings.wifiOnly)
+            val shortForeground = settings.intervalMinutes < RefreshIntervals.MIN_WORK_MANAGER_MINUTES
+            if (shortForeground) app.autoRefreshScheduler.cancelAndAwait()
+            else app.autoRefreshScheduler.scheduleAndAwait(settings.intervalMinutes, settings.wifiOnly)
+            val effective = if (shortForeground) settings.intervalMinutes
+                else RefreshIntervals.backgroundScheduleMinutes(settings.intervalMinutes)
+            val now = DeviceTime.nowInstant()
+            app.settingsStore.recordRuntimeSchedule(
+                effective, if (shortForeground) ScheduleModes.FOREGROUND else ScheduleModes.WORK_MANAGER,
+                MonitoringRuntime.nextAt(now, effective), CheckStates.WAITING, now.toString()
+            )
+        } else {
+            app.settingsStore.recordRuntimeSchedule(
+                settings.intervalMinutes, ScheduleModes.OFF, null,
+                CheckStates.IDLE, DeviceTime.nowIsoString()
+            )
         }
         app.repository.writeLog("info", "work", "continuous monitoring stopped", result)
     }
@@ -155,6 +205,8 @@ class ContinuousMonitoringService : Service() {
         const val NOTIFICATION_ONGOING = true
         const val NOTIFICATION_AUTO_CANCEL = false
         const val ACTION_STOP = "com.littletaro.bilibilimonitor.STOP_CONTINUOUS_MONITORING"
+        const val ACTION_RECONFIGURE = "com.littletaro.bilibilimonitor.RECONFIGURE_CONTINUOUS_MONITORING"
+        const val ACTION_STOP_FOR_RECONFIGURE = "com.littletaro.bilibilimonitor.STOP_CONTINUOUS_FOR_RECONFIGURE"
         private const val NOTIFICATION_ID = 2100
 
         fun start(context: Context) {
@@ -164,5 +216,17 @@ class ContinuousMonitoringService : Service() {
         fun stop(context: Context) {
             context.startService(Intent(context, ContinuousMonitoringService::class.java).setAction(ACTION_STOP))
         }
+
+        fun reconfigure(context: Context) {
+            context.startService(Intent(context, ContinuousMonitoringService::class.java).setAction(ACTION_RECONFIGURE))
+        }
+
+        fun stopForReconfigure(context: Context) {
+            context.startService(Intent(context, ContinuousMonitoringService::class.java).setAction(ACTION_STOP_FOR_RECONFIGURE))
+        }
+
+        @JvmStatic
+        fun foregroundNotificationText(intervalMinutes: Long?): String =
+            intervalMinutes?.let { "当前间隔：$it 分钟；系统可能延迟执行" } ?: "正在启动持续监控"
     }
 }
