@@ -2,6 +2,7 @@ package com.littletaro.bilibilimonitor.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
@@ -39,6 +40,7 @@ class MonitorRepository(
 
     fun snapshots(bvId: String): Flow<List<VideoSnapshotEntity>> = dao.observeSnapshots(bvId)
         .map { rows -> rows.sortedWith(snapshotNewestFirst) }
+        .flowOn(Dispatchers.Default)
 
     suspend fun addVideo(input: String): String {
         val bvId = try {

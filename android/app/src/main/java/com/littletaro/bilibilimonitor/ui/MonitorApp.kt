@@ -1545,7 +1545,7 @@ private fun SettingsPage(
                     onClick = {
                         scope.launch {
                             status = "正在生成历史交换包"
-                            runCatching { repository.exportHistoryExchange("0.12.0") }
+                            runCatching { repository.exportHistoryExchange("0.12.1") }
                                 .onSuccess {
                                     pendingExchangeExport = it
                                     createExchangeLauncher.launch("bilibili-history-v1-${System.currentTimeMillis()}.zip")
