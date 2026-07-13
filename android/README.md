@@ -30,6 +30,11 @@
 - view API 已确认 `data.pic` 封面字段；Room v4 保存可空封面 URL，首页使用受控内存/磁盘缓存与统一占位降级。
 - Room v4 通过 v3→v4 非破坏性迁移回填可排序的绝对采集毫秒；历史交换格式仍为 v1，`coverUrl` 是可选字段。
 
+## v0.12.1
+
+- 修正历史快照绝对时间排序仍可能在 UI 收集线程执行的问题；排序转换明确运行在 `Dispatchers.Default`。
+- 不改动 v0.12.0 的数据模型、趋势规则、后台保活、WorkManager、前台服务或通知逻辑。
+
 本目录是 Android 原生应用工程，和根目录 `app/` 的 Windows/Python 端隔离维护。
 
 - 根目录 `app/`：Windows/Python 后端、页面、采集与测试。
