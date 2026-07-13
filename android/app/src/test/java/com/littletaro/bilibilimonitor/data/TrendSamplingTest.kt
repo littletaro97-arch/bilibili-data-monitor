@@ -64,6 +64,35 @@ class TrendSamplingTest {
         assertEquals(0.05, result[2].ratio!!, 0.000001)
     }
 
+    @Test fun largeRatioSelectionUsesOneSharedSampleForBothAxesAndRatio() {
+        val snapshots = (0 until 5_000).map { index ->
+            snapshot(
+                id = index.toLong(),
+                seconds = index.toLong(),
+                view = if (index == 4_321) 8_000_000 else 1_000 + index.toLong(),
+                like = if (index == 1_234) 700_000 else 10 + index.toLong()
+            )
+        }
+        val selected = TrendCalculator.select(
+            snapshots, TrendRange.ALL, TrendCalculator.targetPointCount(800, 3),
+            listOf(
+                { it.likeCount?.toDouble() },
+                { it.viewCount?.toDouble() },
+                { snapshot ->
+                    val likes = snapshot.likeCount
+                    val views = snapshot.viewCount
+                    if (likes != null && views != null && views != 0L) likes.toDouble() / views else null
+                }
+            )
+        )
+        val points = TrendCalculator.ratioPoints(selected.displayedSnapshots, TrendMetric.LIKE, TrendMetric.VIEW)
+
+        assertTrue(selected.displayedSnapshots.size <= TrendCalculator.targetPointCount(800, 3))
+        assertTrue(selected.displayedSnapshots.any { it.id == 1_234L })
+        assertTrue(selected.displayedSnapshots.any { it.id == 4_321L })
+        assertEquals(selected.displayedSnapshots.map { it.id }, points.map { it.snapshotId })
+    }
+
     @Test fun recentRangesDoNotSampleOrLoadMoreThanTheirRange() {
         val snapshots = (0 until 100).map { snapshot(it.toLong(), it.toLong(), it.toLong()) }
         val twenty = TrendCalculator.select(snapshots, TrendRange.TWENTY, 120, listOf { it.viewCount?.toDouble() })

@@ -10,7 +10,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val app = application as BilibiliMonitorApplication
         setContent {
-            MonitorApp(app.repository, app.settingsStore, app.autoRefreshScheduler)
+            MonitorApp(app.repository, app.settingsStore, app.chartPreferencesStore, app.autoRefreshScheduler)
         }
     }
 }

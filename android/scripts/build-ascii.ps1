@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "v0.12.1",
+    [string]$Version = "v0.12.2",
     [string]$ProjectRoot = "",
     [string]$AsciiRoot = (Join-Path ([IO.Path]::GetTempPath()) "bilibili-monitor-ascii")
 )

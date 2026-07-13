@@ -6,6 +6,7 @@ import com.littletaro.bilibilimonitor.data.BilibiliApi
 import com.littletaro.bilibilimonitor.data.MonitorRepository
 import com.littletaro.bilibilimonitor.data.SnapshotExporter
 import com.littletaro.bilibilimonitor.settings.AutoRefreshSettingsStore
+import com.littletaro.bilibilimonitor.settings.ChartPreferencesStore
 import com.littletaro.bilibilimonitor.worker.AutoRefreshScheduler
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -30,6 +31,10 @@ class BilibiliMonitorApplication : Application() {
     }
     val settingsStore: AutoRefreshSettingsStore by lazy {
         AutoRefreshSettingsStore(this)
+    }
+
+    val chartPreferencesStore: ChartPreferencesStore by lazy {
+        ChartPreferencesStore(this)
     }
 
     val autoRefreshScheduler: AutoRefreshScheduler by lazy {
