@@ -1,7 +1,7 @@
 # B站本地分析工具安卓端控制端续开发文档
 
 > 交付对象：Codex / 新对话继续开发  
-> 基准项目目录：`<legacy-workspace>`  
+> 基准项目目录：`<legacy-workspace>`
 > 当前基准提交：`fb4d86e Add ratio charts and history import`  
 > 目标：在不破坏 Windows 本地程序安全边界的前提下，评估并逐步开发安卓端查看/控制能力  
 
