@@ -14,6 +14,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -49,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -56,8 +59,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,10 +84,12 @@ import com.littletaro.bilibilimonitor.data.HistoryImportReport
 import com.littletaro.bilibilimonitor.data.MonitorRepository
 import com.littletaro.bilibilimonitor.data.RefreshAllResult
 import com.littletaro.bilibilimonitor.data.SnapshotSources
+import com.littletaro.bilibilimonitor.data.SnapshotDeltaCalculator
 import com.littletaro.bilibilimonitor.data.RefreshTrigger
 import com.littletaro.bilibilimonitor.data.TrendCalculator
 import com.littletaro.bilibilimonitor.data.TrendMetric
 import com.littletaro.bilibilimonitor.data.TrendPoint
+import com.littletaro.bilibilimonitor.data.TrendRange
 import com.littletaro.bilibilimonitor.data.VideoEntity
 import com.littletaro.bilibilimonitor.data.VideoSnapshotEntity
 import com.littletaro.bilibilimonitor.notifications.MonitorNotificationManager
@@ -102,9 +111,13 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import java.io.File
 import java.time.Instant
+import java.text.NumberFormat
+import java.util.Locale
 import kotlin.math.abs
 
 private enum class Page {
@@ -114,6 +127,8 @@ private enum class Page {
     Settings,
     Advanced
 }
+
+private enum class TrendDisplayMode { Single, Ratio }
 
 @Composable
 fun MonitorApp(
@@ -440,15 +455,23 @@ private fun VideoCard(repository: MonitorRepository, video: VideoEntity, onOpenV
     var openError by remember { mutableStateOf<String?>(null) }
     var openingExternal by remember { mutableStateOf(false) }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            ExpandableText(
-                text = video.title ?: "未刷新标题",
-                collapsedMaxLines = 2,
-                fontWeight = FontWeight.Bold
+        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            CoverThumbnail(
+                url = video.coverUrl,
+                modifier = Modifier
+                    .weight(0.32f, fill = false)
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(8.dp))
             )
-            Text("BV: ${video.bvId}")
-            Text("UP: ${video.authorName ?: "未知"}")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ExpandableText(
+                    text = video.title ?: "未刷新标题",
+                    collapsedMaxLines = 2,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("BV: ${video.bvId}")
+                Text("UP: ${video.authorName ?: "未知"}")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { onOpenVideo(video.bvId) }) { Text("详情") }
                 Button(
                     enabled = !openingExternal,
@@ -475,8 +498,9 @@ private fun VideoCard(repository: MonitorRepository, video: VideoEntity, onOpenV
                         }
                     }
                 ) { Text("打开") }
+                }
+                openError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
-            openError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }
 }
@@ -491,6 +515,8 @@ private fun DetailPage(
     val context = LocalContext.current
     val videos by repository.videos.collectAsStateWithLifecycle(initialValue = emptyList())
     val latest by repository.latestSnapshot(bvId).collectAsStateWithLifecycle(initialValue = null)
+    val latestComparison by repository.latestValidSnapshotComparison(bvId)
+        .collectAsStateWithLifecycle(initialValue = null)
     val settings by settingsStore.settings.collectAsStateWithLifecycle(initialValue = AutoRefreshSettings())
     val video = videos.firstOrNull { it.bvId == bvId }
     val scope = rememberCoroutineScope()
@@ -539,7 +565,7 @@ private fun DetailPage(
             item { Text(text) }
         }
         item {
-            SnapshotBlock(latest)
+            SnapshotBlock(latest, latestComparison?.takeIf { it.current.id == latest?.id })
         }
     }
 }
@@ -571,7 +597,10 @@ private fun CheckTimerCard(settings: AutoRefreshSettings, onOpenSettings: () -> 
 }
 
 @Composable
-private fun SnapshotBlock(snapshot: VideoSnapshotEntity?) {
+private fun SnapshotBlock(
+    snapshot: VideoSnapshotEntity?,
+    comparison: com.littletaro.bilibilimonitor.data.LatestSnapshotComparison?
+) {
     if (snapshot == null) {
         Text("暂无快照")
         return
@@ -584,14 +613,36 @@ private fun SnapshotBlock(snapshot: VideoSnapshotEntity?) {
             snapshot.errorMessage?.let {
                 ExpandableText(text = "错误：$it", collapsedMaxLines = 2)
             } ?: Text("错误：-")
-            Text("播放：${snapshot.viewCount ?: "-"}")
-            Text("弹幕：${snapshot.danmakuCount ?: "-"}")
-            Text("评论：${snapshot.replyCount ?: "-"}")
-            Text("收藏：${snapshot.favoriteCount ?: "-"}")
-            Text("投币：${snapshot.coinCount ?: "-"}")
-            Text("分享：${snapshot.shareCount ?: "-"}")
-            Text("点赞：${snapshot.likeCount ?: "-"}")
+            SnapshotMetricRow("播放", snapshot.viewCount, comparison?.previous?.viewCount, comparison != null)
+            SnapshotMetricRow("弹幕", snapshot.danmakuCount, comparison?.previous?.danmakuCount, comparison != null)
+            SnapshotMetricRow("评论", snapshot.replyCount, comparison?.previous?.replyCount, comparison != null)
+            SnapshotMetricRow("收藏", snapshot.favoriteCount, comparison?.previous?.favoriteCount, comparison != null)
+            SnapshotMetricRow("投币", snapshot.coinCount, comparison?.previous?.coinCount, comparison != null)
+            SnapshotMetricRow("分享", snapshot.shareCount, comparison?.previous?.shareCount, comparison != null)
+            SnapshotMetricRow("点赞", snapshot.likeCount, comparison?.previous?.likeCount, comparison != null)
         }
+    }
+}
+
+@Composable
+private fun SnapshotMetricRow(label: String, current: Long?, previous: Long?, hasValidCurrent: Boolean) {
+    val delta = SnapshotDeltaCalculator.delta(current, previous)
+    val message = when {
+        !hasValidCurrent || current == null -> "暂无对比"
+        previous == null -> "首次记录"
+        delta!! > 0 -> "↑ +${formatCount(delta)}"
+        delta < 0 -> "↓ ${formatCount(delta)}"
+        else -> "— 0"
+    }
+    val color = when {
+        delta == null -> MaterialTheme.colorScheme.onSurfaceVariant
+        delta > 0 -> MaterialTheme.colorScheme.primary
+        delta < 0 -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text("$label：${current?.let(::formatCount) ?: "-"}")
+        Text(message, color = color, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -599,9 +650,40 @@ private fun SnapshotBlock(snapshot: VideoSnapshotEntity?) {
 private fun HistoryPage(repository: MonitorRepository, bvId: String) {
     val snapshots by repository.snapshots(bvId).collectAsStateWithLifecycle(initialValue = emptyList())
     var metric by remember { mutableStateOf(TrendMetric.VIEW) }
-    var limit by remember { mutableStateOf(20) }
-    val trendPoints = remember(snapshots, metric, limit) {
-        TrendCalculator.points(snapshots, metric, limit)
+    var range by rememberSaveable { mutableStateOf(TrendRange.TWENTY) }
+    var displayMode by rememberSaveable { mutableStateOf(TrendDisplayMode.Single) }
+    var numeratorMetric by rememberSaveable { mutableStateOf(TrendMetric.LIKE) }
+    var denominatorMetric by rememberSaveable { mutableStateOf(TrendMetric.VIEW) }
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val availableWidthPx = with(density) { ((configuration.screenWidthDp - 48).coerceAtLeast(1)).dp.roundToPx() }
+    val selectedMetrics = if (displayMode == TrendDisplayMode.Single) listOf(metric) else listOf(numeratorMetric, denominatorMetric)
+    val selection by produceState(
+        initialValue = com.littletaro.bilibilimonitor.data.TrendSelection(0, emptyList()),
+        snapshots, range, displayMode, metric, numeratorMetric, denominatorMetric, availableWidthPx
+    ) {
+        val series = selectedMetrics.map { selected -> { snapshot: VideoSnapshotEntity -> TrendCalculator.valueOf(snapshot, selected)?.toDouble() } }.toMutableList()
+        if (displayMode == TrendDisplayMode.Ratio) {
+            series += { snapshot ->
+                val numerator = TrendCalculator.valueOf(snapshot, numeratorMetric)
+                val denominator = TrendCalculator.valueOf(snapshot, denominatorMetric)
+                if (numerator != null && denominator != null && denominator != 0L) numerator.toDouble() / denominator else null
+            }
+        }
+        value = withContext(Dispatchers.Default) {
+            TrendCalculator.select(
+                snapshots,
+                range,
+                TrendCalculator.targetPointCount(availableWidthPx, series.size),
+                series
+            )
+        }
+    }
+    val singlePoints = remember(selection, metric) {
+        TrendCalculator.points(selection.displayedSnapshots, metric)
+    }
+    val ratioPoints = remember(selection, numeratorMetric, denominatorMetric) {
+        TrendCalculator.ratioPoints(selection.displayedSnapshots, numeratorMetric, denominatorMetric)
     }
 
     LazyColumn(
@@ -613,33 +695,58 @@ private fun HistoryPage(repository: MonitorRepository, bvId: String) {
             item { Text("暂无历史快照，请先手动刷新") }
         } else {
             item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (displayMode == TrendDisplayMode.Single) Button(onClick = { displayMode = TrendDisplayMode.Single }) { Text("单项趋势（已选）") }
+                    else TextButton(onClick = { displayMode = TrendDisplayMode.Single }) { Text("单项趋势") }
+                    if (displayMode == TrendDisplayMode.Ratio) Button(onClick = { displayMode = TrendDisplayMode.Ratio }) { Text("双指标比值（已选）") }
+                    else TextButton(onClick = { displayMode = TrendDisplayMode.Ratio }) { Text("双指标比值") }
+                }
+            }
+            item {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                     items(TrendMetric.entries) { item ->
-                        if (metric == item) {
-                            Button(onClick = { metric = item }) { Text(item.label) }
-                        } else {
-                            TextButton(onClick = { metric = item }) { Text(item.label) }
+                        val selected = if (displayMode == TrendDisplayMode.Single) metric == item else numeratorMetric == item
+                        if (selected) Button(onClick = { if (displayMode == TrendDisplayMode.Single) metric = item else numeratorMetric = item }) { Text(if (displayMode == TrendDisplayMode.Single) item.label else "分子 ${item.label}") }
+                        else TextButton(onClick = {
+                            if (displayMode == TrendDisplayMode.Single) metric = item
+                            else if (item != denominatorMetric) numeratorMetric = item
+                        }, enabled = displayMode == TrendDisplayMode.Single || item != denominatorMetric) { Text(if (displayMode == TrendDisplayMode.Single) item.label else "分子 ${item.label}") }
+                    }
+                }
+            }
+            if (displayMode == TrendDisplayMode.Ratio) {
+                item {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        items(TrendMetric.entries) { item ->
+                            if (denominatorMetric == item) Button(onClick = { denominatorMetric = item }) { Text("分母 ${item.label}") }
+                            else TextButton(onClick = { if (item != numeratorMetric) denominatorMetric = item }, enabled = item != numeratorMetric) { Text("分母 ${item.label}") }
                         }
                     }
                 }
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("最近")
-                    if (limit == 20) {
-                        Button(onClick = { limit = 20 }) { Text("20") }
-                    } else {
-                        TextButton(onClick = { limit = 20 }) { Text("20") }
+                    Text("范围")
+                    TrendRange.entries.forEach { item ->
+                        if (range == item) Button(onClick = { range = item }) { Text("${item.label}（已选）") }
+                        else TextButton(onClick = { range = item }) { Text(item.label) }
                     }
-                    if (limit == 50) {
-                        Button(onClick = { limit = 50 }) { Text("50") }
-                    } else {
-                        TextButton(onClick = { limit = 50 }) { Text("50") }
-                    }
-                    Text("条")
                 }
             }
-            item { TrendChart(trendPoints, metric) }
+            if (selection.isOptimized) {
+                item { Text("已优化显示，原始记录 ${formatCount(selection.originalRecordCount.toLong())} 条，绘制 ${selection.displayedSnapshots.size} 条", style = MaterialTheme.typography.bodySmall) }
+            }
+            if (displayMode == TrendDisplayMode.Single) {
+                item { NumericTrendChart("${metric.label}趋势", numericPoints(singlePoints) { formatCount(it.toLong()) }) }
+            } else {
+                item {
+                    RatioTrendCharts(
+                        ratioPoints = ratioPoints,
+                        numeratorMetric = numeratorMetric,
+                        denominatorMetric = denominatorMetric
+                    )
+                }
+            }
             items(snapshots, key = { it.id }) { snapshot ->
                 var expanded by rememberSaveable(HistoryExpansionPolicy.stateKey(snapshot.id)) {
                     mutableStateOf(HistoryExpansionPolicy.defaultExpanded())
@@ -668,49 +775,125 @@ private fun HistoryPage(repository: MonitorRepository, bvId: String) {
     }
 }
 
+private data class NumericChartPoint(
+    val snapshotId: Long,
+    val collectedAt: String,
+    val value: Double?,
+    val captureSource: String,
+    val tooltip: String
+)
+
+private fun numericPoints(
+    points: List<TrendPoint>,
+    display: (Double) -> String
+): List<NumericChartPoint> = points.map { point ->
+    NumericChartPoint(
+        snapshotId = point.snapshotId,
+        collectedAt = point.collectedAt,
+        value = point.value?.toDouble(),
+        captureSource = point.captureSource,
+        tooltip = point.value?.let { "${formatCount(it)}${point.delta?.let { delta -> "，变化 ${if (delta >= 0) "+" else ""}${formatCount(delta)}" } ?: "，首次记录"}" }
+            ?: "该快照缺少此指标"
+    )
+}
+
 @Composable
-private fun TrendChart(points: List<TrendPoint>, metric: TrendMetric) {
+private fun RatioTrendCharts(
+    ratioPoints: List<com.littletaro.bilibilimonitor.data.RatioTrendPoint>,
+    numeratorMetric: TrendMetric,
+    denominatorMetric: TrendMetric
+) {
+    val ratioAsPercent = denominatorMetric == TrendMetric.VIEW
+    val ratioLabel = if (ratioAsPercent) "${numeratorMetric.label} ÷ 播放（%）" else "${numeratorMetric.label} ÷ ${denominatorMetric.label}"
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("${numeratorMetric.label} ÷ ${denominatorMetric.label}", fontWeight = FontWeight.Bold)
+        Text("图例：${numeratorMetric.label} 实线 · ${denominatorMetric.label} 点划线 · 比值 虚线；三图使用同一批快照和时间范围。", style = MaterialTheme.typography.bodySmall)
+        NumericTrendChart(
+            title = numeratorMetric.label,
+            points = ratioPoints.map { point -> NumericChartPoint(point.snapshotId, point.collectedAt, point.numerator?.toDouble(), point.captureSource, point.numerator?.let(::formatCount) ?: "该快照缺少分子") },
+            dashed = false
+        )
+        NumericTrendChart(
+            title = denominatorMetric.label,
+            points = ratioPoints.map { point -> NumericChartPoint(point.snapshotId, point.collectedAt, point.denominator?.toDouble(), point.captureSource, point.denominator?.let(::formatCount) ?: "该快照缺少分母") },
+            dashed = true
+        )
+        NumericTrendChart(
+            title = ratioLabel,
+            points = ratioPoints.map { point ->
+                NumericChartPoint(
+                    point.snapshotId,
+                    point.collectedAt,
+                    point.ratio,
+                    point.captureSource,
+                    point.ratio?.let { if (ratioAsPercent) String.format(Locale.getDefault(), "%.2f%%", it * 100) else String.format(Locale.getDefault(), "%.4f", it) }
+                        ?: "当前无法计算比值（分母为 0 或数据缺失）"
+                )
+            },
+            dashed = true,
+            formatter = { value -> if (ratioAsPercent) String.format(Locale.getDefault(), "%.2f%%", value * 100) else String.format(Locale.getDefault(), "%.4f", value) }
+        )
+    }
+}
+
+@Composable
+private fun NumericTrendChart(
+    title: String,
+    points: List<NumericChartPoint>,
+    dashed: Boolean = false,
+    formatter: (Double) -> String = { formatCount(it.toLong()) }
+) {
     val validPoints = points.filter { it.value != null }
-    val lineColor = MaterialTheme.colorScheme.primary
+    val lineColor = if (dashed) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
     val axisColor = MaterialTheme.colorScheme.outline
-    val pointColor = MaterialTheme.colorScheme.tertiary
+    var selectedId by remember(points) { mutableStateOf(points.lastOrNull()?.snapshotId) }
+    val selected = points.firstOrNull { it.snapshotId == selectedId }
     Card {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("${metric.label}趋势", fontWeight = FontWeight.Bold)
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, fontWeight = FontWeight.Bold)
             if (validPoints.isEmpty()) {
                 Text("暂无可绘制数据")
+                selected?.let { Text("提示：${DeviceTime.formatForDisplay(it.collectedAt)} · ${it.tooltip}", style = MaterialTheme.typography.bodySmall) }
                 return@Column
             }
-            Text("数据点：${validPoints.size} · 最近：${DeviceTime.formatForDisplay(validPoints.last().collectedAt)}")
-            Canvas(modifier = Modifier.fillMaxWidth().height(200.dp)) {
-                val minValue = validPoints.minOf { it.value ?: 0L }
-                val maxValue = validPoints.maxOf { it.value ?: 0L }
-                val valueRange = (maxValue - minValue).coerceAtLeast(1L).toFloat()
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .pointerInput(points) {
+                        detectTapGestures { tap ->
+                            val index = if (points.size <= 1) 0 else ((tap.x / size.width) * (points.size - 1)).toInt().coerceIn(0, points.lastIndex)
+                            selectedId = points[index].snapshotId
+                        }
+                    }
+            ) {
+                val minValue = validPoints.minOf { it.value!! }
+                val maxValue = validPoints.maxOf { it.value!! }
+                val valueRange = (maxValue - minValue).takeIf { it > 0.0 } ?: 1.0
                 val left = 8f
                 val right = size.width - 8f
                 val top = 8f
                 val bottom = size.height - 8f
                 drawLine(axisColor, Offset(left, bottom), Offset(right, bottom), strokeWidth = 2f)
-                val offsets = validPoints.mapIndexed { index, point ->
-                    val x = if (validPoints.size == 1) {
-                        (left + right) / 2f
-                    } else {
-                        left + (right - left) * index / (validPoints.size - 1)
+                fun offset(index: Int, point: NumericChartPoint): Offset? {
+                    val value = point.value ?: return null
+                    val x = if (points.size == 1) (left + right) / 2f else left + (right - left) * index / (points.size - 1)
+                    val y = bottom - ((value - minValue) / valueRange).toFloat() * (bottom - top)
+                    return Offset(x, y)
+                }
+                points.zipWithNext().forEachIndexed { index, pair ->
+                    val start = offset(index, pair.first)
+                    val end = offset(index + 1, pair.second)
+                    if (start != null && end != null) drawLine(lineColor, start, end, strokeWidth = 3f, cap = StrokeCap.Round, pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(10f, 8f)) else null)
+                }
+                points.forEachIndexed { index, point ->
+                    offset(index, point)?.let { pointOffset ->
+                        drawCircle(lineColor, radius = if (point.captureSource == SnapshotSources.MANUAL) 5f else 3f, center = pointOffset)
                     }
-                    val normalized = ((point.value ?: minValue) - minValue).toFloat() / valueRange
-                    val y = bottom - normalized * (bottom - top)
-                    Offset(x, y)
-                }
-                offsets.zipWithNext().forEach { (start, end) ->
-                    drawLine(lineColor, start, end, strokeWidth = 4f, cap = StrokeCap.Round)
-                }
-                offsets.forEachIndexed { index, offset ->
-                    val source = validPoints[index].captureSource
-                    if (source == SnapshotSources.MANUAL) drawCircle(pointColor, radius = 7f, center = offset)
-                    else drawCircle(pointColor, radius = 4f, center = offset)
                 }
             }
-            Text("最小 ${minValueText(validPoints)} / 最大 ${maxValueText(validPoints)}")
+            Text("最小 ${formatter(validPoints.minOf { it.value!! })} / 最大 ${formatter(validPoints.maxOf { it.value!! })}", style = MaterialTheme.typography.bodySmall)
+            selected?.let { Text("提示：${DeviceTime.formatForDisplay(it.collectedAt)} · ${it.tooltip}", style = MaterialTheme.typography.bodySmall) }
         }
     }
 }
@@ -720,6 +903,9 @@ private fun snapshotSourceLabel(source: String): String = when (source) {
     SnapshotSources.AUTO -> "自动采集"
     else -> "历史数据"
 }
+
+private fun formatCount(value: Long): String =
+    NumberFormat.getIntegerInstance(Locale.getDefault()).format(value)
 
 @Composable
 private fun TrendPointCard(point: TrendPoint, metric: TrendMetric) {
@@ -1359,7 +1545,7 @@ private fun SettingsPage(
                     onClick = {
                         scope.launch {
                             status = "正在生成历史交换包"
-                            runCatching { repository.exportHistoryExchange("0.11.2") }
+                            runCatching { repository.exportHistoryExchange("0.12.0") }
                                 .onSuccess {
                                     pendingExchangeExport = it
                                     createExchangeLauncher.launch("bilibili-history-v1-${System.currentTimeMillis()}.zip")
