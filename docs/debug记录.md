@@ -84,7 +84,7 @@ netstat -ano | findstr :7860
 ### Gradle Sync 失败
 
 1. 确认使用 `android/gradlew.bat`，不要依赖不明确的全局 Gradle。
-2. 确认 Android SDK 路径有效：`C:\Users\LittleTaro\AppData\Local\Android\Sdk`。
+2. 确认 Android SDK 路径有效：`%LOCALAPPDATA%\Android\Sdk`。
 3. 如果提示 compileSdk 35 支持问题，先确认本机 SDK 已安装 API 35。
 
 ### SDK 缺失
@@ -141,7 +141,7 @@ ClassNotFoundException: com.littletaro.bilibilimonitor.data.BvParserTest
 本轮验证使用临时 ASCII junction：
 
 ```text
-C:\Users\LittleTaro\codex-bilibili-monitor-ascii
+%TEMP%\bilibili-monitor-ascii
 ```
 
 该 junction 指向正式仓库，不改变代码归属。后续若要彻底解决，应评估升级 Gradle/AGP/JDK 组合，或将 Android 构建工作区放在 ASCII 路径。
@@ -158,7 +158,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
 
 脚本会：
 
-1. 检查 `C:\Users\LittleTaro\codex-bilibili-monitor-ascii` 是否存在。
+1. 检查 `%TEMP%\bilibili-monitor-ascii` 是否存在。
 2. 不存在时创建 junction，指向正式项目目录。
 3. 在 ASCII 路径下进入 `android/`。
 4. 执行 `.\gradlew.bat test`。
@@ -367,7 +367,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
 ### Android unit test 在中文路径下 ClassNotFoundException
 
 1. 如果 `app/build/intermediates/javac/.../*Test.class` 存在，但测试报告显示所有测试类 `ClassNotFoundException`，优先怀疑 Gradle/JDK worker classpath 在中文路径下异常。
-2. 使用 `C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android` 这个 ASCII junction 重新执行同一测试。
+2. 使用 `%TEMP%\bilibili-monitor-ascii\android` 这个 ASCII junction 重新执行同一测试。
 3. 只有 ASCII 路径下仍失败时，才按代码或测试逻辑失败处理。
 
 ## Android v0.8.0 高级页和滚动布局排查

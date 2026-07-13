@@ -18,7 +18,7 @@ powershell -ExecutionPolicy Bypass -File .\android\scripts\build-ascii.ps1
 脚本会检查或创建：
 
 ```text
-C:\Users\LittleTaro\codex-bilibili-monitor-ascii
+%TEMP%\bilibili-monitor-ascii
 ```
 
 该 junction 指向正式项目目录，用来规避 Windows 中文路径下 Gradle/JDK worker `@argfile` 可能导致的 Android unit-test classpath 问题。

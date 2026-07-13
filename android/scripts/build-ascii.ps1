@@ -1,7 +1,7 @@
 param(
     [string]$Version = "v0.12.0",
     [string]$ProjectRoot = "",
-    [string]$AsciiRoot = "C:\Users\LittleTaro\codex-bilibili-monitor-ascii"
+    [string]$AsciiRoot = (Join-Path ([IO.Path]::GetTempPath()) "bilibili-monitor-ascii")
 )
 
 $ErrorActionPreference = "Stop"

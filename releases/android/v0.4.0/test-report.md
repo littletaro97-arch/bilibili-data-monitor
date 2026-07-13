@@ -9,14 +9,14 @@
 ## Android Unit Tests
 
 - Command: `.\gradlew.bat test`
-- Path used: `C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android`
+- Path used: `%TEMP%\bilibili-monitor-ascii\android`
 - Used ASCII junction: yes
 - Result: passed
 
 ## Android Build
 
 - Command: `.\gradlew.bat assembleDebug`
-- Path used: `C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android`
+- Path used: `%TEMP%\bilibili-monitor-ascii\android`
 - Used ASCII junction: yes
 - Result: passed
 

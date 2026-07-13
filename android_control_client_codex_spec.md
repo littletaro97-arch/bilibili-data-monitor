@@ -1,7 +1,7 @@
 # B站本地分析工具安卓端控制端续开发文档
 
 > 交付对象：Codex / 新对话继续开发  
-> 基准项目目录：`C:\Users\LittleTaro\Desktop\课外项目\迭代版本`  
+> 基准项目目录：`<legacy-workspace>`  
 > 当前基准提交：`fb4d86e Add ratio charts and history import`  
 > 目标：在不破坏 Windows 本地程序安全边界的前提下，评估并逐步开发安卓端查看/控制能力  
 
@@ -230,7 +230,7 @@ API 返回要求：
 
 新对话优先目标：
 
-1. 在副本目录 `C:\Users\LittleTaro\Desktop\课外项目\迭代版本` 上继续。
+1. 在副本目录 `<legacy-workspace>` 上继续。
 2. 先做“移动端 Web 完善检查”，不要立刻创建 Android 项目。
 3. 如果手机浏览器体验仍有问题，先修 Web。
 4. Web 稳定后，再创建 `android/` 子目录做 Kotlin WebView 壳。
@@ -241,7 +241,7 @@ API 返回要求：
 ## 10. 可直接交给 Codex 的新对话指令
 
 ```text
-工作目录：C:\Users\LittleTaro\Desktop\课外项目\迭代版本
+工作目录：<legacy-workspace>
 
 请阅读 android_control_client_codex_spec.md、bilibili_local_analytics_codex_spec.md 和当前代码。
 
@@ -254,6 +254,6 @@ API 返回要求：
 
 请先审查当前手机端 Web 页面还有哪些问题，修复后运行 pytest。
 如果 Web 体验已经足够稳定，再提出 WebView 壳的最小实现方案。
-不要修改原目录：C:\Users\LittleTaro\Desktop\课外项目\准实时 B站视频舆情与互动数据本地分析工具
+不要修改原目录：<original-analysis-tool>
 ```
 

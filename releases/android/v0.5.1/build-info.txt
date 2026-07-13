@@ -1,11 +1,11 @@
-﻿Version: v0.5.1
+Version: v0.5.1
 Git commit hash at build time: cb55e0c
 Git branch: codex/bilibili-project-setup
 Build time: 2026-07-08 08:21:21 +08:00
-Formal project path: C:\Users\LittleTaro\Desktop\课外项目\bilibili数据监控
-Android build path: C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android
+Formal project path: <formal-project-root>
+Android build path: %TEMP%\bilibili-monitor-ascii\android
 Used ASCII junction: yes
-ASCII junction path: C:\Users\LittleTaro\codex-bilibili-monitor-ascii
+ASCII junction path: %TEMP%\bilibili-monitor-ascii
 Gradle version: 8.7
 Android Gradle Plugin version: 8.5.2
 Kotlin plugin version: 1.9.24

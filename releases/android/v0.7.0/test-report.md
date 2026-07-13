@@ -1,4 +1,4 @@
-﻿# v0.7.0 Test Report
+# v0.7.0 Test Report
 
 ## Windows
 
@@ -13,7 +13,7 @@
 - Result: passed
 - Command: .\gradlew.bat assembleDebug
 - Result: passed
-- Build path: C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android
+- Build path: %TEMP%\bilibili-monitor-ascii\android
 - Used ASCII junction: yes
 
 ## APK

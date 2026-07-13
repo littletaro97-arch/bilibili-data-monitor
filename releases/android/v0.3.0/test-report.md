@@ -9,14 +9,14 @@
 ## Android Unit Tests
 
 - Command: `.\gradlew.bat test`
-- Path used: `C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android`
+- Path used: `%TEMP%\bilibili-monitor-ascii\android`
 - Result: passed
-- Note: the path is a temporary ASCII junction pointing to `C:\Users\LittleTaro\Desktop\课外项目\bilibili数据监控`.
+- Note: the path is a temporary ASCII junction pointing to `<formal-project-root>`.
 
 ## Android Build
 
 - Command: `.\gradlew.bat assembleDebug`
-- Path used: `C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android`
+- Path used: `%TEMP%\bilibili-monitor-ascii\android`
 - Result: passed
 - APK generated: yes
 - APK copied to release directory: yes

@@ -68,7 +68,7 @@ cd android
 powershell -ExecutionPolicy Bypass -File .\android\scripts\build-ascii.ps1
 ```
 
-该脚本会通过 `C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android` 执行测试和构建，并把 Debug APK 复制到对应版本的 `releases/android/` 目录。
+该脚本会通过 `%TEMP%\bilibili-monitor-ascii\android` 执行测试和构建，并把 Debug APK 复制到对应版本的 `releases/android/` 目录。
 从 v0.7.0 起，该脚本还会执行 `lintDebug`。
 
 如果项目位于包含中文字符的 Windows 路径，JDK/Gradle 的测试 worker `@argfile` 可能无法正确加载 unit-test classpath，表现为 `ClassNotFoundException`。本机验证时使用临时 ASCII junction 指向同一仓库后执行 Android 测试和打包。

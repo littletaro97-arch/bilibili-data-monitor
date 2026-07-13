@@ -1,4 +1,4 @@
-﻿# v0.6.0 Test Report
+# v0.6.0 Test Report
 
 ## Windows
 
@@ -14,7 +14,7 @@
 - Result: passed
 - Command: powershell -ExecutionPolicy Bypass -File .\scripts\android-build-ascii.ps1
 - Result: passed
-- Build path: C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android
+- Build path: %TEMP%\bilibili-monitor-ascii\android
 - Used ASCII junction: yes
 
 ## Feature Checks

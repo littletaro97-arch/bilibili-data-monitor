@@ -1,4 +1,4 @@
-﻿# v0.9.0 Test Report
+# v0.9.0 Test Report
 
 ## Windows
 
@@ -15,7 +15,7 @@
 - Result: passed
 - Notification policy tests: covered by Gradle unit tests.
 - Notification interval tests: covered by Gradle unit tests.
-- Build path: C:\Users\LittleTaro\codex-bilibili-monitor-ascii\android
+- Build path: %TEMP%\bilibili-monitor-ascii\android
 - Used ASCII junction: yes
 
 ## APK
@@ -27,10 +27,10 @@
 
 ## Real Device Test
 
-- Command: C:\Users\LittleTaro\AppData\Local\Android\Sdk\platform-tools\adb.exe devices -l
+- Command: %LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe devices -l
 - Result: no devices attached. Codex did not perform real-device installation testing.
 
 ## Emulator Test
 
-- Command: C:\Users\LittleTaro\AppData\Local\Android\Sdk\emulator\emulator.exe -list-avds
+- Command: %LOCALAPPDATA%\Android\Sdk\emulator\emulator.exe -list-avds
 - Result: no AVDs returned. Codex did not perform emulator UI testing.
