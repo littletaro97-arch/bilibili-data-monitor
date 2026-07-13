@@ -67,13 +67,16 @@ interface MonitorDao {
         return HistoryImportReport(videosAdded, snapshotsAdded, duplicates, conflicts)
     }
 
-    @Query("SELECT * FROM video_snapshots WHERE bvId = :bvId ORDER BY collectedAt DESC, id DESC LIMIT 1")
+    @Query("SELECT * FROM video_snapshots WHERE bvId = :bvId ORDER BY collectedAtEpochMillis DESC, id DESC LIMIT 1")
     fun observeLatestSnapshot(bvId: String): Flow<VideoSnapshotEntity?>
 
-    @Query("SELECT * FROM video_snapshots WHERE bvId = :bvId ORDER BY collectedAt DESC, id DESC")
+    @Query("SELECT * FROM video_snapshots WHERE bvId = :bvId AND fetchStatus != 'failed' ORDER BY collectedAtEpochMillis DESC, id DESC LIMIT 2")
+    fun observeLatestValidSnapshots(bvId: String): Flow<List<VideoSnapshotEntity>>
+
+    @Query("SELECT * FROM video_snapshots WHERE bvId = :bvId ORDER BY collectedAtEpochMillis DESC, id DESC")
     fun observeSnapshots(bvId: String): Flow<List<VideoSnapshotEntity>>
 
-    @Query("SELECT * FROM video_snapshots WHERE bvId = :bvId ORDER BY collectedAt DESC, id DESC")
+    @Query("SELECT * FROM video_snapshots WHERE bvId = :bvId ORDER BY collectedAtEpochMillis DESC, id DESC")
     suspend fun snapshotsForExport(bvId: String): List<VideoSnapshotEntity>
 
     @Query("SELECT * FROM videos WHERE bvId = :bvId")

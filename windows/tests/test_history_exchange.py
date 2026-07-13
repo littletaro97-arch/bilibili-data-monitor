@@ -17,8 +17,8 @@ def _repository(path) -> Repository:
     with database.connect() as conn:
         now = "2026-01-01T00:00:00+00:00"
         conn.execute(
-            "INSERT INTO videos (bvid,title,created_at,updated_at) VALUES (?,?,?,?)",
-            ("BV1xx411c7mD", "中文标题😀", now, now),
+            "INSERT INTO videos (bvid,title,cover_url,created_at,updated_at) VALUES (?,?,?,?,?)",
+            ("BV1xx411c7mD", "中文标题😀", "https://i0.hdslb.com/bfs/archive/cover.jpg", now, now),
         )
         conn.execute(
             """INSERT INTO video_stats_snapshot
@@ -40,6 +40,8 @@ def test_cross_database_round_trip_and_duplicate(tmp_path):
     second = target.merge(preview)
     assert (first.videos_added, first.snapshots_added, first.conflicts) == (1, 1, 0)
     assert (second.videos_added, second.snapshots_added, second.duplicates) == (0, 0, 1)
+    with target_db.connect() as conn:
+        assert conn.execute("SELECT cover_url FROM videos WHERE bvid=?", ("BV1xx411c7mD",)).fetchone()[0] == "https://i0.hdslb.com/bfs/archive/cover.jpg"
 
 
 def test_checksum_corruption_is_rejected(tmp_path):

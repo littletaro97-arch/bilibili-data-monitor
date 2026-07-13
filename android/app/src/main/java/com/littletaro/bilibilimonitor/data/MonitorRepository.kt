@@ -16,6 +16,11 @@ data class RefreshAllResult(
     val failed: Int
 )
 
+data class LatestSnapshotComparison(
+    val current: VideoSnapshotEntity,
+    val previous: VideoSnapshotEntity?
+)
+
 class MonitorRepository(
     private val dao: MonitorDao,
     private val api: BilibiliApi,
@@ -25,7 +30,12 @@ class MonitorRepository(
     val logs: Flow<List<AppLogEntity>> = dao.observeLogs()
 
     fun latestSnapshot(bvId: String): Flow<VideoSnapshotEntity?> =
-        snapshots(bvId).map { it.firstOrNull() }
+        dao.observeLatestSnapshot(bvId)
+
+    fun latestValidSnapshotComparison(bvId: String): Flow<LatestSnapshotComparison?> =
+        dao.observeLatestValidSnapshots(bvId).map { rows ->
+            rows.firstOrNull()?.let { LatestSnapshotComparison(it, rows.getOrNull(1)) }
+        }
 
     fun snapshots(bvId: String): Flow<List<VideoSnapshotEntity>> = dao.observeSnapshots(bvId)
         .map { rows -> rows.sortedWith(snapshotNewestFirst) }
@@ -56,6 +66,7 @@ class MonitorRepository(
                         authorMid = null,
                         duration = null,
                         pubdate = null,
+                        coverUrl = null,
                         sourceUrl = "https://www.bilibili.com/video/$bvId/",
                         createdAt = now,
                         updatedAt = now
@@ -79,7 +90,12 @@ class MonitorRepository(
                 writeLog("info", "network", "${trigger.logLabel} 刷新请求开始", bvId)
                 val record = api.fetchSnapshot(bvId)
                 val existing = dao.videoByBvId(bvId)
-                dao.upsertVideo(record.video.copy(createdAt = existing?.createdAt ?: record.video.createdAt))
+                dao.upsertVideo(
+                    record.video.copy(
+                        createdAt = existing?.createdAt ?: record.video.createdAt,
+                        coverUrl = record.video.coverUrl ?: existing?.coverUrl
+                    )
+                )
                 dao.insertSnapshot(record.snapshot.copy(captureSource = SnapshotSources.from(trigger)))
                 writeLog("info", "database", "${trigger.logLabel} 快照写入成功", "status=${record.snapshot.fetchStatus}, bvId=$bvId")
                 writeLog("info", "network", "${trigger.logLabel} 刷新请求成功", "status=${record.snapshot.fetchStatus}, bvId=$bvId")

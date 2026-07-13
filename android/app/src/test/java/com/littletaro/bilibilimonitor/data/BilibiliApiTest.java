@@ -15,6 +15,7 @@ public class BilibiliApiTest {
                         + "\"data\":{"
                         + "\"aid\":123,"
                         + "\"title\":\"Test Video\","
+                        + "\"pic\":\"https://i0.hdslb.com/bfs/archive/cover.jpg\","
                         + "\"duration\":90,"
                         + "\"pubdate\":1710000000,"
                         + "\"owner\":{\"mid\":456,\"name\":\"UP\"},"
@@ -35,6 +36,7 @@ public class BilibiliApiTest {
         assertEquals("Test Video", record.getVideo().getTitle());
         assertEquals(Long.valueOf(123L), record.getVideo().getAid());
         assertEquals("UP", record.getVideo().getAuthorName());
+        assertEquals("https://i0.hdslb.com/bfs/archive/cover.jpg", record.getVideo().getCoverUrl());
         assertEquals("success", record.getSnapshot().getFetchStatus());
         assertEquals(Long.valueOf(1000L), record.getSnapshot().getViewCount());
         assertNull(record.getSnapshot().getErrorMessage());

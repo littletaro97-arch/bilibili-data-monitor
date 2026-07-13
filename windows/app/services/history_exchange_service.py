@@ -113,9 +113,9 @@ class HistoryExchangeService:
                 if not exists:
                     now = _utc_now()
                     conn.execute(
-                        """INSERT INTO videos (bvid, aid, title, owner_mid, owner_name, pubdate, duration, created_at, updated_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (video["bvId"], video.get("aid"), video.get("title"), video.get("authorMid"), video.get("authorName"), video.get("pubdate"), video.get("duration"), now, now),
+                        """INSERT INTO videos (bvid, aid, title, owner_mid, owner_name, pubdate, duration, cover_url, created_at, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (video["bvId"], video.get("aid"), video.get("title"), video.get("authorMid"), video.get("authorName"), video.get("pubdate"), video.get("duration"), video.get("coverUrl"), now, now),
                     )
                     videos_added += 1
             for snapshot in preview.snapshots:
@@ -162,7 +162,7 @@ class HistoryExchangeService:
 
     @staticmethod
     def _video_row(row: dict) -> dict:
-        return {"bvId": row["bvid"], "aid": row.get("aid"), "title": row.get("title"), "authorName": row.get("owner_name"), "authorMid": row.get("owner_mid"), "duration": row.get("duration"), "pubdate": row.get("pubdate"), "sourceUrl": f"https://www.bilibili.com/video/{row['bvid']}"}
+        return {"bvId": row["bvid"], "aid": row.get("aid"), "title": row.get("title"), "authorName": row.get("owner_name"), "authorMid": row.get("owner_mid"), "duration": row.get("duration"), "pubdate": row.get("pubdate"), "coverUrl": row.get("cover_url"), "sourceUrl": f"https://www.bilibili.com/video/{row['bvid']}"}
 
     @staticmethod
     def _snapshot_row(row: dict) -> dict:

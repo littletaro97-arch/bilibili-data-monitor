@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [VideoEntity::class, VideoSnapshotEntity::class, AppLogEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -18,7 +18,7 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "bilibili_monitor.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -32,6 +32,21 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE video_snapshots ADD COLUMN exchangeDigest TEXT")
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE videos ADD COLUMN coverUrl TEXT")
+                database.execSQL("ALTER TABLE video_snapshots ADD COLUMN collectedAtEpochMillis INTEGER NOT NULL DEFAULT 0")
+                database.execSQL(
+                    "UPDATE video_snapshots SET collectedAtEpochMillis = " +
+                        "COALESCE(CAST(strftime('%s', collectedAt) AS INTEGER) * 1000, 0)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_video_snapshots_bvId_collectedAtEpochMillis_id " +
+                        "ON video_snapshots (bvId, collectedAtEpochMillis, id)"
+                )
             }
         }
     }

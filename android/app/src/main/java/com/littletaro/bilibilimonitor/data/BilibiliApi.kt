@@ -127,6 +127,7 @@ class BilibiliApi(internal val client: OkHttpClient) {
                 authorMid = owner.optNullableLong("mid"),
                 duration = data.optNullableLong("duration"),
                 pubdate = data.optNullableLong("pubdate"),
+                coverUrl = CoverUrlPolicy.acceptedOrNull(data.optNullableString("pic")),
                 sourceUrl = sourceUrl,
                 createdAt = collectedAt,
                 updatedAt = collectedAt
@@ -159,6 +160,7 @@ class BilibiliApi(internal val client: OkHttpClient) {
                     authorMid = null,
                     duration = null,
                     pubdate = null,
+                    coverUrl = null,
                     sourceUrl = sourceUrl,
                     createdAt = collectedAt,
                     updatedAt = collectedAt

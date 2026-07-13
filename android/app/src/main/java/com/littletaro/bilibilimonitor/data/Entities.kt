@@ -13,6 +13,7 @@ data class VideoEntity(
     val authorMid: Long?,
     val duration: Long?,
     val pubdate: Long?,
+    val coverUrl: String?,
     val sourceUrl: String?,
     val createdAt: String,
     val updatedAt: String
@@ -20,7 +21,10 @@ data class VideoEntity(
 
 @Entity(
     tableName = "video_snapshots",
-    indices = [Index(value = ["bvId", "collectedAt"])]
+    indices = [
+        Index(value = ["bvId", "collectedAt"]),
+        Index(value = ["bvId", "collectedAtEpochMillis", "id"])
+    ]
 )
 data class VideoSnapshotEntity @JvmOverloads constructor(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -37,8 +41,14 @@ data class VideoSnapshotEntity @JvmOverloads constructor(
     val fetchStatus: String,
     val errorMessage: String?,
     val captureSource: String = SnapshotSources.UNKNOWN,
-    val exchangeDigest: String? = null
+    val exchangeDigest: String? = null,
+    val collectedAtEpochMillis: Long = SnapshotTime.epochMillis(collectedAt)
 )
+
+object SnapshotTime {
+    fun epochMillis(collectedAt: String): Long =
+        DeviceTime.parseToInstant(collectedAt)?.toEpochMilli() ?: 0L
+}
 
 object SnapshotSources {
     const val MANUAL = "MANUAL"

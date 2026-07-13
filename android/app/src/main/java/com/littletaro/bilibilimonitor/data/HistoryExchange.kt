@@ -55,7 +55,7 @@ object HistoryExchangeCodec {
             .put("exportedAt", exportedAt)
             .put("sourcePlatform", "android")
             .put("sourceAppVersion", sourceVersion)
-            .put("schemaVersion", 3)
+            .put("schemaVersion", 4)
             .put("recordCounts", JSONObject().put("videos", videos.size).put("snapshots", snapshots.size))
             .put("includedSections", JSONArray(listOf("videos", "snapshots")))
             .put("timeStandard", "UTC RFC3339")
@@ -140,7 +140,7 @@ object HistoryExchangeCodec {
     }
 
     private fun videosJson(videos: List<VideoEntity>) = JSONArray().apply {
-        videos.forEach { video -> put(JSONObject().put("bvId", video.bvId).put("aid", video.aid).put("title", video.title).put("authorName", video.authorName).put("authorMid", video.authorMid).put("duration", video.duration).put("pubdate", video.pubdate).put("sourceUrl", video.sourceUrl)) }
+        videos.forEach { video -> put(JSONObject().put("bvId", video.bvId).put("aid", video.aid).put("title", video.title).put("authorName", video.authorName).put("authorMid", video.authorMid).put("duration", video.duration).put("pubdate", video.pubdate).put("coverUrl", video.coverUrl).put("sourceUrl", video.sourceUrl)) }
     }
 
     private fun snapshotsJson(snapshots: List<VideoSnapshotEntity>) = JSONArray().apply {
@@ -151,7 +151,7 @@ object HistoryExchangeCodec {
         val item = array.getJSONObject(index)
         val bv = item.getString("bvId")
         require(Regex("^BV[0-9A-Za-z]{10}$").matches(bv)) { "videos.json 包含无效 BV" }
-        VideoEntity(bv, item.optLongOrNull("aid"), item.optNullableString("title"), item.optNullableString("authorName"), item.optLongOrNull("authorMid"), item.optLongOrNull("duration"), item.optLongOrNull("pubdate"), item.optNullableString("sourceUrl"), Instant.now().toString(), Instant.now().toString())
+        VideoEntity(bv, item.optLongOrNull("aid"), item.optNullableString("title"), item.optNullableString("authorName"), item.optLongOrNull("authorMid"), item.optLongOrNull("duration"), item.optLongOrNull("pubdate"), CoverUrlPolicy.acceptedOrNull(item.optNullableString("coverUrl")), item.optNullableString("sourceUrl"), Instant.now().toString(), Instant.now().toString())
     }
 
     private fun parseSnapshots(array: JSONArray): List<VideoSnapshotEntity> = (0 until array.length()).map { index ->
