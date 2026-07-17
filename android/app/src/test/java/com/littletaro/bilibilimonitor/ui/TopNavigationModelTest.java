@@ -10,7 +10,7 @@ public class TopNavigationModelTest {
     @Test
     public void hidesVideoPagesWhenNoVideoIsSelected() {
         assertEquals(
-                Arrays.asList("首页", "设置", "高级"),
+                Arrays.asList("首页", "回收站", "设置", "高级"),
                 TopNavigationModel.INSTANCE.labels(false)
         );
     }
@@ -18,7 +18,7 @@ public class TopNavigationModelTest {
     @Test
     public void showsVideoPagesWhenVideoIsSelected() {
         assertEquals(
-                Arrays.asList("首页", "详情", "历史", "设置", "高级"),
+                Arrays.asList("首页", "回收站", "详情", "历史", "设置", "高级"),
                 TopNavigationModel.INSTANCE.labels(true)
         );
     }

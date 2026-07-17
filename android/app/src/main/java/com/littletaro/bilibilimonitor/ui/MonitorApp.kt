@@ -128,6 +128,7 @@ import kotlin.math.abs
 
 private enum class Page {
     Home,
+    RecycleBin,
     Detail,
     History,
     Settings,
@@ -269,10 +270,11 @@ fun MonitorApp(
                 Spacer(Modifier.height(12.dp))
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     when (page) {
-                        Page.Home -> HomePage(repository, settingsStore) {
+                        Page.Home -> HomePage(repository, settingsStore, chartPreferencesStore) {
                             selectedBvId = it
                             page = Page.Detail
                         }
+                        Page.RecycleBin -> RecycleBinPage(repository, chartPreferencesStore)
                         Page.Detail -> if (hasValidSelection) DetailPage(repository, settingsStore, selectedBvId!!) { page = Page.Settings } else EmptySelection()
                         Page.History -> if (hasValidSelection) HistoryPage(repository, chartPreferencesStore, selectedBvId!!) else EmptySelection()
                         Page.Settings -> SettingsPage(repository, settingsStore, autoRefreshScheduler)
@@ -350,6 +352,7 @@ private fun BackgroundGuideDialog(
 private fun NavRow(current: Page, hasSelection: Boolean, backgroundRestricted: Boolean, onSelect: (Page) -> Unit) {
     val pageByLabel = mapOf(
         "首页" to Page.Home,
+        "回收站" to Page.RecycleBin,
         "详情" to Page.Detail,
         "历史" to Page.History,
         "设置" to Page.Settings,
@@ -372,6 +375,7 @@ private fun NavRow(current: Page, hasSelection: Boolean, backgroundRestricted: B
 private fun HomePage(
     repository: MonitorRepository,
     settingsStore: AutoRefreshSettingsStore,
+    chartPreferencesStore: ChartPreferencesStore,
     onOpenVideo: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -447,18 +451,25 @@ private fun HomePage(
             item { Text("暂无视频，请先输入 BV 号或视频链接") }
         } else {
             items(videos, key = { it.bvId }) { video ->
-                VideoCard(repository, video, onOpenVideo)
+                VideoCard(repository, chartPreferencesStore, video, onOpenVideo)
             }
         }
     }
 }
 
 @Composable
-private fun VideoCard(repository: MonitorRepository, video: VideoEntity, onOpenVideo: (String) -> Unit) {
+private fun VideoCard(
+    repository: MonitorRepository,
+    chartPreferencesStore: ChartPreferencesStore,
+    video: VideoEntity,
+    onOpenVideo: (String) -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var openError by remember { mutableStateOf<String?>(null) }
     var openingExternal by remember { mutableStateOf(false) }
+    var deleteDialog by remember { mutableStateOf<VideoDeleteDialog?>(null) }
+    var deleting by remember { mutableStateOf(false) }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             CoverThumbnail(
@@ -477,8 +488,8 @@ private fun VideoCard(repository: MonitorRepository, video: VideoEntity, onOpenV
                 Text("BV: ${video.bvId}")
                 Text("UP: ${video.authorName ?: "未知"}")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onOpenVideo(video.bvId) }) { Text("详情") }
-                Button(
+                    Button(onClick = { onOpenVideo(video.bvId) }) { Text("详情") }
+                    Button(
                     enabled = !openingExternal,
                     onClick = {
                         openingExternal = true
@@ -502,12 +513,183 @@ private fun VideoCard(repository: MonitorRepository, video: VideoEntity, onOpenV
                             openingExternal = false
                         }
                     }
-                ) { Text("打开") }
+                    ) { Text("打开") }
+                    TextButton(enabled = !deleting, onClick = { deleteDialog = VideoDeleteDialog.Choose }) { Text("删除") }
                 }
                 openError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         }
     }
+    VideoDeleteDialogs(
+        dialog = deleteDialog,
+        bvId = video.bvId,
+        deleting = deleting,
+        onDismiss = { if (!deleting) deleteDialog = null },
+        onMoveToRecycleBin = {
+            scope.launch {
+                deleting = true
+                try {
+                    if (!repository.moveToRecycleBin(video.bvId)) openError = "视频已不在当前列表"
+                    deleteDialog = null
+                } catch (error: Exception) {
+                    openError = error.message ?: "移至回收站失败"
+                } finally {
+                    deleting = false
+                }
+            }
+        },
+        onConfirmPermanentDelete = { deleteDialog = VideoDeleteDialog.Permanent },
+        onPermanentlyDelete = {
+            scope.launch {
+                deleting = true
+                try {
+                    if (!permanentlyDeleteVideo(repository, chartPreferencesStore, video.bvId)) openError = "视频已不在当前列表"
+                    deleteDialog = null
+                } catch (error: Exception) {
+                    openError = error.message ?: "永久删除失败"
+                } finally {
+                    deleting = false
+                }
+            }
+        }
+    )
+}
+
+private enum class VideoDeleteDialog { Choose, Permanent }
+
+@Composable
+private fun VideoDeleteDialogs(
+    dialog: VideoDeleteDialog?,
+    bvId: String,
+    deleting: Boolean,
+    onDismiss: () -> Unit,
+    onMoveToRecycleBin: () -> Unit,
+    onConfirmPermanentDelete: () -> Unit,
+    onPermanentlyDelete: () -> Unit
+) {
+    when (dialog) {
+        VideoDeleteDialog.Choose -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("删除视频链接") },
+            text = { Text("“移至回收站”只会从首页隐藏该链接，全部历史快照仍会保留，可在回收站恢复。") },
+            confirmButton = {
+                Button(onClick = onMoveToRecycleBin, enabled = !deleting) {
+                    Text(if (deleting) "处理中" else "移至回收站")
+                }
+            },
+            dismissButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = onConfirmPermanentDelete, enabled = !deleting) { Text("永久删除…") }
+                    TextButton(onClick = onDismiss, enabled = !deleting) { Text("取消") }
+                }
+            }
+        )
+        VideoDeleteDialog.Permanent -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("永久删除历史？") },
+            text = { Text("将永久删除 $bvId、全部本地历史快照和该视频图表偏好。此操作无法撤销。") },
+            confirmButton = {
+                Button(onClick = onPermanentlyDelete, enabled = !deleting) {
+                    Text(if (deleting) "处理中" else "永久删除")
+                }
+            },
+            dismissButton = { TextButton(onClick = onDismiss, enabled = !deleting) { Text("取消") } }
+        )
+        null -> Unit
+    }
+}
+
+@Composable
+private fun RecycleBinPage(repository: MonitorRepository, chartPreferencesStore: ChartPreferencesStore) {
+    val videos by repository.recycleBinVideos.collectAsStateWithLifecycle(initialValue = emptyList())
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = pageContentPadding()) {
+        item { Text("回收站", style = MaterialTheme.typography.titleMedium) }
+        item { Text("回收站中的链接不会自动刷新或出现在首页；恢复后保留原有历史。", style = MaterialTheme.typography.bodySmall) }
+        if (videos.isEmpty()) {
+            item { Text("回收站为空") }
+        } else {
+            items(videos, key = { it.bvId }) { video ->
+                RecycleBinVideoCard(repository, chartPreferencesStore, video)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecycleBinVideoCard(
+    repository: MonitorRepository,
+    chartPreferencesStore: ChartPreferencesStore,
+    video: VideoEntity
+) {
+    val scope = rememberCoroutineScope()
+    var deleteDialog by remember { mutableStateOf(false) }
+    var working by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    Card {
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(video.title ?: "未刷新标题", fontWeight = FontWeight.Bold)
+            Text("BV: ${video.bvId}")
+            Text("移入时间：${video.deletedAt?.let(DeviceTime::formatForDisplay) ?: "-"}", style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    enabled = !working,
+                    onClick = {
+                        scope.launch {
+                            working = true
+                            try {
+                                if (!repository.restoreFromRecycleBin(video.bvId)) message = "恢复失败：记录不存在"
+                            } catch (error: Exception) {
+                                message = error.message ?: "恢复失败"
+                            } finally {
+                                working = false
+                            }
+                        }
+                    }
+                ) { Text("恢复") }
+                TextButton(enabled = !working, onClick = { deleteDialog = true }) { Text("永久删除") }
+            }
+            message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+    if (deleteDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!working) deleteDialog = false },
+            title = { Text("永久删除历史？") },
+            text = { Text("将永久删除 ${video.bvId}、全部本地历史快照和图表偏好。此操作无法撤销。") },
+            confirmButton = {
+                Button(
+                    enabled = !working,
+                    onClick = {
+                        scope.launch {
+                            working = true
+                            try {
+                                if (!permanentlyDeleteVideo(repository, chartPreferencesStore, video.bvId)) message = "删除失败：记录不存在"
+                                deleteDialog = false
+                            } catch (error: Exception) {
+                                message = error.message ?: "永久删除失败"
+                            } finally {
+                                working = false
+                            }
+                        }
+                    }
+                ) { Text(if (working) "处理中" else "永久删除") }
+            },
+            dismissButton = { TextButton(enabled = !working, onClick = { deleteDialog = false }) { Text("取消") } }
+        )
+    }
+}
+
+private suspend fun permanentlyDeleteVideo(
+    repository: MonitorRepository,
+    chartPreferencesStore: ChartPreferencesStore,
+    bvId: String
+): Boolean {
+    val deleted = repository.permanentlyDelete(bvId)
+    if (deleted) {
+        runCatching { chartPreferencesStore.clear(bvId) }
+            .onFailure { repository.writeLog("warning", "settings", "图表偏好清理失败", bvId) }
+    }
+    return deleted
 }
 
 @Composable
@@ -1036,8 +1218,8 @@ private fun AdvancedPage(
         }
         item {
             ExpandableSection("技术诊断", initiallyExpanded = false, stateKey = "advanced_diagnostics") {
-                Text("应用版本：0.12.2")
-                Text("数据库版本：4")
+                Text("应用版本：0.12.3")
+                Text("数据库版本：5")
                 Text("交换格式版本：1")
                 AutoRefreshStatusBlock(settings, null, null)
             }
@@ -1739,7 +1921,7 @@ private fun SettingsPage(
             }
         }
         item {
-            Text("版本：0.11.2", style = MaterialTheme.typography.bodySmall)
+            Text("版本：0.12.3", style = MaterialTheme.typography.bodySmall)
         }
         item {
         status?.let { Text(it) }
@@ -2297,6 +2479,7 @@ private fun maxValueText(points: List<TrendPoint>): String =
 private fun pageLabel(page: Page, backgroundRestricted: Boolean = false): String =
     when (page) {
         Page.Home -> "首页"
+        Page.RecycleBin -> "回收站"
         Page.Detail -> "详情"
         Page.History -> "历史"
         Page.Settings -> "设置"

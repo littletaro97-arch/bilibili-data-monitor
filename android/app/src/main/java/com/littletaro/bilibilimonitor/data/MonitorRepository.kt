@@ -28,6 +28,7 @@ class MonitorRepository(
     private val exporter: SnapshotExporter
 ) {
     val videos: Flow<List<VideoEntity>> = dao.observeVideos()
+    val recycleBinVideos: Flow<List<VideoEntity>> = dao.observeDeletedVideos()
     val logs: Flow<List<AppLogEntity>> = dao.observeLogs()
 
     fun latestSnapshot(bvId: String): Flow<VideoSnapshotEntity?> =
@@ -75,6 +76,9 @@ class MonitorRepository(
                     )
                 )
                 writeLog("info", "database", "视频写入成功", bvId)
+            } else if (existing.deletedAt != null) {
+                dao.restoreVideo(bvId, now)
+                writeLog("info", "database", "视频已从回收站恢复", bvId)
             } else {
                 writeLog("info", "database", "视频已存在，未重复创建", bvId)
             }
@@ -147,6 +151,25 @@ class MonitorRepository(
         }
         writeLog("info", "work", "${trigger.logLabel} 批量刷新完成", "total=${videos.size}, success=$success, failed=$failed")
         RefreshAllResult(total = videos.size, success = success, failed = failed)
+    }
+
+    suspend fun moveToRecycleBin(bvId: String): Boolean = withContext(Dispatchers.IO) {
+        val moved = dao.moveToRecycleBin(bvId, DeviceTime.nowIsoString()) > 0
+        if (moved) writeLog("info", "database", "视频已移至回收站", bvId)
+        moved
+    }
+
+    suspend fun restoreFromRecycleBin(bvId: String): Boolean = withContext(Dispatchers.IO) {
+        val restored = dao.restoreVideo(bvId, DeviceTime.nowIsoString()) > 0
+        if (restored) writeLog("info", "database", "视频已从回收站恢复", bvId)
+        restored
+    }
+
+    /** Deletes the video row and every local snapshot atomically. Caller clears non-Room UI state after success. */
+    suspend fun permanentlyDelete(bvId: String): Boolean = withContext(Dispatchers.IO) {
+        val deleted = dao.permanentlyDeleteVideo(bvId)
+        if (deleted) writeLog("warning", "database", "视频及历史记录已永久删除", bvId)
+        deleted
     }
 
     suspend fun exportJson(bvId: String): ExportResult = withContext(Dispatchers.IO) {

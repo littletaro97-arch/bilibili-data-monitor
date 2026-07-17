@@ -4,7 +4,10 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "videos")
+@Entity(
+    tableName = "videos",
+    indices = [Index(value = ["deletedAt", "updatedAt"])]
+)
 data class VideoEntity(
     @PrimaryKey val bvId: String,
     val aid: Long?,
@@ -16,7 +19,9 @@ data class VideoEntity(
     val coverUrl: String?,
     val sourceUrl: String?,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    /** Null means active; a timestamp keeps the record and all snapshots recoverable. */
+    val deletedAt: String? = null
 )
 
 @Entity(

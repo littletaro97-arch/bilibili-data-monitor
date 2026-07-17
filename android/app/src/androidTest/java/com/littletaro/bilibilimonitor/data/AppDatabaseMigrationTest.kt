@@ -9,6 +9,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -47,5 +48,30 @@ class AppDatabaseMigrationTest {
         assertEquals(true, videoCursor.isNull(0))
         videoCursor.close()
         database.close()
+    }
+
+    @Test fun migration4To5KeepsExistingVideoAndAddsRecycleTimestamp() {
+        val migrationName = "migration-v4-v5.db"
+        val config = SupportSQLiteOpenHelper.Configuration.builder(context).name(migrationName).callback(object : SupportSQLiteOpenHelper.Callback(4) {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE videos (bvId TEXT NOT NULL PRIMARY KEY, aid INTEGER, title TEXT, authorName TEXT, authorMid INTEGER, duration INTEGER, pubdate INTEGER, coverUrl TEXT, sourceUrl TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL)")
+                db.execSQL("CREATE TABLE video_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, bvId TEXT NOT NULL, collectedAt TEXT NOT NULL, viewCount INTEGER, danmakuCount INTEGER, replyCount INTEGER, favoriteCount INTEGER, coinCount INTEGER, shareCount INTEGER, likeCount INTEGER, sourceUrl TEXT, fetchStatus TEXT NOT NULL, errorMessage TEXT, captureSource TEXT NOT NULL DEFAULT 'UNKNOWN', exchangeDigest TEXT, collectedAtEpochMillis INTEGER NOT NULL DEFAULT 0)")
+                db.execSQL("CREATE TABLE app_logs (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, time TEXT NOT NULL, level TEXT NOT NULL, tag TEXT NOT NULL, message TEXT NOT NULL, detail TEXT)")
+                db.execSQL("INSERT INTO videos VALUES ('BV1xx411c7mD',NULL,'title',NULL,NULL,NULL,NULL,NULL,NULL,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')")
+            }
+            override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }).build()
+        FrameworkSQLiteOpenHelperFactory().create(config).writableDatabase.close()
+
+        val database = Room.databaseBuilder(context, AppDatabase::class.java, migrationName)
+            .addMigrations(AppDatabase.MIGRATION_4_5)
+            .build()
+        val cursor = database.openHelper.readableDatabase.query("SELECT title, deletedAt FROM videos")
+        cursor.moveToFirst()
+        assertEquals("title", cursor.getString(0))
+        assertTrue(cursor.isNull(1))
+        cursor.close()
+        database.close()
+        context.deleteDatabase(migrationName)
     }
 }

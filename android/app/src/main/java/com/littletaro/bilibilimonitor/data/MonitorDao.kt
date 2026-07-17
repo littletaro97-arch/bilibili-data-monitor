@@ -18,17 +18,38 @@ interface MonitorDao {
     @Insert
     suspend fun insertLog(log: AppLogEntity)
 
-    @Query("SELECT * FROM videos ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM videos WHERE deletedAt IS NULL ORDER BY updatedAt DESC")
     fun observeVideos(): Flow<List<VideoEntity>>
 
-    @Query("SELECT * FROM videos ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM videos WHERE deletedAt IS NULL ORDER BY updatedAt DESC")
     suspend fun videosForRefresh(): List<VideoEntity>
 
-    @Query("SELECT * FROM videos ORDER BY bvId ASC")
+    @Query("SELECT * FROM videos WHERE deletedAt IS NULL ORDER BY bvId ASC")
     suspend fun allVideosForExchange(): List<VideoEntity>
 
-    @Query("SELECT * FROM video_snapshots ORDER BY bvId ASC, collectedAt ASC, id ASC")
+    @Query("SELECT * FROM video_snapshots WHERE bvId IN (SELECT bvId FROM videos WHERE deletedAt IS NULL) ORDER BY bvId ASC, collectedAt ASC, id ASC")
     suspend fun allSnapshotsForExchange(): List<VideoSnapshotEntity>
+
+    @Query("SELECT * FROM videos WHERE deletedAt IS NOT NULL ORDER BY deletedAt DESC, bvId ASC")
+    fun observeDeletedVideos(): Flow<List<VideoEntity>>
+
+    @Query("UPDATE videos SET deletedAt = :deletedAt WHERE bvId = :bvId AND deletedAt IS NULL")
+    suspend fun moveToRecycleBin(bvId: String, deletedAt: String): Int
+
+    @Query("UPDATE videos SET deletedAt = NULL, updatedAt = :restoredAt WHERE bvId = :bvId AND deletedAt IS NOT NULL")
+    suspend fun restoreVideo(bvId: String, restoredAt: String): Int
+
+    @Query("DELETE FROM video_snapshots WHERE bvId = :bvId")
+    suspend fun deleteSnapshotsForVideo(bvId: String): Int
+
+    @Query("DELETE FROM videos WHERE bvId = :bvId")
+    suspend fun deleteVideo(bvId: String): Int
+
+    @Transaction
+    suspend fun permanentlyDeleteVideo(bvId: String): Boolean {
+        deleteSnapshotsForVideo(bvId)
+        return deleteVideo(bvId) > 0
+    }
 
     @Query("SELECT * FROM video_snapshots WHERE bvId=:bvId AND captureSource=:captureSource ORDER BY id ASC")
     suspend fun snapshotsByExchangeSource(bvId: String, captureSource: String): List<VideoSnapshotEntity>

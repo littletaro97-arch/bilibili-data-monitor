@@ -20,6 +20,6 @@ class MainActivityUiTest {
         rule.onNodeWithText("系统权限").assertExists()
         rule.onNodeWithText("抓取策略").assertExists()
         rule.onNodeWithText("历史数据管理").assertExists()
-        rule.onNodeWithText("版本：0.11.2").assertExists()
+        rule.onNodeWithText("版本：0.12.3").assertExists()
     }
 }
