@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+runtime-data/
+config.toml
+workspace-history/
+releases/**/*.zip
+releases/**/*.exe

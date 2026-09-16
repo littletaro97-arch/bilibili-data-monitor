@@ -48,15 +48,15 @@ function Get-GradleVersion {
 }
 
 if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
-    $ProjectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
+    $ProjectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 } else {
     $ProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
 }
 Ensure-Junction -LinkPath $AsciiRoot -TargetPath $ProjectRoot
 
-$androidRoot = Join-Path $AsciiRoot "android"
-$formalAndroidRoot = Join-Path $ProjectRoot "android"
-$releaseDir = Join-Path $formalAndroidRoot "releases\$Version"
+$androidRoot = $AsciiRoot
+$formalAndroidRoot = $ProjectRoot
+$releaseDir = Join-Path $ProjectRoot "releases\$Version"
 $apkName = "bilibili-monitor-android-$Version-debug.apk"
 $apkSource = Join-Path $formalAndroidRoot "app\build\outputs\apk\debug\app-debug.apk"
 $apkTarget = Join-Path $releaseDir $apkName
@@ -124,7 +124,7 @@ $changelogLines.Add("- Fixes parsing for mobile Bilibili share text, standard mo
 $changelogLines.Add("- Adds compact expand/edit wheel rows to reduce accidental setting changes while scrolling Settings.")
 $changelogLines.Add("- Stores new collection, log, export, and worker times with device local offset time.")
 $changelogLines.Add("- Adds parser, short-link resolver, wheel editor, device-time, and notification-time unit coverage.")
-$changelogLines.Add("- Generates versioned Debug APK under android/releases/$Version/.")
+$changelogLines.Add("- Generates versioned Debug APK under releases/$Version/.")
 $changelogLines.Add("- Generates build info and test report with APK size and SHA256.")
 $changelogLines.Add("")
 $changelogLines.Add("## Changed")
@@ -148,11 +148,6 @@ $changelog = [string]::Join([Environment]::NewLine, $changelogLines)
 $testReportLines = New-Object System.Collections.Generic.List[string]
 $testReportLines.Add("# $Version Test Report")
 $testReportLines.Add("")
-$testReportLines.Add("## Windows")
-$testReportLines.Add("")
-$testReportLines.Add("- Command: python -m pytest")
-$testReportLines.Add("- Result: run separately before release; record final result in the delivery report.")
-$testReportLines.Add("")
 $testReportLines.Add("## Android")
 $testReportLines.Add("")
 $testReportLines.Add("- Command: .\gradlew.bat test")
@@ -168,7 +163,7 @@ $testReportLines.Add("- Used ASCII junction: yes")
 $testReportLines.Add("")
 $testReportLines.Add("## APK")
 $testReportLines.Add("")
-$testReportLines.Add("- File: android/releases/$Version/$apkName")
+$testReportLines.Add("- File: releases/$Version/$apkName")
 $testReportLines.Add("- Size: $($apkItem.Length) bytes")
 $testReportLines.Add("- SHA256: $sha256")
 $testReportLines.Add("- Copied to release directory: yes")

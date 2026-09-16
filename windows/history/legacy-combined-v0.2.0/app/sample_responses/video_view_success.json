@@ -1,0 +1,28 @@
+{
+  "code": 0,
+  "message": "0",
+  "ttl": 1,
+  "data": {
+    "bvid": "BV1xx411c7mD",
+    "aid": 123456,
+    "cid": 654321,
+    "title": "Mock <Video> Title",
+    "owner": {
+      "mid": 10001,
+      "name": "Mock & UP"
+    },
+    "pubdate": 1710000000,
+    "duration": 360,
+    "online_count": 42,
+    "pic": "https://example.invalid/cover.jpg",
+    "stat": {
+      "view": 12000,
+      "danmaku": 80,
+      "reply": 30,
+      "favorite": 400,
+      "coin": 120,
+      "share": 60,
+      "like": 800
+    }
+  }
+}

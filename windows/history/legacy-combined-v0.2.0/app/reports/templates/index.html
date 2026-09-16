@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}任务 - B站本地分析{% endblock %}
+{% block content %}
+<section class="compact-section">
+  <div class="compact-lan">
+    <div>
+      <h2>其它设备访问</h2>
+      <p class="muted">
+        {% if runtime_lan_enabled %}
+          局域网访问已运行：<code>{{ lan_url }}</code>
+        {% elif lan_config_enabled %}
+          已保存局域网配置但当前未生效，请重启程序后使用：<code>{{ lan_url }}</code>
+        {% else %}
+          当前仅本机访问：<code>{{ local_url }}</code>
+        {% endif %}
+      </p>
+    </div>
+    <a class="button secondary" href="/settings">访问设置</a>
+  </div>
+</section>
+
+<section>
+  <h2>添加采集任务</h2>
+  <form method="post" action="/tasks" class="row">
+    <div>
+      <label for="video_input">BV 号或视频链接</label>
+      <input id="video_input" name="video_input" required placeholder="BV1xx411c7mD 或 https://www.bilibili.com/video/BV...">
+    </div>
+    <div>
+      <label for="interval_seconds">采集间隔，最低 {{ min_interval }} 秒</label>
+      <input id="interval_seconds" name="interval_seconds" type="number" min="{{ min_interval }}" value="{{ default_interval }}">
+    </div>
+    <button type="submit">添加</button>
+  </form>
+</section>
+
+<section>
+  <h2>任务列表</h2>
+  {% if tasks %}
+    <table>
+      <thead>
+        <tr>
+          <th>视频</th>
+          <th>状态</th>
+          <th>间隔</th>
+          <th>最新数据</th>
+          <th>上次采集</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for task in tasks %}
+          <tr>
+            <td>
+              <a href="/videos/{{ task.bvid }}">{{ task.title or task.bvid }}</a><br>
+              <span class="muted">{{ task.bvid }} · {{ task.owner_name or "UP 未知" }}</span>
+            </td>
+            <td><span class="badge {{ task.status }}">{{ task.status }}</span>{% if task.last_error %}<br><span class="muted">{{ task.last_error }}</span>{% endif %}</td>
+            <td>{{ task.interval_seconds }} 秒</td>
+            <td>
+              播放 {{ task.view_count if task.view_count is not none else "暂无" }}<br>
+              点赞 {{ task.like_count if task.like_count is not none else "暂无" }}<br>
+              当前观看 {{ task.online_text or task.online_count or "暂无" }}
+            </td>
+            <td>{{ task.latest_captured_at or "暂无" }}</td>
+            <td>
+              <div class="actions">
+                <form class="inline" method="post" action="/tasks/{{ task.id }}/collect"><button type="submit">立即采集</button></form>
+                {% if task.status == "paused" %}
+                  <form class="inline" method="post" action="/tasks/{{ task.id }}/resume"><button class="secondary" type="submit">恢复</button></form>
+                {% else %}
+                  <form class="inline" method="post" action="/tasks/{{ task.id }}/pause"><button class="secondary" type="submit">暂停</button></form>
+                {% endif %}
+                <form class="inline" method="post" action="/tasks/{{ task.id }}/stop"><button class="danger" type="submit">删除</button></form>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">暂无任务。</p>
+  {% endif %}
+</section>
+
+{% endblock %}

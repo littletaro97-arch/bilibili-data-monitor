@@ -2,18 +2,20 @@
 
 ## 当前源码位置
 
-Windows 端源码已统一位于 `windows/app/`，本说明文件位于 `windows/docs/`。所有 Windows 命令默认从 `windows/` 目录执行。
+现有 Windows 端源码仍位于项目根的 `app/`。不要为了目录整齐立即移动到 `windows/app/`，否则需要同步修改：
 
-源码、运行数据和入口的当前路径为：
+- `app/config.py`
+- 启动命令
+- 测试导入路径
+- 数据库路径
+- 报告输出路径
+- `run.bat`
 
-- `windows/app/`
-- `windows/runtime-data/`
-- `windows/run.bat`
+这类移动应单独作为后续路径重构任务处理。
 
 ## 安装
 
 ```powershell
-cd E:\课外项目\Bilibili-monitor\windows
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
@@ -69,8 +71,8 @@ netstat -ano | findstr :7860
 3. 如果通过 `run.bat` 启动且窗口被隐藏，查看：
 
 ```text
-runtime-data/logs/launcher.log
-runtime-data/logs/app.log
+logs/launcher.log
+logs/app.log
 ```
 
 4. 如果 LAN 已开启但无法访问，确认：
@@ -88,3 +90,4 @@ python -m pytest
 ```
 
 当前测试使用 mock 响应和临时 SQLite，不依赖真实 B 站网络请求。
+

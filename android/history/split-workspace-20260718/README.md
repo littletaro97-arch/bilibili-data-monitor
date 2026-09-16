@@ -35,11 +35,7 @@
 - 修正历史快照绝对时间排序仍可能在 UI 收集线程执行的问题；排序转换明确运行在 `Dispatchers.Default`。
 - 不改动 v0.12.0 的数据模型、趋势规则、后台保活、WorkManager、前台服务或通知逻辑。
 
-本目录是 Android 原生应用工程，和 `windows/` 下的 Windows/Python 端隔离维护。
-
-- `windows/`：Windows/Python 后端、页面、采集与测试。
-- `android/app/`：Android 原生应用模块。
-- `shared/`：仅放双端共享 schema 和说明，不放 Android 私有代码。
+本目录是独立的 Android 原生应用工程。Android 模块位于 `app/`；`shared/` 仅放双端共享 schema 和说明，不放 Android 私有代码或 Windows/Python 源码。
 
 ## v0.3.0 MVP 范围
 
@@ -62,18 +58,17 @@ v0.3.0 提供 Android MVP 原型：
 本工程使用 Gradle Wrapper：
 
 ```powershell
-cd android
 .\gradlew.bat test
 .\gradlew.bat assembleDebug
 ```
 
-正式打包优先使用本目录脚本：
+正式打包优先使用根目录脚本：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build-ascii.ps1
 ```
 
-该脚本会通过 `%TEMP%\bilibili-monitor-ascii\android` 执行测试和构建，并把 Debug APK 复制到对应版本的 `releases/` 目录。
+该脚本会通过 `%TEMP%\bilibili-monitor-ascii` 执行测试和构建，并把 Debug APK 复制到对应版本的 `releases/` 目录。
 从 v0.7.0 起，该脚本还会执行 `lintDebug`。
 
 如果项目位于包含中文字符的 Windows 路径，JDK/Gradle 的测试 worker `@argfile` 可能无法正确加载 unit-test classpath，表现为 `ClassNotFoundException`。本机验证时使用临时 ASCII junction 指向同一仓库后执行 Android 测试和打包。

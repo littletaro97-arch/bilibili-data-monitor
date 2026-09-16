@@ -2,18 +2,11 @@
 
 ## 当前源码位置
 
-Windows 端源码已统一位于 `windows/app/`，本说明文件位于 `windows/docs/`。所有 Windows 命令默认从 `windows/` 目录执行。
-
-源码、运行数据和入口的当前路径为：
-
-- `windows/app/`
-- `windows/runtime-data/`
-- `windows/run.bat`
+Windows 端源码位于本独立工作区根目录的 `app/`。不要将 Android Gradle 工程、APK 或 Android 构建缓存复制到这里。
 
 ## 安装
 
 ```powershell
-cd E:\课外项目\Bilibili-monitor\windows
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt

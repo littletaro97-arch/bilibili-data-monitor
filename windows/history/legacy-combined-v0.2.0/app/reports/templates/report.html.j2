@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>{{ video.title if video else bvid }} - 本地采集报告</title>
+  <style>
+    body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; margin: 24px; color: #1f2933; letter-spacing: 0; }
+    h1 { font-size: 24px; }
+    h2 { font-size: 18px; margin-top: 26px; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #d9dee7; padding: 8px; text-align: left; }
+    th { background: #f6f7f9; }
+    .notice { background: #f6f7f9; border: 1px solid #d9dee7; padding: 12px; border-radius: 6px; }
+    .empty { color: #687586; }
+  </style>
+</head>
+<body>
+  <h1>{{ video.title if video else "视频报告" }}</h1>
+  <div class="notice">
+    本报告由本地程序生成，只基于公开统计字段的数字变化做机械分析。公开网页接口可能变化，数据可能不稳定，使用者需要自行遵守平台规则。
+  </div>
+
+  <h2>基础信息</h2>
+  <table>
+    <tr><th>BV 号</th><td>{{ video.bvid if video else "" }}</td></tr>
+    <tr><th>UP 主</th><td>{{ video.owner_name if video else "" }}</td></tr>
+    <tr><th>发布时间</th><td>{{ video.pubdate if video else "" }}</td></tr>
+    <tr><th>报告生成时间</th><td>{{ generated_at }}</td></tr>
+    <tr><th>采集开始时间</th><td>{{ collection_start }}</td></tr>
+    <tr><th>采集结束时间</th><td>{{ collection_end }}</td></tr>
+    <tr><th>采集间隔</th><td>{{ task.interval_seconds if task else "未知" }} 秒</td></tr>
+  </table>
+
+  <h2>最新互动数据</h2>
+  {% if latest %}
+    <table>
+      <tr><th>播放</th><td>{{ latest.view_count }}</td><th>点赞</th><td>{{ latest.like_count }}</td></tr>
+      <tr><th>投币</th><td>{{ latest.coin_count }}</td><th>收藏</th><td>{{ latest.favorite_count }}</td></tr>
+      <tr><th>评论</th><td>{{ latest.reply_count }}</td><th>弹幕</th><td>{{ latest.danmaku_count }}</td></tr>
+      <tr><th>分享</th><td>{{ latest.share_count }}</td><th>当前观看人数</th><td>{{ latest.online_text or latest.online_count or "暂无" }}</td></tr>
+      <tr><th>数据来源</th><td>{{ "历史导入" if latest.source_type == "imported" else "自动采集" }}</td><th>采集时间</th><td>{{ latest.captured_at }}</td></tr>
+    </table>
+  {% else %}
+    <p class="empty">暂无快照数据。</p>
+  {% endif %}
+
+  <h2>文字结论</h2>
+  <p>{{ summary }}</p>
+
+  <h2>图表</h2>
+  {% for chart in charts %}
+    <h3>{{ chart.title }}</h3>
+    {{ chart.html }}
+  {% endfor %}
+
+  <h2>限制说明</h2>
+  <p>第一版不采集评论全文和弹幕全文，不实现登录、Cookie、代理池、验证码绕过、局域网公开访问或移动端控制端。</p>
+</body>
+</html>

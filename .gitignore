@@ -16,6 +16,12 @@ config.toml
 windows/runtime-data/
 windows/.venv/
 
+# Historical runtime snapshots and local backups are retained locally, but must
+# never enter source control: they can contain databases, logs, exports, and
+# app data from real use.
+windows/history/local-backups/
+windows/history/runtime-snapshots/
+
 # Android local/build artifacts
 android/.gradle/
 android/local.properties
@@ -25,4 +31,4 @@ windows/**/__pycache__/
 windows/.pytest_cache/
 
 # Release APKs are kept as local deliverables, not Git history.
-releases/**/*.apk
+android/releases/**/*.apk

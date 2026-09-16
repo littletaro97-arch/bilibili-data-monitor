@@ -1,0 +1,38 @@
+[app]
+# 本机调试默认只监听 127.0.0.1。
+# 不要把这里改成 0.0.0.0；需要局域网访问时使用 [lan].enabled。
+host = "127.0.0.1"
+port = 7860
+
+[crawl]
+default_interval = 300
+min_interval = 60
+max_concurrency = 2
+max_active_tasks = 10
+global_min_request_interval = 3
+schedule_jitter_seconds = 30
+failure_cooldown_seconds = 600
+global_risk_cooldown_seconds = 1800
+timeout = 10
+save_raw_json = false
+
+[report]
+output_dir = "reports/output"
+
+[database]
+path = "data/bilibili_local.db"
+
+[phase2]
+max_root_comments = 500
+max_child_comments = 20
+comment_min_interval_seconds = 600
+danmaku_min_interval_seconds = 600
+
+[lan]
+# 默认关闭。启用后程序会监听 0.0.0.0，并要求非本机访问输入密码。
+enabled = false
+password_hash = ""
+session_cookie = "blla_lan_auth"
+
+[launcher]
+show_console = true
