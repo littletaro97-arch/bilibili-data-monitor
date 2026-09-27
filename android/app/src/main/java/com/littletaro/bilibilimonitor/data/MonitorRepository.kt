@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 enum class RefreshTrigger(val logLabel: String) {
     MANUAL("manual"),
@@ -25,7 +26,8 @@ data class LatestSnapshotComparison(
 class MonitorRepository(
     private val dao: MonitorDao,
     private val api: BilibiliApi,
-    private val exporter: SnapshotExporter
+    private val exporter: SnapshotExporter,
+    private val deviceId: String
 ) {
     val videos: Flow<List<VideoEntity>> = dao.observeVideos()
     val recycleBinVideos: Flow<List<VideoEntity>> = dao.observeDeletedVideos()
@@ -42,6 +44,10 @@ class MonitorRepository(
     fun snapshots(bvId: String): Flow<List<VideoSnapshotEntity>> = dao.observeSnapshots(bvId)
         .map { rows -> rows.sortedWith(snapshotNewestFirst) }
         .flowOn(Dispatchers.Default)
+
+    suspend fun initializeSyncIdentity() = withContext(Dispatchers.IO) {
+        dao.backfillSnapshotOrigins(deviceId)
+    }
 
     suspend fun addVideo(input: String): String {
         val bvId = try {
@@ -102,7 +108,11 @@ class MonitorRepository(
                         coverUrl = record.video.coverUrl ?: existing?.coverUrl
                     )
                 )
-                dao.insertSnapshot(record.snapshot.copy(captureSource = SnapshotSources.from(trigger)))
+                dao.insertSnapshot(record.snapshot.copy(
+                    captureSource = SnapshotSources.from(trigger),
+                    originDeviceId = deviceId,
+                    originSnapshotId = UUID.randomUUID().toString()
+                ))
                 writeLog("info", "database", "${trigger.logLabel} 快照写入成功", "status=${record.snapshot.fetchStatus}, bvId=$bvId")
                 writeLog("info", "network", "${trigger.logLabel} 刷新请求成功", "status=${record.snapshot.fetchStatus}, bvId=$bvId")
             } catch (exc: Exception) {
@@ -123,7 +133,9 @@ class MonitorRepository(
                             sourceUrl = "https://www.bilibili.com/video/$bvId/",
                             fetchStatus = "failed",
                             errorMessage = message,
-                            captureSource = SnapshotSources.from(trigger)
+                            captureSource = SnapshotSources.from(trigger),
+                            originDeviceId = deviceId,
+                            originSnapshotId = UUID.randomUUID().toString()
                         )
                     )
                     writeLog("warning", "database", "${trigger.logLabel} 失败快照已写入", bvId)
@@ -212,7 +224,8 @@ class MonitorRepository(
         HistoryExchangeCodec.export(
             dao.allVideosForExchange(),
             dao.allSnapshotsForExchange().sortedWith(compareBy<VideoSnapshotEntity> { it.bvId }.then(snapshotOldestFirst)),
-            sourceVersion
+            sourceVersion,
+            deviceId
         )
     }
 

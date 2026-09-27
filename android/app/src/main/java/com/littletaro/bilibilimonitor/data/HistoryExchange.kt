@@ -44,7 +44,7 @@ object HistoryExchangeCodec {
     const val MAX_COMPRESSION_RATIO = 100L
     private val requiredEntries = setOf("manifest.json", "videos.json", "snapshots.json", "checksums.json")
 
-    fun export(videos: List<VideoEntity>, snapshots: List<VideoSnapshotEntity>, sourceVersion: String): ByteArray {
+    fun export(videos: List<VideoEntity>, snapshots: List<VideoSnapshotEntity>, sourceVersion: String, deviceId: String): ByteArray {
         val exportedAt = Instant.now().toString()
         val videosBytes = videosJson(videos).toString().toByteArray(Charsets.UTF_8)
         val snapshotsBytes = snapshotsJson(snapshots).toString().toByteArray(Charsets.UTF_8)
@@ -54,6 +54,7 @@ object HistoryExchangeCodec {
             .put("exportId", UUID.randomUUID().toString())
             .put("exportedAt", exportedAt)
             .put("sourcePlatform", "android")
+            .put("sourceDeviceId", deviceId)
             .put("sourceAppVersion", sourceVersion)
             .put("schemaVersion", 4)
             .put("recordCounts", JSONObject().put("videos", videos.size).put("snapshots", snapshots.size))
@@ -144,7 +145,7 @@ object HistoryExchangeCodec {
     }
 
     private fun snapshotsJson(snapshots: List<VideoSnapshotEntity>) = JSONArray().apply {
-        snapshots.forEach { snapshot -> put(JSONObject().put("bvId", snapshot.bvId).put("collectedAt", normalizeTime(snapshot.collectedAt)).put("collectionSource", SnapshotSources.sanitize(snapshot.captureSource)).put("viewCount", snapshot.viewCount).put("danmakuCount", snapshot.danmakuCount).put("replyCount", snapshot.replyCount).put("favoriteCount", snapshot.favoriteCount).put("coinCount", snapshot.coinCount).put("shareCount", snapshot.shareCount).put("likeCount", snapshot.likeCount).put("fetchStatus", snapshot.fetchStatus).put("errorMessage", snapshot.errorMessage).put("contentSha256", snapshotDigest(snapshot))) }
+        snapshots.forEach { snapshot -> put(JSONObject().put("bvId", snapshot.bvId).put("collectedAt", normalizeTime(snapshot.collectedAt)).put("collectionSource", SnapshotSources.sanitize(snapshot.captureSource)).put("viewCount", snapshot.viewCount).put("danmakuCount", snapshot.danmakuCount).put("replyCount", snapshot.replyCount).put("favoriteCount", snapshot.favoriteCount).put("coinCount", snapshot.coinCount).put("shareCount", snapshot.shareCount).put("likeCount", snapshot.likeCount).put("fetchStatus", snapshot.fetchStatus).put("errorMessage", snapshot.errorMessage).put("originDeviceId", snapshot.originDeviceId).put("originSnapshotId", snapshot.originSnapshotId).put("contentSha256", snapshotDigest(snapshot))) }
     }
 
     private fun parseVideos(array: JSONArray): List<VideoEntity> = (0 until array.length()).map { index ->
@@ -157,7 +158,7 @@ object HistoryExchangeCodec {
     private fun parseSnapshots(array: JSONArray): List<VideoSnapshotEntity> = (0 until array.length()).map { index ->
         val item = array.getJSONObject(index)
         val source = SnapshotSources.sanitize(item.getString("collectionSource"))
-        val snapshot = VideoSnapshotEntity(bvId = item.getString("bvId"), collectedAt = normalizeTime(item.getString("collectedAt")), viewCount = item.optLongOrNull("viewCount"), danmakuCount = item.optLongOrNull("danmakuCount"), replyCount = item.optLongOrNull("replyCount"), favoriteCount = item.optLongOrNull("favoriteCount"), coinCount = item.optLongOrNull("coinCount"), shareCount = item.optLongOrNull("shareCount"), likeCount = item.optLongOrNull("likeCount"), sourceUrl = null, fetchStatus = item.getString("fetchStatus"), errorMessage = item.optNullableString("errorMessage"), captureSource = source, exchangeDigest = item.getString("contentSha256"))
+        val snapshot = VideoSnapshotEntity(bvId = item.getString("bvId"), collectedAt = normalizeTime(item.getString("collectedAt")), viewCount = item.optLongOrNull("viewCount"), danmakuCount = item.optLongOrNull("danmakuCount"), replyCount = item.optLongOrNull("replyCount"), favoriteCount = item.optLongOrNull("favoriteCount"), coinCount = item.optLongOrNull("coinCount"), shareCount = item.optLongOrNull("shareCount"), likeCount = item.optLongOrNull("likeCount"), sourceUrl = null, fetchStatus = item.getString("fetchStatus"), errorMessage = item.optNullableString("errorMessage"), captureSource = source, exchangeDigest = item.getString("contentSha256"), originDeviceId = item.optNullableString("originDeviceId") ?: "", originSnapshotId = item.optNullableString("originSnapshotId") ?: "")
         require(snapshot.exchangeDigest == snapshotDigest(snapshot)) { "snapshots.json 内容摘要不匹配" }
         snapshot
     }

@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import com.littletaro.bilibilimonitor.data.AppDatabase
 import com.littletaro.bilibilimonitor.data.BilibiliApi
 import com.littletaro.bilibilimonitor.data.DeviceTime
+import com.littletaro.bilibilimonitor.data.DeviceIdentity
 import com.littletaro.bilibilimonitor.data.MonitorRepository
 import com.littletaro.bilibilimonitor.data.RefreshTrigger
 import com.littletaro.bilibilimonitor.data.SnapshotExporter
@@ -35,8 +36,10 @@ class AutoRefreshWorker(
                     .readTimeout(10, TimeUnit.SECONDS)
                     .build()
             ),
-            SnapshotExporter(applicationContext)
+            SnapshotExporter(applicationContext),
+            DeviceIdentity.get(applicationContext)
         )
+        repository.initializeSyncIdentity()
 
         if (!settings.enabled) {
             settingsStore.recordWorkerFinished(

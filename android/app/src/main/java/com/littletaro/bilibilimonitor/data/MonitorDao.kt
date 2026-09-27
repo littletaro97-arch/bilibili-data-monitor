@@ -15,6 +15,12 @@ interface MonitorDao {
     @Insert
     suspend fun insertSnapshot(snapshot: VideoSnapshotEntity): Long
 
+    @Query("UPDATE video_snapshots SET originDeviceId = :deviceId, originSnapshotId = 'legacy-' || id WHERE originDeviceId = '' OR originSnapshotId = ''")
+    suspend fun backfillSnapshotOrigins(deviceId: String): Int
+
+    @Query("SELECT * FROM video_snapshots WHERE originDeviceId = :deviceId AND originSnapshotId = :snapshotId")
+    suspend fun snapshotsByOrigin(deviceId: String, snapshotId: String): List<VideoSnapshotEntity>
+
     @Insert
     suspend fun insertLog(log: AppLogEntity)
 
@@ -68,6 +74,12 @@ interface MonitorDao {
             }
         }
         packageData.snapshots.forEach { incoming ->
+            if (incoming.originDeviceId.isNotBlank() && incoming.originSnapshotId.isNotBlank()) {
+                if (snapshotsByOrigin(incoming.originDeviceId, incoming.originSnapshotId).isNotEmpty()) {
+                    duplicates++
+                    return@forEach
+                }
+            }
             val incomingInstant = DeviceTime.parseToInstant(incoming.collectedAt)
             val identityMatches = snapshotsByExchangeSource(incoming.bvId, incoming.captureSource)
                 .filter { DeviceTime.parseToInstant(it.collectedAt) == incomingInstant }

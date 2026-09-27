@@ -47,7 +47,9 @@ data class VideoSnapshotEntity @JvmOverloads constructor(
     val errorMessage: String?,
     val captureSource: String = SnapshotSources.UNKNOWN,
     val exchangeDigest: String? = null,
-    val collectedAtEpochMillis: Long = SnapshotTime.epochMillis(collectedAt)
+    val collectedAtEpochMillis: Long = SnapshotTime.epochMillis(collectedAt),
+    val originDeviceId: String = "",
+    val originSnapshotId: String = ""
 )
 
 object SnapshotTime {

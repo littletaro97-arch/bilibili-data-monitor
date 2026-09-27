@@ -9,7 +9,7 @@ class HistoryExchangeCodecTest {
     private val snapshot = VideoSnapshotEntity(bvId = video.bvId, collectedAt = "2026-01-01T08:00:00+08:00", viewCount = 100, danmakuCount = 2, replyCount = 3, favoriteCount = 4, coinCount = 5, shareCount = 6, likeCount = 7, sourceUrl = video.sourceUrl, fetchStatus = "success", errorMessage = null, captureSource = SnapshotSources.MANUAL)
 
     @Test fun roundTripUsesUtcAndSource() {
-        val bytes = HistoryExchangeCodec.export(listOf(video), listOf(snapshot), "test")
+        val bytes = HistoryExchangeCodec.export(listOf(video), listOf(snapshot), "test", "test-device")
         val preview = HistoryExchangeCodec.preview(bytes)
         assertEquals(1, preview.videoCount)
         assertEquals(1, preview.snapshotCount)

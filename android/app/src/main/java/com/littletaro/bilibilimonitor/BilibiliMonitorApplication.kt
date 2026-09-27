@@ -16,6 +16,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.littletaro.bilibilimonitor.data.DeviceTime
+import com.littletaro.bilibilimonitor.data.DeviceIdentity
 
 class BilibiliMonitorApplication : Application() {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -23,6 +24,7 @@ class BilibiliMonitorApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         appScope.launch {
+            repository.initializeSyncIdentity()
             val current = settingsStore.settings.first()
             if (current.continuousMonitoringRunning) {
                 settingsStore.recordContinuousMonitoringStopped(DeviceTime.nowIsoString(), "process restarted; user confirmation required")
@@ -47,6 +49,6 @@ class BilibiliMonitorApplication : Application() {
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .build()
-        MonitorRepository(database.dao(), BilibiliApi(client), SnapshotExporter(this))
+        MonitorRepository(database.dao(), BilibiliApi(client), SnapshotExporter(this), DeviceIdentity.get(this))
     }
 }
