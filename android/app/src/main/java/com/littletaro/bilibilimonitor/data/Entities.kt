@@ -1,6 +1,7 @@
 package com.littletaro.bilibilimonitor.data
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -28,7 +29,8 @@ data class VideoEntity(
     tableName = "video_snapshots",
     indices = [
         Index(value = ["bvId", "collectedAt"]),
-        Index(value = ["bvId", "collectedAtEpochMillis", "id"])
+        Index(value = ["bvId", "collectedAtEpochMillis", "id"]),
+        Index(value = ["originDeviceId", "originSnapshotId"])
     ]
 )
 data class VideoSnapshotEntity @JvmOverloads constructor(
@@ -48,8 +50,8 @@ data class VideoSnapshotEntity @JvmOverloads constructor(
     val captureSource: String = SnapshotSources.UNKNOWN,
     val exchangeDigest: String? = null,
     val collectedAtEpochMillis: Long = SnapshotTime.epochMillis(collectedAt),
-    val originDeviceId: String = "",
-    val originSnapshotId: String = ""
+    @ColumnInfo(defaultValue = "''") val originDeviceId: String = "",
+    @ColumnInfo(defaultValue = "''") val originSnapshotId: String = ""
 )
 
 object SnapshotTime {
