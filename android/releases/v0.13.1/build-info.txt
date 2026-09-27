@@ -1,8 +1,8 @@
 Version: v0.13.1
-Git commit hash at build time: c46c8a5
+Git commit hash at build time: 6e050fb
 Git branch: codex/bilibili-project-setup
-Git working tree clean at build time: no
-Build time: 2026-09-27 18:30:11 +08:00
+Git working tree clean at build time: yes
+Build time: 2026-09-27 18:33:54 +08:00
 Used ASCII junction: yes
 Gradle version: 8.7
 Android Gradle Plugin version: 8.5.2
