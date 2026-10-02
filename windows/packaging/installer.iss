@@ -1,5 +1,12 @@
-#define AppVersion "0.11.1"
-#define PackageVersion "0.11.1.1"
+#ifndef AppVersion
+  #define AppVersion "0.11.1"
+#endif
+#ifndef InstallerRevision
+  #define InstallerRevision "1"
+#endif
+#ifndef PackageVersion
+  #define PackageVersion AppVersion + "." + InstallerRevision
+#endif
 
 [Setup]
 AppId={{C3C19C03-7F8E-48E4-95F3-B497EB0C6AE6}
@@ -8,6 +15,7 @@ AppVersion={#AppVersion}
 AppVerName=B站数据监控 {#AppVersion}（电脑版）
 VersionInfoVersion={#PackageVersion}
 DefaultDirName={localappdata}\Programs\BilibiliMonitor
+UsePreviousAppDir=yes
 DefaultGroupName=B站数据监控
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
@@ -17,8 +25,8 @@ WizardStyle=modern
 DisableWelcomePage=no
 DisableDirPage=no
 DisableProgramGroupPage=no
-OutputDir=..\releases\v0.11.1-installer.1
-OutputBaseFilename=BilibiliMonitor-v0.11.1-installer.1-windows-x64-setup
+OutputDir=..\releases\v{#AppVersion}-installer.{#InstallerRevision}
+OutputBaseFilename=BilibiliMonitor-v{#AppVersion}-installer.{#InstallerRevision}-windows-x64-setup
 Compression=lzma2
 SolidCompression=yes
 UninstallDisplayName=B站数据监控（电脑版）

@@ -22,6 +22,25 @@
   </table>
 </section>
 
+<section id="version-updates">
+  <h2>版本更新</h2>
+  <p>当前电脑版：{{ app_version }} · 安装包第 {{ installer_revision }} 版</p>
+  <p>{{ update_service.status }}</p>
+  <div class="actions">
+    <form method="post" action="/settings/updates/check"><button type="submit">检查 GitHub 更新</button></form>
+    <a class="button secondary" href="{{ releases_url }}" target="_blank" rel="noreferrer">GitHub 发布页</a>
+    {% if update_service.available and update_service.package.digest %}
+      <a class="button" href="/settings/updates/download">下载更新安装包</a>
+    {% endif %}
+  </div>
+  {% if update_service.available %}
+    <p><strong>可用版本：{{ update_service.package.display_version }}</strong></p>
+    <p class="muted">{{ update_service.package.name }} · {{ '%.1f'|format(update_service.package.size / 1048576) }} MB</p>
+    <details><summary>更新说明</summary><p style="white-space: pre-wrap; overflow-wrap: anywhere;">{{ update_service.package.notes }}</p></details>
+  {% endif %}
+  <p class="muted">下载前会校验文件大小与 SHA-256。下载完成后，请先退出监控程序，再运行安装包；同一 Windows 用户下安装会默认沿用原安装目录，并保留数据。首次安装或便携版没有安装记录时，使用默认目录，可在向导中选择。</p>
+</section>
+
 <section>
   <h2>启动窗口</h2>
   <p class="muted">程序运行时会显示系统托盘图标。左键打开浏览器面板；右键可立即检测、进入设置或退出程序。立即检测仅处理正在运行且不在冷却中的任务。</p>

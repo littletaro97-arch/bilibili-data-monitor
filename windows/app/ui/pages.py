@@ -14,6 +14,8 @@ from plotly.offline import get_plotlyjs
 from app.config import load_settings, settings
 from app.config_writer import save_lan_settings, save_launcher_settings
 from app.cover import safe_cover_url
+from app.version import APP_VERSION, INSTALLER_REVISION
+from app.services.update_service import RELEASES_URL, UpdateError
 from app.logger import clear_log_file
 from app.models import AppError
 from app.security import session_token, verify_password
@@ -413,6 +415,10 @@ async def settings_page(request: Request, message: str | None = None, level: str
             "message": message,
             "level": level,
             "runtime_lan_enabled": settings.lan.enabled,
+            "update_service": request.app.state.update_service,
+            "app_version": APP_VERSION,
+            "installer_revision": INSTALLER_REVISION,
+            "releases_url": RELEASES_URL,
             "lan_active": lan_active,
             "local_ip": local_ip,
             "local_url": f"http://127.0.0.1:{current_settings.app.port}",
@@ -425,6 +431,21 @@ async def settings_page(request: Request, message: str | None = None, level: str
             or current_settings.lan.password_hash != settings.lan.password_hash,
         },
     )
+
+
+@router.post("/settings/updates/check")
+async def check_desktop_updates(request: Request):
+    await request.app.state.update_service.check()
+    return RedirectResponse("/settings#version-updates", status_code=303)
+
+
+@router.get("/settings/updates/download")
+async def download_desktop_update(request: Request):
+    try:
+        path, name = await request.app.state.update_service.download()
+        return FileResponse(path, filename=name, media_type="application/octet-stream")
+    except UpdateError as exc:
+        return _flash_redirect("/settings", str(exc), "error")
 
 
 @router.post("/settings/lan")

@@ -20,6 +20,7 @@ from app.services.report_service import ReportService
 from app.services.phase2_service import Phase2Service
 from app.services.task_service import TaskScheduler
 from app.services.video_service import VideoService
+from app.services.update_service import UpdateService
 from app.security import verify_session_token
 from app.ui.pages import router, _request_shutdown
 
@@ -106,6 +107,7 @@ def create_app() -> FastAPI:
     app.state.history_exchange_service = history_exchange_service
     app.state.history_exchange_previews = {}
     app.state.scheduler = scheduler
+    app.state.update_service = UpdateService(RUNTIME_DIR / "updates")
 
     @app.middleware("http")
     async def lan_access_guard(request, call_next):

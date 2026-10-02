@@ -10,6 +10,7 @@ import uuid
 from zipfile import BadZipFile, ZIP_DEFLATED, ZipFile, ZipInfo
 
 from app.database import Repository
+from app.version import APP_VERSION
 
 
 FORMAT_NAME = "bilibili-history-exchange"
@@ -40,7 +41,7 @@ class ImportReport:
 
 
 class HistoryExchangeService:
-    def __init__(self, repository: Repository, app_version: str = "0.11.1"):
+    def __init__(self, repository: Repository, app_version: str = APP_VERSION):
         self.repository = repository
         self.app_version = app_version
 

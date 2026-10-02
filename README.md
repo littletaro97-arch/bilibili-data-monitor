@@ -18,6 +18,8 @@
 2026-10-02 的电脑版源码迭代新增系统托盘和详情页封面展示；本轮未打包。
 双端功能差异、数据安全检查与验收证据见 [windows/docs/DESKTOP_ITERATION_20261002.md](windows/docs/DESKTOP_ITERATION_20261002.md)。
 
+设置页现支持检查 GitHub 电脑版更新并校验下载安装包；发布规则、原目录升级条件及自有面板讨论见 [windows/docs/GITHUB_UPDATES.md](windows/docs/GITHUB_UPDATES.md)。本次同样仅更新源码，没有打包或发布。
+
 ```powershell
 cd E:\课外项目\Bilibili-monitor\windows
 python -m venv .venv
