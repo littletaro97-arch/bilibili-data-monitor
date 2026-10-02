@@ -23,6 +23,12 @@ app.state.desktop_panel = panel
 server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=18770, log_level="warning"))
 app.state.shutdown_callback = lambda: setattr(server, "should_exit", True)
 result = {}
+refresh_requests = []
+@app.middleware("http")
+async def observe_refresh(request, call_next):
+    if request.url.path == "/api/logs" or (request.url.path.startswith("/api/videos/") and request.url.path.endswith("/latest")):
+        refresh_requests.append(request.url.path)
+    return await call_next(request)
 
 def verify():
     try:
@@ -45,6 +51,10 @@ def verify():
                 break
             time.sleep(.05)
         assert httpx.get(panel.url + "/api/desktop/visibility", headers={"User-Agent": "BilibiliMonitorDesktopPanel"}).json()["hidden"] is True
+        time.sleep(.6)  # Allow any already-running refresh to finish.
+        before = len(refresh_requests)
+        time.sleep(5.5)  # One full log refresh cycle in the real hidden WebView.
+        assert len(refresh_requests) == before, "Hidden panel still refreshes business data"
         result["hide_pauses_refresh"] = True
         result["native_document_hidden"] = panel.window.evaluate_js("document.hidden")
         panel.open("/settings")
