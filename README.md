@@ -15,6 +15,9 @@
 电脑版 EXE 安装包与构建说明见 [windows/packaging/README.md](windows/packaging/README.md)。
 当前安装包在 `windows/releases/v0.11.1-installer.1/`，无需另装 Python，卸载保留用户数据。
 
+2026-10-02 的电脑版源码迭代新增系统托盘和详情页封面展示；本轮未打包。
+双端功能差异、数据安全检查与验收证据见 [windows/docs/DESKTOP_ITERATION_20261002.md](windows/docs/DESKTOP_ITERATION_20261002.md)。
+
 ```powershell
 cd E:\课外项目\Bilibili-monitor\windows
 python -m venv .venv

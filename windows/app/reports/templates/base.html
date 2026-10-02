@@ -110,6 +110,16 @@
     .metric { border: 1px solid var(--line); border-radius: 6px; padding: 12px; background: #fbfcfd; }
     .metric span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
     .metric strong { font-size: 20px; overflow-wrap: anywhere; }
+    .video-heading { display: grid; grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); gap: 24px; align-items: start; }
+    .video-heading-content { min-width: 0; }
+    .video-heading-content h2 { font-size: 21px; line-height: 1.45; overflow-wrap: anywhere; }
+    .video-cover { position: relative; width: 100%; aspect-ratio: 16 / 9; margin: 0; background: #e9eef2; border-radius: 8px; overflow: hidden; }
+    .video-cover img { display: block; width: 100%; height: 100%; object-fit: contain; }
+    .video-cover img[hidden], .cover-placeholder[hidden] { display: none; }
+    .cover-placeholder { display: grid; place-items: center; position: absolute; inset: 0; color: var(--muted); font-size: 14px; }
+    .video-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .video-metadata .metric { padding: 10px 12px; }
+    .video-metadata .metric strong { font-size: 16px; }
     .chart-block { width: 100%; overflow-x: auto; }
     .chart-block .plotly-graph-div { width: 100% !important; max-width: 100%; }
     .chart-panel, .nested-panel { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 12px; }
@@ -139,6 +149,8 @@
       .actions form.inline { display: block; }
       .grid { grid-template-columns: 1fr; }
       .metric strong { font-size: 18px; }
+      .video-heading { grid-template-columns: 1fr; gap: 16px; }
+      .video-heading-content h2 { font-size: 18px; }
       table { min-width: 620px; font-size: 13px; }
     }
   </style>
@@ -161,6 +173,21 @@
     {% block content %}{% endblock %}
   </main>
   <script>
+    const coverImage = document.querySelector("[data-video-cover]");
+    const coverPlaceholder = document.querySelector("[data-cover-placeholder]");
+    if (coverImage && coverPlaceholder) {
+      coverImage.addEventListener("load", () => {
+        coverImage.hidden = false;
+        coverPlaceholder.hidden = true;
+      });
+      const unavailable = () => {
+        coverImage.hidden = true;
+        coverPlaceholder.hidden = false;
+        coverPlaceholder.textContent = "封面暂不可用";
+      };
+      coverImage.addEventListener("error", unavailable);
+      if (coverImage.getAttribute("src") && coverImage.complete && !coverImage.naturalWidth) unavailable();
+    }
     function escapeHtml(value) {
       return String(value ?? "")
         .replaceAll("&", "&amp;")
@@ -270,6 +297,9 @@
         if (!response.ok) return;
         const data = await response.json();
         const latest = data.latest || {};
+        if (coverImage && data.cover_url && coverImage.getAttribute("src") !== data.cover_url) {
+          coverImage.src = data.cover_url;
+        }
         for (const node of document.querySelectorAll("[data-latest-field]")) {
           const field = node.dataset.latestField;
           node.textContent = formatLatestValue(field, latest[field]);

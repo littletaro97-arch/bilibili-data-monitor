@@ -1,0 +1,8 @@
+{
+  "original_view_count": 100,
+  "forged_view_count": 999999,
+  "windows_corruption_rejected": true,
+  "windows_forged_hashes_accepted": true,
+  "windows_local_sqlite_edit_visible": true,
+  "evidence_directory": "C:\\Users\\LITTLE~1\\AppData\\Local\\Temp\\bilibili-integrity-probe-9z1p16ve"
+}

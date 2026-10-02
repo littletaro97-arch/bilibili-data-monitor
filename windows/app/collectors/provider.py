@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 
 from app.collectors.bilibili_client import BilibiliClient
 from app.config import BASE_DIR
+from app.cover import safe_cover_url
 from app.models import DanmakuItem, ProviderError, RiskControlError, VideoComment, VideoInfo, VideoStats
 
 
@@ -51,7 +52,7 @@ class BilibiliWebProvider(VideoDataProvider):
             owner_name=owner.get("name"),
             pubdate=_as_int(data.get("pubdate")),
             duration=_as_int(data.get("duration")),
-            cover_url=data.get("pic"),
+            cover_url=safe_cover_url(data.get("pic")),
             raw_json=json.dumps(payload, ensure_ascii=False) if self.save_raw_json else None,
         )
 
@@ -72,6 +73,7 @@ class BilibiliWebProvider(VideoDataProvider):
             like_count=_as_int(stat.get("like")),
             online_count=online_count,
             online_text=online_text,
+            cover_url=safe_cover_url(data.get("pic")),
             raw_json=json.dumps(payload, ensure_ascii=False) if self.save_raw_json else None,
         )
 
@@ -174,7 +176,7 @@ def _map_info(bvid: str, payload: dict[str, Any], save_raw_json: bool = False) -
         owner_name=owner.get("name"),
         pubdate=_as_int(data.get("pubdate")),
         duration=_as_int(data.get("duration")),
-        cover_url=data.get("pic"),
+        cover_url=safe_cover_url(data.get("pic")),
         raw_json=json.dumps(payload, ensure_ascii=False) if save_raw_json else None,
     )
 
@@ -194,6 +196,7 @@ def _map_stats(bvid: str, payload: dict[str, Any], save_raw_json: bool = False) 
         like_count=_as_int(stat.get("like")),
         online_count=online_count,
         online_text=online_text,
+        cover_url=safe_cover_url(data.get("pic")),
         raw_json=json.dumps(payload, ensure_ascii=False) if save_raw_json else None,
     )
 

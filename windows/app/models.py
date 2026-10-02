@@ -54,6 +54,7 @@ class VideoStats:
     online_count: int | None = None
     online_text: str | None = None
     raw_json: str | None = None
+    cover_url: str | None = None
 
 
 @dataclass(frozen=True)

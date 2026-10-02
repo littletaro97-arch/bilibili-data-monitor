@@ -1,0 +1,20 @@
+{
+  "bvid": "BV1GJ411x7h7",
+  "cover_url": "http://i1.hdslb.com/bfs/archive/5242750857121e05146d5d5b13a47a2a6dd36e98.jpg",
+  "image_status": 200,
+  "image_bytes": 651508,
+  "image_dimensions": [
+    1920,
+    1080
+  ],
+  "title": "【官方 MV】Never Gonna Give You Up - Rick Astley",
+  "TLS_verification": "httpx default enabled",
+  "https_cover_url": "https://i1.hdslb.com/bfs/archive/5242750857121e05146d5d5b13a47a2a6dd36e98.jpg",
+  "https_image_status": 200,
+  "https_image_dimensions": [
+    1920,
+    1080
+  ],
+  "cover_transport_original": "HTTP",
+  "cover_transport_tested": "HTTPS with certificate validation"
+}

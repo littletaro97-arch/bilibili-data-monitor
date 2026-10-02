@@ -1,0 +1,7 @@
+{
+  "android_corruption_rejected": true,
+  "runtime": "JVM, existing v0.13.1 codec classes; matching sources unchanged since 6e050fb",
+  "android_forged_hashes_accepted": true,
+  "android_http_cover_rejected": true,
+  "android_forged_view_count": 999999
+}

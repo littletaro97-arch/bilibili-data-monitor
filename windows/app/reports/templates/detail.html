@@ -6,22 +6,30 @@
   <a class="button secondary" href="/settings">进入设置</a>
 </div>
 
-<section>
-  <h2>{{ video.title if video else "视频详情" }}</h2>
-  {% if video %}
-    <div class="grid">
-      <div class="metric"><span>BV 号</span><strong>{{ video.bvid }}</strong></div>
-      <div class="metric"><span>UP 主</span><strong>{{ video.owner_name or "未知" }}</strong></div>
-      <div class="metric"><span>发布时间</span><strong>{{ video.pubdate or "未知" }}</strong></div>
-      <div class="metric"><span>任务状态</span><strong data-task-status>{{ task.status if task else "无任务" }}</strong></div>
+<section class="video-overview">
+  <div class="video-heading">
+    <figure class="video-cover">
+      <img data-video-cover {% if cover_url %}src="{{ cover_url }}"{% else %}hidden{% endif %} alt="{{ video.title or '视频' }}的封面" referrerpolicy="no-referrer" decoding="async">
+      <div class="cover-placeholder" data-cover-placeholder {% if cover_url %}hidden{% endif %}>暂无封面</div>
+    </figure>
+    <div class="video-heading-content">
+      <h2>{{ video.title if video else "视频详情" }}</h2>
+      {% if video %}
+        <div class="video-metadata">
+          <div class="metric"><span>BV 号</span><strong>{{ video.bvid }}</strong></div>
+          <div class="metric"><span>UP 主</span><strong>{{ video.owner_name or "未知" }}</strong></div>
+          <div class="metric"><span>发布时间</span><strong>{{ video.pubdate or "未知" }}</strong></div>
+          <div class="metric"><span>任务状态</span><strong data-task-status>{{ task.status if task else "无任务" }}</strong></div>
+        </div>
+      {% endif %}
+      <p class="muted">本工具只保存公开统计字段；raw_json 默认关闭，报告不包含完整原始响应。</p>
+      <div class="actions">
+        {% if video.bvid %}
+          <a class="button secondary" href="https://www.bilibili.com/video/{{ video.bvid }}/" target="_blank" rel="noreferrer">打开 B 站视频</a>
+        {% endif %}
+        <form class="inline" method="post" action="/videos/{{ video.bvid }}/report"><button type="submit">生成 HTML 报告</button></form>
+      </div>
     </div>
-  {% endif %}
-  <p class="muted">本工具只保存公开统计字段；raw_json 默认关闭，报告不包含完整原始响应。</p>
-  <div class="actions">
-    {% if video.bvid %}
-      <a class="button secondary" href="https://www.bilibili.com/video/{{ video.bvid }}/" target="_blank" rel="noreferrer">打开 B 站视频</a>
-    {% endif %}
-    <form class="inline" method="post" action="/videos/{{ video.bvid }}/report"><button type="submit">生成 HTML 报告</button></form>
   </div>
   <p class="muted">报告保存目录：<code>{{ report_output_dir }}</code>。生成后可在下方“最近报告”直接打开。</p>
   {% if reports %}

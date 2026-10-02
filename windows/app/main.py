@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import asyncio
 
 import uvicorn
 from fastapi import FastAPI
@@ -10,6 +11,7 @@ from app.collectors.bilibili_client import BilibiliClient
 from app.collectors.provider import BilibiliWebProvider
 from app.config import BASE_DIR, RUNTIME_DIR, Settings, settings
 from app.database import Database, Repository
+from app.desktop_tray import DesktopTray
 from app.logger import logger
 from app.services.crawl_service import CrawlService
 from app.services.export_service import ExportService
@@ -19,7 +21,7 @@ from app.services.phase2_service import Phase2Service
 from app.services.task_service import TaskScheduler
 from app.services.video_service import VideoService
 from app.security import verify_session_token
-from app.ui.pages import router
+from app.ui.pages import router, _request_shutdown
 
 
 def resolve_bind_host(current_settings: Settings = settings) -> str:
@@ -84,9 +86,13 @@ def create_app() -> FastAPI:
             )
         repository.add_log("INFO", "application startup")
         scheduler.start()
+        tray = DesktopTray(asyncio.get_running_loop(), crawl_service, settings.app.port, lambda: _request_shutdown(app))
+        app.state.desktop_tray = tray
+        tray.start()
         try:
             yield
         finally:
+            tray.stop()
             scheduler.shutdown()
             logger.info("application shutdown")
 
@@ -130,7 +136,9 @@ def main() -> None:
             "Use only on a trusted LAN with a password.",
             settings.app.port,
         )
-    uvicorn.run("app.main:app", host=host, port=settings.app.port, reload=False)
+    server = uvicorn.Server(uvicorn.Config(app, host=host, port=settings.app.port, reload=False))
+    app.state.shutdown_callback = lambda: setattr(server, "should_exit", True)
+    server.run()
 
 
 if __name__ == "__main__":

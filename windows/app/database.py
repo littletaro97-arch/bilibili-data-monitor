@@ -246,6 +246,10 @@ class Repository:
         with self.database.connect() as conn:
             return conn.execute("SELECT * FROM videos WHERE bvid = ?", (bvid,)).fetchone()
 
+    def update_video_cover(self, bvid: str, cover_url: str) -> None:
+        with self.database.connect() as conn:
+            conn.execute("UPDATE videos SET cover_url=?, updated_at=? WHERE bvid=?", (cover_url, iso_now(), bvid))
+
     def get_task(self, task_id: int) -> sqlite3.Row | None:
         with self.database.connect() as conn:
             return conn.execute("SELECT * FROM crawl_tasks WHERE id = ?", (task_id,)).fetchone()
@@ -314,7 +318,7 @@ class Repository:
             conn.execute(
                 """
                 UPDATE crawl_tasks
-                SET status='running', last_run_at=?, last_success_at=?,
+                SET status=CASE WHEN status IN ('paused', 'stopped') THEN status ELSE 'running' END, last_run_at=?, last_success_at=?,
                     next_run_at=?, consecutive_failures=0,
                     cooldown_until=NULL, last_error=NULL, updated_at=?
                 WHERE bvid=?
@@ -342,7 +346,7 @@ class Repository:
             conn.execute(
                 """
                 UPDATE crawl_tasks
-                SET status=?, last_run_at=?, consecutive_failures=?,
+                SET status=CASE WHEN status IN ('paused', 'stopped') THEN status ELSE ? END, last_run_at=?, consecutive_failures=?,
                     cooldown_until=?, next_run_at=?, last_error=?, updated_at=?
                 WHERE bvid=?
                 """,

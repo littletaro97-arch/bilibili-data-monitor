@@ -13,6 +13,7 @@ from plotly.offline import get_plotlyjs
 
 from app.config import load_settings, settings
 from app.config_writer import save_lan_settings, save_launcher_settings
+from app.cover import safe_cover_url
 from app.logger import clear_log_file
 from app.models import AppError
 from app.security import session_token, verify_password
@@ -98,9 +99,17 @@ def _local_ip() -> str:
             return "无法检测"
 
 
-def _request_shutdown() -> None:
+def _request_shutdown(app) -> None:
+    callback = getattr(app.state, "shutdown_callback", None)
+    if callback:
+        callback()
+        return
+
     def stop_process() -> None:
         time.sleep(1)
+        tray = getattr(app.state, "desktop_tray", None)
+        if tray:
+            tray.stop()
         os._exit(0)
 
     threading.Thread(target=stop_process, daemon=True).start()
@@ -146,7 +155,10 @@ async def api_logs(request: Request, bvid: str | None = None, limit: int = 30):
 @router.get("/api/videos/{bvid}/latest")
 async def api_video_latest(request: Request, bvid: str):
     repo = request.app.state.repository
-    return _latest_payload(repo.latest_snapshot(bvid), repo.get_task_by_bvid(bvid))
+    payload = _latest_payload(repo.latest_snapshot(bvid), repo.get_task_by_bvid(bvid))
+    video = repo.get_video(bvid)
+    payload["cover_url"] = safe_cover_url(video["cover_url"]) if video else None
+    return payload
 
 
 @router.get("/assets/plotly.min.js")
@@ -259,6 +271,7 @@ async def video_detail(
         "detail.html",
         {
             "video": video,
+            "cover_url": safe_cover_url(video["cover_url"]) if video else None,
             "task": task,
             "snapshots": snapshots,
             "latest": snapshots[-1] if snapshots else None,
@@ -498,7 +511,7 @@ async def confirm_history_exchange(request: Request, token: str = Form(...)):
 
 @router.post("/shutdown")
 async def shutdown_app(request: Request):
-    _request_shutdown()
+    _request_shutdown(request.app)
     return templates.TemplateResponse(
         request,
         "shutdown.html",
