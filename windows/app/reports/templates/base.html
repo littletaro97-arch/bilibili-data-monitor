@@ -164,6 +164,7 @@
     <nav>
       <a href="/">返回首页</a>
       <a href="/settings">设置</a>
+      <a href="/recycle-bin">回收站</a>
     </nav>
   </header>
   <main>
@@ -198,6 +199,7 @@
     }
 
     async function refreshLogs() {
+      if (document.hidden || window.__desktopHidden) return;
       const body = document.querySelector("[data-log-body]");
       if (!body) return;
       const bvid = body.dataset.bvid;
@@ -290,6 +292,7 @@
     }
 
     async function refreshLatestVideoData() {
+      if (document.hidden || window.__desktopHidden) return;
       const match = window.location.pathname.match(/^\/videos\/([^/]+)/);
       if (!match) return;
       try {

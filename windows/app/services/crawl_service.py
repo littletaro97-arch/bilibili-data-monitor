@@ -48,6 +48,10 @@ class CrawlService:
                 return False
             try:
                 stats = await self.provider.fetch_video_stats(bvid)
+                # An in-flight HTTP request may finish after recycling; discard its result.
+                latest_task = self.repository.get_task_by_bvid(bvid)
+                if not latest_task or latest_task["status"] == "stopped":
+                    return False
                 cover_url = safe_cover_url(stats.cover_url)
                 if cover_url:
                     self.repository.update_video_cover(bvid, cover_url)

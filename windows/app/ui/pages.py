@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import asyncio
 from datetime import datetime
 from pathlib import Path
 import socket
@@ -227,7 +228,39 @@ async def resume_task(request: Request, task_id: int):
 @router.post("/tasks/{task_id}/stop")
 async def stop_task(request: Request, task_id: int):
     request.app.state.video_service.stop_task(task_id)
-    return _flash_redirect("/", "任务已删除，历史数据保留")
+    return _flash_redirect("/", "已放入回收站，停止检测，历史数据保留")
+
+
+@router.get("/recycle-bin", response_class=HTMLResponse)
+async def recycle_bin(request: Request, message: str | None = None, level: str = "info"):
+    tasks = [task for task in request.app.state.repository.list_tasks(include_stopped=True) if task["status"] == "stopped"]
+    return templates.TemplateResponse(request, "recycle_bin.html", {"tasks": tasks, "message": message, "level": level})
+
+
+@router.post("/recycle-bin/{task_id}/restore")
+async def restore_recycled_task(request: Request, task_id: int):
+    try:
+        request.app.state.video_service.restore_task(task_id)
+        return _flash_redirect("/recycle-bin", "已取回链接，恢复正常检测")
+    except AppError as exc:
+        return _flash_redirect("/recycle-bin", str(exc), "error")
+
+
+@router.post("/desktop/activate")
+async def activate_desktop(request: Request):
+    from urllib.parse import urlsplit
+    if not request.client or request.client.host not in {"127.0.0.1", "::1"}:
+        return Response(status_code=403)
+    origin = request.headers.get("origin")
+    if origin and origin != str(request.base_url).rstrip("/"):
+        return Response(status_code=403)
+    if urlsplit(str(request.url)).hostname not in {"127.0.0.1", "::1"}:
+        return Response(status_code=403)
+    panel = getattr(request.app.state, "desktop_panel", None)
+    if panel:
+        await asyncio.to_thread(panel.open, "/")
+        return {"activated": True}
+    return {"activated": False}
 
 
 @router.post("/tasks/{task_id}/collect")
@@ -236,7 +269,9 @@ async def collect_now(request: Request, task_id: int):
     if not task:
         return _flash_redirect("/", "任务不存在", "error")
     try:
-        await request.app.state.crawl_service.collect_once(task["bvid"])
+        collected = await request.app.state.crawl_service.collect_once(task["bvid"])
+        if not collected:
+            return _flash_redirect("/", "本次未采集：任务已停止或正在检测")
         return _flash_redirect("/", "立即采集完成")
     except AppError as exc:
         return _flash_redirect("/", str(exc), "error")

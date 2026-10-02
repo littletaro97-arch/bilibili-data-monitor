@@ -51,8 +51,9 @@ def main() -> None:
     install_args = [str(args.installer.resolve()), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/CLOSEAPPLICATIONS=no", f"/DIR={install}", f"/GROUP=BilibiliMonitor-test-{root.name}"]
     checks = []
 
-    def install_once(label: str) -> None:
-        subprocess.run([*install_args, f"/LOG={root / (label + '.log')}"], check=True, timeout=180)
+    def install_once(label: str, use_previous: bool = False) -> None:
+        command = [arg for arg in install_args if not (use_previous and arg.startswith("/DIR="))]
+        subprocess.run([*command, f"/LOG={root / (label + '.log')}"], check=True, timeout=180)
         assert (install / "BilibiliMonitor.exe").exists()
         assert registered()
         assert not list(install.rglob("*.db")), "User database must not be included"
@@ -92,12 +93,14 @@ def main() -> None:
         install_once("fresh-install")
         process = launch()
         try:
-            for route in ["/", "/settings", "/assets/plotly.min.js"]:
+            for route in ["/", "/settings", "/recycle-bin", "/assets/plotly.min.js"]:
                 response = httpx.get(base + route, timeout=30)
                 assert response.status_code == 200, (route, response.text[:200])
                 if route == "/settings":
                     assert "run.bat" not in response.text
             checks.append("homepage-settings-plotly")
+            assert httpx.post(base + "/desktop/activate", timeout=20).json()["activated"]
+            checks.append("packaged-native-window-activation")
             database = data / "data" / "bilibili_local.db"
             with sqlite3.connect(database) as conn:
                 now = "2026-01-01T00:00:00+00:00"
@@ -120,7 +123,7 @@ def main() -> None:
         finally:
             stop(process)
         before = hashlib.sha256(database.read_bytes()).hexdigest()
-        install_once("upgrade-reinstall")
+        install_once("upgrade-reinstall-original-directory", use_previous=True)
         assert hashlib.sha256(database.read_bytes()).hexdigest() == before
         process = launch()
         assert httpx.get(base + "/videos/BV1xx411c7mD", timeout=30).status_code == 200

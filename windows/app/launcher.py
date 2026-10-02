@@ -26,7 +26,7 @@ def main() -> int:
         return 0
     if args.no_browser:
         from app.main import main as server_main
-        server_main()
+        server_main(desktop=False)
         return 0
 
     current = load_settings()
@@ -46,22 +46,13 @@ def _run_visible() -> int:
     if _port_is_open(current.app.port):
         print(f"端口 {current.app.port} 已被占用。")
         print(f"如果程序已经在运行，将打开 {url}")
-        webbrowser.open(url)
+        _activate_existing(current.app.port, url)
         _pause()
         return 0
 
-    opener = subprocess.Popen(
-        _command("app.launcher", "--open-browser-only"),
-        cwd=BASE_DIR,
-        creationflags=_creationflags(hidden=True),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
     try:
         return subprocess.call(_command("app.main"), cwd=BASE_DIR)
     finally:
-        if opener.poll() is None:
-            opener.terminate()
         _pause()
 
 
@@ -69,7 +60,7 @@ def _run_hidden() -> int:
     current = load_settings()
     url = _local_url(current.app.port)
     if _port_is_open(current.app.port):
-        webbrowser.open(url)
+        _activate_existing(current.app.port, url)
         return 0
 
     log_path = RUNTIME_DIR / "logs" / "launcher.log"
@@ -83,8 +74,22 @@ def _run_hidden() -> int:
             stderr=log,
         )
 
-    _open_when_ready(current.app.port, url, process)
+    for _ in range(30):
+        if process.poll() is not None or _port_is_open(current.app.port):
+            break
+        time.sleep(1)
     return 0
+
+
+def _activate_existing(port: int, url: str) -> None:
+    import httpx
+    try:
+        response = httpx.post(f"http://127.0.0.1:{port}/desktop/activate", timeout=3)
+        if response.status_code == 200 and response.json().get("activated"):
+            return
+    except (httpx.HTTPError, ValueError):
+        pass
+    webbrowser.open(url)
 
 
 def _start_detached_launcher() -> int:

@@ -13,11 +13,12 @@ from app.logger import logger
 class DesktopTray:
     """Windows tray belongs to the server process, including hidden launcher mode."""
 
-    def __init__(self, loop, crawl_service, port: int, request_exit: Callable[[], None]):
+    def __init__(self, loop, crawl_service, port: int, request_exit: Callable[[], None], open_panel=None):
         self.loop = loop
         self.crawl_service = crawl_service
         self.url = f"http://127.0.0.1:{port}"
         self.request_exit = request_exit
+        self.panel_opener = open_panel
         self.icon = None
         self.thread = None
         self._pending: Future | None = None
@@ -57,10 +58,16 @@ class DesktopTray:
         logger.info("系统托盘已启动")
 
     def open_panel(self, icon=None, item=None) -> None:
-        webbrowser.open(self.url + "/")
+        if self.panel_opener:
+            self.panel_opener("/")
+        else:
+            webbrowser.open(self.url + "/")
 
     def open_settings(self, icon=None, item=None) -> None:
-        webbrowser.open(self.url + "/settings")
+        if self.panel_opener:
+            self.panel_opener("/settings")
+        else:
+            webbrowser.open(self.url + "/settings")
 
     def collect_now(self, icon=None, item=None) -> None:
         if self._pending is not None and not self._pending.done():

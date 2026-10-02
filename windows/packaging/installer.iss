@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.11.1"
+  #define AppVersion "0.12.0"
 #endif
 #ifndef InstallerRevision
   #define InstallerRevision "1"

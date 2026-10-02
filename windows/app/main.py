@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import asyncio
+import os
+import threading
+import time
+import webbrowser
 
 import uvicorn
 from fastapi import FastAPI
@@ -87,7 +91,8 @@ def create_app() -> FastAPI:
             )
         repository.add_log("INFO", "application startup")
         scheduler.start()
-        tray = DesktopTray(asyncio.get_running_loop(), crawl_service, settings.app.port, lambda: _request_shutdown(app))
+        panel = getattr(app.state, "desktop_panel", None)
+        tray = DesktopTray(asyncio.get_running_loop(), crawl_service, settings.app.port, lambda: _request_shutdown(app), panel.open if panel else None)
         app.state.desktop_tray = tray
         tray.start()
         try:
@@ -130,7 +135,7 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
-def main() -> None:
+def main(*, desktop: bool = True) -> None:
     host = resolve_bind_host(settings)
     if settings.lan.enabled:
         logger.warning(
@@ -140,6 +145,28 @@ def main() -> None:
         )
     server = uvicorn.Server(uvicorn.Config(app, host=host, port=settings.app.port, reload=False))
     app.state.shutdown_callback = lambda: setattr(server, "should_exit", True)
+    if desktop and os.name == "nt":
+        from app.desktop_panel import DesktopPanel, evergreen_installed, missing_runtime_notice
+        if evergreen_installed():
+            try:
+                panel = DesktopPanel(settings.app.port)
+            except ImportError:
+                logger.exception("自有窗口依赖缺失，将使用浏览器面板")
+            else:
+                app.state.desktop_panel = panel
+                panel.run(server)
+                return
+        else:
+            missing_runtime_notice()
+        def open_browser():
+            for _ in range(200):
+                if server.started:
+                    webbrowser.open(f"http://127.0.0.1:{settings.app.port}/")
+                    return
+                if server.should_exit:
+                    return
+                time.sleep(.1)
+        threading.Thread(target=open_browser, daemon=True).start()
     server.run()
 
 

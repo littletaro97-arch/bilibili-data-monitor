@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}回收站 - B站数据监控{% endblock %}
+{% block content %}
+<section>
+  <h2>回收站</h2>
+  <p class="muted">这里的链接已经停止检测，已有历史保留。取回后按原间隔恢复正常检测；若运行任务数已达上限，请先暂停一个任务。</p>
+  {% if tasks %}
+    <table><thead><tr><th>视频</th><th>原检测间隔</th><th>放入时间</th><th>操作</th></tr></thead><tbody>
+    {% for task in tasks %}
+      <tr><td><a href="/videos/{{ task.bvid }}">{{ task.title or task.bvid }}</a><br><span class="muted">{{ task.bvid }}</span></td>
+        <td>{{ task.interval_seconds }} 秒</td><td>{{ task.updated_at }}</td><td>
+          <form method="post" action="/recycle-bin/{{ task.id }}/restore"><button type="submit">取回并恢复检测</button></form>
+        </td></tr>
+    {% endfor %}
+    </tbody></table>
+  {% else %}<p class="empty">回收站为空。</p>{% endif %}
+</section>
+{% endblock %}

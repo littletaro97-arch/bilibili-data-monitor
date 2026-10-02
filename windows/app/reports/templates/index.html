@@ -23,7 +23,7 @@
   <h2>添加采集任务</h2>
   <form method="post" action="/tasks" class="row">
     <div>
-      <label for="video_input">BV 号或视频链接</label>
+      <label for="video_input">BV 号、视频链接或 b23.tv 短链</label>
       <input id="video_input" name="video_input" required placeholder="BV1xx411c7mD 或 https://www.bilibili.com/video/BV...">
     </div>
     <div>
@@ -71,7 +71,7 @@
                 {% else %}
                   <form class="inline" method="post" action="/tasks/{{ task.id }}/pause"><button class="secondary" type="submit">暂停</button></form>
                 {% endif %}
-                <form class="inline" method="post" action="/tasks/{{ task.id }}/stop"><button class="danger" type="submit">删除</button></form>
+                <form class="inline" method="post" action="/tasks/{{ task.id }}/stop"><button class="danger" type="submit">放入回收站</button></form>
               </div>
             </td>
           </tr>

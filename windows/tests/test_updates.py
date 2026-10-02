@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.services.update_service import REPOSITORY, UpdateService, UpdateError, safe_download_url
 
 
-def release(version="0.12.0", revision=1, content=b"synthetic installer bytes"):
+def release(version="0.12.1", revision=1, content=b"synthetic installer bytes"):
     name = f"BilibiliMonitor-v{version}-installer.{revision}-windows-x64-setup.exe"
     tag = f"windows-v{version}-installer.{revision}"
     return {"tag_name": tag, "draft": False, "prerelease": False, "body": "<script>notes</script>", "assets": [{
@@ -32,7 +32,7 @@ async def test_select_windows_numeric_version_and_installer_revision(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("version,revision,available", [("0.11.1", 1, False), ("0.11.1", 2, True), ("0.10.9", 99, False)])
+@pytest.mark.parametrize("version,revision,available", [("0.12.0", 1, False), ("0.12.0", 2, True), ("0.11.1", 99, False)])
 async def test_compare_current_version(tmp_path, version, revision, available):
     service = UpdateService(tmp_path, httpx.MockTransport(lambda request: httpx.Response(200, json=[release(version, revision)])))
     await service.check()
