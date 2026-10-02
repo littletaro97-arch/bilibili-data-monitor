@@ -1,0 +1,20 @@
+Application version: 0.11.1 (Windows)
+Installer revision: 1
+Package identifier: v0.11.1-installer.1
+Source commit: 441718128961ab6d1c85a3bbf418b5b3d027df77
+Pre-change baseline: a3d08f6
+Branch: codex/windows-installer
+Build date: 2026-10-02 (Asia/Shanghai)
+Python: 3.13.5 x64
+PyInstaller: 6.18.0
+PyInstaller hooks: 2026.0
+Inno Setup: 6.7.3
+Installer bytes: 49828021
+Installer SHA256: 2695D764EC3407115B85CA030937782C2360CFE2AEB34FFFD81421A902D56B05
+Authenticode: NotSigned
+Python tests: 60 passed
+Isolated install/startup/upgrade/uninstall validation: PASS
+Visual checks: Chinese welcome/information/directory/start-menu/tasks/ready pages and uninstall data-retention prompt inspected
+Visual limitation: progress/finish pages were not individually inspected; full install/uninstall ran automatically
+Release state: local only; not uploaded or published
+Frozen payload was built by PyInstaller; the final settings template was copied from source into its matching resource directory before final Inno compilation.

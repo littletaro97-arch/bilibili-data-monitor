@@ -1,0 +1,13 @@
+{
+  "result": "PASS",
+  "checks": [
+    "fresh-install",
+    "homepage-settings-plotly",
+    "report-export-config-write",
+    "upgrade-reinstall",
+    "uninstall",
+    "all-user-data-retained"
+  ],
+  "evidence_directory": "C:\\Users\\LITTLE~1\\AppData\\Local\\Temp\\bilibili-installer-u6izdm20",
+  "visual_wizard_verification": "separate manual report"
+}
