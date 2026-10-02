@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 from fastapi.testclient import TestClient
 
-from app.cover import safe_cover_url
+from app.cover import safe_cover_url, local_cover_url
 from app.database import Database, Repository, local_now
 from app.desktop_tray import DesktopTray
 from app.models import VideoInfo, VideoStats
@@ -174,5 +174,6 @@ def test_detail_and_refresh_api_never_render_untrusted_cover(tmp_path):
     assert "暂无封面" in response.text
     assert client.get("/api/videos/BV1xx411c7mD/latest").json()["cover_url"] is None
     repo.update_video_cover("BV1xx411c7mD", "http://i0.hdslb.com/cover.jpg")
-    assert 'src="https://i0.hdslb.com/cover.jpg"' in client.get("/videos/BV1xx411c7mD").text
-    assert client.get("/api/videos/BV1xx411c7mD/latest").json()["cover_url"] == "https://i0.hdslb.com/cover.jpg"
+    url = local_cover_url("BV1xx411c7mD", "https://i0.hdslb.com/cover.jpg")
+    assert f'src="{url}"' in client.get("/videos/BV1xx411c7mD").text
+    assert client.get("/api/videos/BV1xx411c7mD/latest").json()["cover_url"] == url

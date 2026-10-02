@@ -1,0 +1,156 @@
+{
+  "date": "2026-10-02",
+  "baseline_commit": "be3a662",
+  "method": "Same SQLite backup, isolated Windows WebView2 profile, 3 second settle + 15 second sampling per scene, scheduler disabled in test copies",
+  "before": {
+    "success": true,
+    "logical_cpus": 16,
+    "scenes": {
+      "home": {
+        "working_mib": 510.6,
+        "private_mib": 285.6,
+        "cpu_seconds": 0.109,
+        "cpu_machine_percent": 0.045,
+        "rendered_charts": 0
+      },
+      "detail_collapsed": {
+        "working_mib": 636.4,
+        "private_mib": 398.9,
+        "cpu_seconds": 0.219,
+        "cpu_machine_percent": 0.091,
+        "rendered_charts": 11
+      },
+      "detail_one_chart": {
+        "working_mib": 639.8,
+        "private_mib": 399.3,
+        "cpu_seconds": 0.047,
+        "cpu_machine_percent": 0.019,
+        "rendered_charts": 11
+      },
+      "detail_closed_again": {
+        "working_mib": 673.9,
+        "private_mib": 435.2,
+        "cpu_seconds": 0.156,
+        "cpu_machine_percent": 0.065,
+        "rendered_charts": 11
+      },
+      "tray": {
+        "working_mib": 698.2,
+        "private_mib": 457.3,
+        "cpu_seconds": 1.578,
+        "cpu_machine_percent": 0.654,
+        "rendered_charts": 11
+      }
+    },
+    "chart_reopen_and_theme": true,
+    "chart_instance_reused": true,
+    "cover_loaded": true,
+    "warm_cover_fetch": null,
+    "warm_cover_transfer_bytes": []
+  },
+  "after": {
+    "success": true,
+    "logical_cpus": 16,
+    "scenes": {
+      "home": {
+        "working_mib": 523.7,
+        "private_mib": 298.0,
+        "cpu_seconds": 0.406,
+        "cpu_machine_percent": 0.168,
+        "rendered_charts": 0
+      },
+      "detail_collapsed": {
+        "working_mib": 563.4,
+        "private_mib": 329.3,
+        "cpu_seconds": 0.172,
+        "cpu_machine_percent": 0.071,
+        "rendered_charts": 0
+      },
+      "detail_one_chart": {
+        "working_mib": 611.0,
+        "private_mib": 372.5,
+        "cpu_seconds": 0.094,
+        "cpu_machine_percent": 0.039,
+        "rendered_charts": 1
+      },
+      "detail_closed_again": {
+        "working_mib": 645.9,
+        "private_mib": 408.4,
+        "cpu_seconds": 0.125,
+        "cpu_machine_percent": 0.052,
+        "rendered_charts": 1
+      },
+      "tray": {
+        "working_mib": 665.5,
+        "private_mib": 423.0,
+        "cpu_seconds": 1.531,
+        "cpu_machine_percent": 0.635,
+        "rendered_charts": 1
+      }
+    },
+    "chart_reopen_and_theme": true,
+    "chart_instance_reused": true,
+    "cover_loaded": true,
+    "warm_cover_fetch": {
+      "milliseconds": 13.099999964237213,
+      "bytes": 103300
+    },
+    "warm_cover_transfer_bytes": [
+      103600,
+      0
+    ]
+  },
+  "actual_running_application_after": {
+    "duration_seconds": 128.83,
+    "logical_cpus": 16,
+    "cpu_seconds": 1.906,
+    "mean_cpu_machine_percent": 0.092,
+    "peak_cpu_machine_percent": 1.895,
+    "median_private_mib": 324.7,
+    "peak_private_mib": 334.2
+  },
+  "live_http_after": [
+    {
+      "bvid": "BV14Baa6JENd",
+      "detail_ms": [
+        253.6,
+        73.2,
+        73.9,
+        69.6,
+        69.9
+      ],
+      "html_bytes": 63127,
+      "cover_ms": [
+        1319.7,
+        18.0,
+        18.7
+      ],
+      "cover_status": 200,
+      "cover_bytes": 103300
+    },
+    {
+      "bvid": "BV1cQap6UEr2",
+      "detail_ms": [
+        76.7,
+        77.2,
+        77.4,
+        76.9,
+        75.9
+      ],
+      "html_bytes": 61089,
+      "cover_ms": [
+        999.5,
+        12.1,
+        12.2
+      ],
+      "cover_status": 200,
+      "cover_bytes": 54538
+    }
+  ],
+  "limitations": [
+    "Measured user task intervals were 300 seconds. Actual 60 second collection pressure is not verified.",
+    "CPU short samples fluctuate; sustained CPU reduction is not established.",
+    "Working set totals may count shared memory multiple times.",
+    "App restarts and page history confound comparisons of production PID samples."
+  ]
+}

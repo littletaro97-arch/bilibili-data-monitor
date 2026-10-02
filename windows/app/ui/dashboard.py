@@ -1,4 +1,5 @@
 from pathlib import Path
+from plotly import __version__ as PLOTLY_VERSION
 from datetime import datetime
 from app.services.analysis_service import METRICS
 
@@ -41,3 +42,4 @@ templates.env.filters.update(task_label=task_label, task_style=task_style,
     count_display=lambda value: "暂无" if value is None else format(value, ","), local_time=local_time)
 
 templates.env.globals["chart_metric_names"] = [field for field, _ in METRICS]
+templates.env.globals["plotly_version"] = PLOTLY_VERSION

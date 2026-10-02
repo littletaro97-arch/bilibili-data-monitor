@@ -161,7 +161,7 @@
   </style>
   <link rel="stylesheet" href="/assets/appearance.css">
   {% if needs_plotly %}
-    <script src="/assets/plotly.min.js"></script>
+    <script defer src="/assets/charts.js" data-library-url="/assets/plotly.min.js?v={{ plotly_version }}"></script>
   {% endif %}
 </head>
 <body>
@@ -232,9 +232,9 @@
     }
 
     async function refreshLogs() {
-      if (await panelHidden()) return;
       const body = document.querySelector("[data-log-body]");
-      if (!body) return;
+      if (!body || body.closest("details:not([open])")) return;
+      if (await panelHidden()) return;
       const bvid = body.dataset.bvid;
       const limit = body.dataset.limit || "30";
       const url = new URL("/api/logs", window.location.origin);
@@ -244,6 +244,9 @@
         const response = await fetch(url, { cache: "no-store" });
         if (!response.ok) return;
         const data = await response.json();
+        const fingerprint = JSON.stringify(data.logs || []);
+        if (body.dataset.fingerprint === fingerprint) return;
+        body.dataset.fingerprint = fingerprint;
         body.innerHTML = (data.logs || []).map((log) => {
           const detail = log.detail ? `<br><span class="muted">${escapeHtml(log.detail)}</span>` : "";
           const bvid = body.dataset.showBvid === "1" ? `<td>${escapeHtml(log.bvid || "-")}</td>` : "";

@@ -15,6 +15,7 @@ from app.collectors.bilibili_client import BilibiliClient
 from app.collectors.provider import BilibiliWebProvider
 from app.config import BASE_DIR, RUNTIME_DIR, Settings, settings
 from app.database import Database, Repository
+from app.cover import CoverCache
 from app.desktop_tray import DesktopTray
 from app.logger import logger
 from app.services.crawl_service import CrawlService
@@ -104,6 +105,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Bilibili Local Analytics", lifespan=lifespan)
     app.state.repository = repository
+    app.state.cover_cache = CoverCache(RUNTIME_DIR / "cache" / "covers")
     app.state.video_service = video_service
     app.state.crawl_service = crawl_service
     app.state.report_service = report_service

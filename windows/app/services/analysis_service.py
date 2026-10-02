@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from datetime import datetime
 import re
+import uuid
 from typing import Iterable
 
 import plotly.graph_objects as go
@@ -59,7 +60,19 @@ STOPWORDS = {
 }
 
 
-def build_chart_blocks(snapshots: Iterable, include_plotlyjs: bool | str = False) -> list[dict[str, object]]:
+def _chart_html(fig, *, lazy: bool = False, **kwargs) -> str:
+    if not lazy:
+        return pio.to_html(fig, **kwargs)
+    # Web pages retain only JSON until the user opens the chart. Reports remain standalone.
+    fig.update_layout(template=None)
+    payload = pio.to_json(fig).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    identity = "chart-" + uuid.uuid4().hex
+    return (f'<div class="lazy-chart"><div id="{identity}" class="plotly-graph-div lazy-chart-target" '
+            f'style="width:100%;height:{fig.layout.height or 360}px"></div>'
+            f'<script type="application/json" data-chart-json>{payload}</script></div>')
+
+
+def build_chart_blocks(snapshots: Iterable, include_plotlyjs: bool | str = False, *, lazy: bool = False) -> list[dict[str, object]]:
     rows = [dict(row) for row in snapshots]
     if len(rows) < 2:
         return [{"title": "趋势图", "html": Markup("<p class=\"empty\">数据不足，继续采集中</p>")}]
@@ -88,8 +101,8 @@ def build_chart_blocks(snapshots: Iterable, include_plotlyjs: bool | str = False
             {
                 "title": title,
                 "html": Markup(
-                    pio.to_html(
-                        fig,
+                    _chart_html(
+                        fig, lazy=lazy,
                         include_plotlyjs=include_plotlyjs if first_chart else False,
                         full_html=False,
                         default_width="100%",
@@ -115,8 +128,8 @@ def build_chart_blocks(snapshots: Iterable, include_plotlyjs: bool | str = False
             {
                 "title": title,
                 "html": Markup(
-                    pio.to_html(
-                        fig,
+                    _chart_html(
+                        fig, lazy=lazy,
                         include_plotlyjs=False,
                         full_html=False,
                         default_width="100%",
@@ -133,6 +146,7 @@ def build_dual_axis_chart(
     left_field: str = "view_count",
     right_field: str = "like_count",
     include_plotlyjs: bool | str = False,
+    *, lazy: bool = False,
 ) -> Markup:
     rows = [dict(row) for row in snapshots]
     if len(rows) < 2:
@@ -177,8 +191,8 @@ def build_dual_axis_chart(
     )
     _add_source_note(fig, rows)
     return Markup(
-        pio.to_html(
-            fig,
+        _chart_html(
+            fig, lazy=lazy,
             include_plotlyjs=include_plotlyjs,
             full_html=False,
             default_width="100%",
@@ -192,6 +206,7 @@ def build_ratio_chart(
     numerator_field: str = "like_count",
     denominator_field: str = "view_count",
     include_plotlyjs: bool | str = False,
+    *, lazy: bool = False,
 ) -> Markup:
     rows = [dict(row) for row in snapshots]
     if len(rows) < 2:
@@ -246,8 +261,8 @@ def build_ratio_chart(
     )
     _add_source_note(fig, rows)
     return Markup(
-        pio.to_html(
-            fig,
+        _chart_html(
+            fig, lazy=lazy,
             include_plotlyjs=include_plotlyjs,
             full_html=False,
             default_width="100%",
@@ -282,7 +297,7 @@ def top_words(rows: Iterable, field: str = "message", limit: int = 20) -> list[d
     return [{"word": word, "count": count} for word, count in counter.most_common(limit)]
 
 
-def build_danmaku_density_chart(danmaku_rows: Iterable, bucket_seconds: int = 30) -> Markup:
+def build_danmaku_density_chart(danmaku_rows: Iterable, bucket_seconds: int = 30, *, lazy: bool = False) -> Markup:
     rows = [dict(row) for row in danmaku_rows]
     points = [row.get("progress_sec") for row in rows if row.get("progress_sec") is not None]
     if not points:
@@ -303,8 +318,8 @@ def build_danmaku_density_chart(danmaku_rows: Iterable, bucket_seconds: int = 30
         height=360,
     )
     return Markup(
-        pio.to_html(
-            fig,
+        _chart_html(
+            fig, lazy=lazy,
             include_plotlyjs=False,
             full_html=False,
             default_width="100%",

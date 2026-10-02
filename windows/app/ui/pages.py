@@ -10,11 +10,13 @@ import time
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
-from plotly.offline import get_plotlyjs
+import plotly
+import httpx
+from PIL import UnidentifiedImageError, Image
 
 from app.config import load_settings, settings
 from app.config_writer import save_lan_settings, save_launcher_settings
-from app.cover import safe_cover_url
+from app.cover import safe_cover_url, local_cover_url, cover_key
 from app.version import APP_VERSION, INSTALLER_REVISION
 from app.services.update_service import RELEASES_URL, UpdateError
 from app.logger import clear_log_file
@@ -160,19 +162,37 @@ async def api_video_latest(request: Request, bvid: str):
     repo = request.app.state.repository
     payload = _latest_payload(repo.latest_snapshot(bvid), repo.get_task_by_bvid(bvid))
     video = repo.get_video(bvid)
-    payload["cover_url"] = safe_cover_url(video["cover_url"]) if video else None
+    payload["cover_url"] = local_cover_url(bvid, video["cover_url"]) if video else None
     return payload
 
 
 @router.get("/assets/{name}")
 async def branding_asset(name: str):
-    allowed = {"app-icon.png", "app-icon.ico", "appearance.js", "appearance.css"}
+    allowed = {"app-icon.png", "app-icon.ico", "appearance.js", "appearance.css", "charts.js"}
     if name == "plotly.min.js":
-        return Response(get_plotlyjs(), media_type="application/javascript")
+        # Stream the installed asset instead of materializing several MB per request.
+        return FileResponse(Path(plotly.__file__).parent / "package_data" / "plotly.min.js",
+                            media_type="application/javascript", headers={"Cache-Control": "public, max-age=86400"})
     if name not in allowed:
         return Response(status_code=404)
     from app.config import BASE_DIR
     return FileResponse(BASE_DIR / "app" / "assets" / name)
+
+
+@router.get("/covers/{bvid}/{key}.webp")
+async def cached_cover(request: Request, bvid: str, key: str):
+    video = request.app.state.repository.get_video(bvid)
+    url = safe_cover_url(video["cover_url"]) if video else None
+    if not url or key != cover_key(url):
+        return Response(status_code=404)
+    headers = {"Cache-Control": "private, max-age=31536000, immutable", "ETag": f'"{key}"'}
+    if request.headers.get("if-none-match") == headers["ETag"]:
+        return Response(status_code=304, headers=headers)
+    try:
+        path = await request.app.state.cover_cache.get(url)
+        return FileResponse(path, media_type="image/webp", headers=headers)
+    except (httpx.HTTPError, ValueError, OSError, UnidentifiedImageError, Image.DecompressionBombError):
+        return Response(status_code=502, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/lan/login", response_class=HTMLResponse)
@@ -343,13 +363,13 @@ async def video_detail(
         "detail.html",
         {
             "video": video,
-            "cover_url": safe_cover_url(video["cover_url"]) if video else None,
+            "cover_url": local_cover_url(bvid, video["cover_url"]) if video else None,
             "task": task,
             "snapshots": snapshots,
             "latest": snapshots[-1] if snapshots else None,
-            "charts": build_chart_blocks(snapshots, include_plotlyjs=False),
-            "dual_axis_chart": build_dual_axis_chart(snapshots, left_metric, right_metric),
-            "ratio_chart": build_ratio_chart(snapshots, ratio_numerator, ratio_denominator),
+            "charts": build_chart_blocks(snapshots, include_plotlyjs=False, lazy=True),
+            "dual_axis_chart": build_dual_axis_chart(snapshots, left_metric, right_metric, lazy=True),
+            "ratio_chart": build_ratio_chart(snapshots, ratio_numerator, ratio_denominator, lazy=True),
             "metric_options": METRICS,
             "left_metric": left_metric,
             "right_metric": right_metric,
@@ -364,7 +384,7 @@ async def video_detail(
             "danmaku": danmaku[:50],
             "comment_top_words": top_words(comments, field="message", limit=20),
             "danmaku_top_words": top_words(danmaku, field="text", limit=20),
-            "danmaku_density_chart": build_danmaku_density_chart(danmaku),
+            "danmaku_density_chart": build_danmaku_density_chart(danmaku, lazy=True),
             "message": message,
             "level": level,
             "needs_plotly": True,
