@@ -3,6 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from markupsafe import Markup
+from app.config import BASE_DIR
+
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.database import Repository
@@ -28,6 +31,8 @@ class ReportService:
         template = self.env.get_template("report.html.j2")
         generated_at = datetime.now().astimezone().isoformat()
         html = template.render(
+            appearance_css=Markup((BASE_DIR / "app/assets/appearance.css").read_text(encoding="utf-8")),
+            appearance_js=Markup((BASE_DIR / "app/assets/appearance.js").read_text(encoding="utf-8")),
             video=video,
             task=task,
             snapshots=snapshots,

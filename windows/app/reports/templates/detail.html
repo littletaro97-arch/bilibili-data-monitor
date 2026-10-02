@@ -10,7 +10,7 @@
   <div class="video-heading">
     <figure class="video-cover">
       <img data-video-cover {% if cover_url %}src="{{ cover_url }}"{% else %}hidden{% endif %} alt="{{ video.title or '视频' }}的封面" referrerpolicy="no-referrer" decoding="async">
-      <div class="cover-placeholder" data-cover-placeholder {% if cover_url %}hidden{% endif %}>暂无封面</div>
+      <div class="cover-placeholder" data-cover-placeholder >{% if cover_url %}正在加载封面…{% else %}暂无封面{% endif %}</div>
     </figure>
     <div class="video-heading-content">
       <h2>{{ video.title if video else "视频详情" }}</h2>
@@ -19,7 +19,7 @@
           <div class="metric"><span>BV 号</span><strong>{{ video.bvid }}</strong></div>
           <div class="metric"><span>UP 主</span><strong>{{ video.owner_name or "未知" }}</strong></div>
           <div class="metric"><span>发布时间</span><strong>{{ video.pubdate or "未知" }}</strong></div>
-          <div class="metric"><span>任务状态</span><strong data-task-status>{{ task.status if task else "无任务" }}</strong></div>
+          <div class="metric"><span>任务状态</span><strong data-task-status>{{ task.status|task_label if task else "无任务" }}</strong></div>
         </div>
       {% endif %}
       <p class="muted">本工具只保存公开统计字段；raw_json 默认关闭，报告不包含完整原始响应。</p>

@@ -164,9 +164,15 @@ async def api_video_latest(request: Request, bvid: str):
     return payload
 
 
-@router.get("/assets/plotly.min.js")
-async def plotly_asset():
-    return Response(get_plotlyjs(), media_type="application/javascript")
+@router.get("/assets/{name}")
+async def branding_asset(name: str):
+    allowed = {"app-icon.png", "app-icon.ico", "appearance.js", "appearance.css"}
+    if name == "plotly.min.js":
+        return Response(get_plotlyjs(), media_type="application/javascript")
+    if name not in allowed:
+        return Response(status_code=404)
+    from app.config import BASE_DIR
+    return FileResponse(BASE_DIR / "app" / "assets" / name)
 
 
 @router.get("/lan/login", response_class=HTMLResponse)
@@ -268,6 +274,28 @@ async def activate_desktop(request: Request):
         await asyncio.to_thread(panel.open, "/")
         return {"activated": True}
     return {"activated": False}
+
+
+@router.post("/desktop/theme")
+async def desktop_theme(request: Request):
+    from urllib.parse import urlsplit
+    if not request.client or request.client.host not in {"127.0.0.1", "::1"}:
+        return Response(status_code=403)
+    origin = request.headers.get("origin")
+    if origin and origin != str(request.base_url).rstrip("/"):
+        return Response(status_code=403)
+    if urlsplit(str(request.url)).hostname not in {"127.0.0.1", "::1"}:
+        return Response(status_code=403)
+    try:
+        data = await request.json()
+    except ValueError:
+        return Response(status_code=400)
+    if not isinstance(data, dict) or not isinstance(data.get("dark"), bool):
+        return Response(status_code=400)
+    panel = getattr(request.app.state, "desktop_panel", None)
+    if panel:
+        await asyncio.to_thread(panel.set_theme, data["dark"])
+    return {"applied": bool(panel)}
 
 
 @router.post("/tasks/{task_id}/collect")

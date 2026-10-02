@@ -40,6 +40,14 @@ async def test_native_icon_lifecycle_and_actual_menu_callbacks(tmp_path, monkeyp
         items = list(tray.icon.menu)
         items[2](tray.icon)
         assert opened == ["http://127.0.0.1:18769/", "http://127.0.0.1:18769/settings"]
+        # Dispatch the real Shell click event through this icon's native message loop.
+        from pystray._util import win32
+        win32.PostMessage(tray.icon._hwnd, win32.WM_NOTIFY, 0, 0x405)
+        for _ in range(100):
+            if len(opened) == 3: break
+            await asyncio.sleep(.01)
+        assert opened[-1] == "http://127.0.0.1:18769/"
+        assert len(opened) == 3
         items[1](tray.icon)
         await asyncio.wrap_future(tray._pending)
         assert repo.latest_snapshot("BV1xx411c7mD")["view_count"] == 7

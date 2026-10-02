@@ -7,7 +7,7 @@
   {% if tasks %}
     <table><thead><tr><th>视频</th><th>原检测间隔</th><th>放入时间</th><th>操作</th></tr></thead><tbody>
     {% for task in tasks %}
-      <tr><td><a href="/videos/{{ task.bvid }}">{{ task.title or task.bvid }}</a><br><span class="muted">{{ task.bvid }}</span></td>
+      <tr><td><a href="/videos/{{ task.bvid }}">{{ task.title or task.bvid }}</a><br><span class="muted">{{ task.bvid }}</span> <span class="badge stopped">停止</span></td>
         <td>{{ task.interval_seconds }} 秒</td><td>{{ task.updated_at }}</td><td>
           <form method="post" action="/recycle-bin/{{ task.id }}/restore"><button type="submit">取回并恢复检测</button></form>
         </td></tr>

@@ -4,6 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}B站本地分析{% endblock %}</title>
+  <link rel="icon" href="/assets/app-icon.ico" type="image/x-icon">
+  <script>window.bllaMetricNames = {{ chart_metric_names|tojson }};</script>
+  <script src="/assets/appearance.js"></script>
+  {% if metric_options %}<script>restoreChartPreferences({{ metric_options|map(attribute=0)|list|tojson }});</script>{% endif %}
+  {% if cover_url %}<link rel="preload" as="image" href="{{ cover_url }}" referrerpolicy="no-referrer">{% endif %}
   <style>
     :root {
       --bg: #f6f7f9;
@@ -154,17 +159,18 @@
       table { min-width: 620px; font-size: 13px; }
     }
   </style>
+  <link rel="stylesheet" href="/assets/appearance.css">
   {% if needs_plotly %}
     <script src="/assets/plotly.min.js"></script>
   {% endif %}
 </head>
 <body>
   <header>
-    <h1>B站公开视频本地分析</h1>
+    <a class="brand" href="/" aria-label="B站数据监控首页"><img src="/assets/app-icon.png" alt=""><h1>B站公开视频本地分析</h1></a>
     <nav>
-      <a href="/">返回首页</a>
       <a href="/settings">设置</a>
       <a href="/recycle-bin">回收站</a>
+      <button type="button" data-theme-toggle aria-label="切换深浅色模式">☾</button>
     </nav>
   </header>
   <main>
@@ -176,18 +182,29 @@
   <script>
     const coverImage = document.querySelector("[data-video-cover]");
     const coverPlaceholder = document.querySelector("[data-cover-placeholder]");
+    let coverGeneration = 0;
+    async function showDecodedCover(image = coverImage) {
+      if (!image || !image.naturalWidth) return;
+      try { await image.decode(); } catch (_) { if (!image.naturalWidth) return; }
+      if (image === coverImage) { image.hidden = false; image.classList.add('is-ready'); coverPlaceholder.hidden = true; }
+    }
     if (coverImage && coverPlaceholder) {
-      coverImage.addEventListener("load", () => {
-        coverImage.hidden = false;
-        coverPlaceholder.hidden = true;
-      });
-      const unavailable = () => {
-        coverImage.hidden = true;
-        coverPlaceholder.hidden = false;
-        coverPlaceholder.textContent = "封面暂不可用";
-      };
-      coverImage.addEventListener("error", unavailable);
-      if (coverImage.getAttribute("src") && coverImage.complete && !coverImage.naturalWidth) unavailable();
+      coverImage.addEventListener('load', () => showDecodedCover());
+      coverImage.addEventListener('error', () => { coverImage.hidden = true; coverImage.classList.remove('is-ready'); coverPlaceholder.hidden = false; coverPlaceholder.textContent = '封面暂不可用'; });
+      if (coverImage.complete) {
+        if (coverImage.naturalWidth) showDecodedCover();
+        else if (coverImage.getAttribute('src')) { coverImage.hidden = true; coverPlaceholder.hidden = false; coverPlaceholder.textContent = '封面暂不可用'; }
+      }
+    }
+    async function updateCover(url) {
+      const generation = ++coverGeneration;
+      if (!coverImage || !url || coverImage.getAttribute('src') === url) return;
+      const candidate = new Image(); candidate.referrerPolicy = 'no-referrer'; candidate.src = url;
+      try { await candidate.decode(); } catch (_) { return; }
+      if (generation !== coverGeneration) return;
+      // Keep the previous decoded cover until its replacement is ready.
+      coverImage.src = url;
+      coverImage.hidden = false; coverImage.classList.add('is-ready'); coverPlaceholder.hidden = true;
     }
     function escapeHtml(value) {
       return String(value ?? "")
@@ -253,7 +270,6 @@
       if (!selects.length) return;
 
       const url = new URL(window.location.href);
-      let shouldRedirect = false;
       for (const select of selects) {
         const name = select.name;
         const key = pageStorageKey(`select:${name}`);
@@ -268,13 +284,9 @@
         const stored = localStorage.getItem(key);
         if (stored && optionExists(select, stored)) {
           select.value = stored;
-          url.searchParams.set(name, stored);
-          shouldRedirect = true;
         }
       }
-      if (shouldRedirect) {
-        window.location.replace(url.toString());
-      }
+      // Any required navigation was already performed in the head before paint.
 
       for (const form of document.querySelectorAll("form")) {
         form.addEventListener("submit", () => {
@@ -316,15 +328,15 @@
         if (!response.ok) return;
         const data = await response.json();
         const latest = data.latest || {};
-        if (coverImage && data.cover_url && coverImage.getAttribute("src") !== data.cover_url) {
-          coverImage.src = data.cover_url;
+        if (coverImage && data.cover_url) {
+          updateCover(data.cover_url);
         }
         for (const node of document.querySelectorAll("[data-latest-field]")) {
           const field = node.dataset.latestField;
           node.textContent = formatLatestValue(field, latest[field]);
         }
         const status = document.querySelector("[data-task-status]");
-        if (status && data.task) status.textContent = data.task.status || "无任务";
+        if (status && data.task) status.textContent = ({running:"正常",paused:"中断",error:"异常",stopped:"停止"})[data.task.status] || "无任务";
       } catch (_) {
       }
     }

@@ -10,6 +10,19 @@ import webbrowser
 from app.logger import logger
 
 
+def notification_icon_type(base_icon):
+    """pystray 0.19 Windows notification click adapter; keep other tray messages intact."""
+    class NotificationIcon(base_icon):
+        def _on_notify(self, wparam, lparam):
+            # Shell_NotifyIcon NIN_BALLOONUSERCLICK = WM_USER + 5.
+            # LOWORD is also compatible with NOTIFYICON_VERSION_4 payloads.
+            if lparam & 0xffff == 0x405:
+                threading.Thread(target=self, name="notification-open-home", daemon=True).start()
+                return
+            return super()._on_notify(wparam, lparam)
+    return NotificationIcon
+
+
 class DesktopTray:
     """Windows tray belongs to the server process, including hidden launcher mode."""
 
@@ -28,14 +41,10 @@ class DesktopTray:
             return
         try:
             import pystray
-            from PIL import Image, ImageDraw
-
-            image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-            drawing = ImageDraw.Draw(image)
-            drawing.rounded_rectangle((5, 5, 59, 59), radius=13, fill="#0f766e")
-            drawing.rectangle((17, 19, 46, 39), outline="white", width=3)
-            drawing.line((25, 47, 39, 47), fill="white", width=3)
-            self.icon = pystray.Icon("bilibili-monitor", image, "B站数据监控", pystray.Menu(
+            from PIL import Image
+            from app.config import BASE_DIR
+            image = Image.open(BASE_DIR / "app" / "assets" / "app-icon.png").convert("RGBA")
+            self.icon = notification_icon_type(pystray.Icon)("bilibili-monitor", image, "B站数据监控", pystray.Menu(
                 pystray.MenuItem("打开监控面板", self.open_panel, default=True),
                 pystray.MenuItem("立即检测", self.collect_now, enabled=lambda item: self._pending is None or self._pending.done()),
                 pystray.MenuItem("进入设置", self.open_settings),

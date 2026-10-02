@@ -45,6 +45,8 @@ def verify():
             time.sleep(.2)
         assert panel.window.evaluate_js("document.querySelector('h1').textContent") == "B站公开视频本地分析"
         result["native_dom_loaded"] = True
+        assert getattr(panel, "_native_icon", None) is not None
+        result["native_custom_icon"] = True
         panel.window.destroy()  # Actual native FormClosing, which must cancel/hide.
         for _ in range(100):
             if httpx.get(panel.url + "/api/desktop/visibility", headers={"User-Agent": "BilibiliMonitorDesktopPanel"}).json()["hidden"]:
@@ -67,6 +69,18 @@ def verify():
         result["restore_settings_loaded"] = True
         assert httpx.post(panel.url + "/desktop/activate").json()["activated"]
         result["repeat_launch_activates"] = True
+        if "--notification-test" in sys.argv:
+            panel.open("/settings")
+            for _ in range(100):
+                if panel.window.get_current_url() == panel.url + "/settings": break
+                time.sleep(.1)
+            app.state.desktop_tray.icon.notify("通知点击验收：点击返回应用首页", "B站数据监控")
+            print("Notification ready: click to return home", flush=True)
+            for _ in range(300):
+                if panel.window.get_current_url() == panel.url + "/": break
+                time.sleep(.2)
+            assert panel.window.get_current_url() == panel.url + "/", "Notification click was not observed"
+            result["real_notification_click_opens_home"] = True
     except Exception as exc:
         import traceback
         traceback.print_exc()

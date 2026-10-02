@@ -5,7 +5,7 @@ import threading
 import time
 import webbrowser
 
-from app.config import RUNTIME_DIR
+from app.config import BASE_DIR, RUNTIME_DIR
 from app.logger import logger
 
 RUNTIME_DOWNLOAD = "https://developer.microsoft.com/microsoft-edge/webview2/#download-section"
@@ -32,6 +32,9 @@ class DesktopPanel:
     """One Evergreen window; no bundled Chromium and no application JS API bridge."""
     def __init__(self, port: int):
         import webview
+        if os.name == "nt":
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("BilibiliMonitor.Desktop")
         self.webview = webview
         self.url = f"http://127.0.0.1:{port}"
         self.hidden = False
@@ -39,10 +42,38 @@ class DesktopPanel:
         self._destroyed = False
         self._gui_lock = threading.RLock()
         self.window = webview.create_window("B站数据监控", html="<p>正在启动监控服务…</p>", width=1150, height=800, min_size=(760, 560))
+        self.window.events.before_show += self._set_window_icon
         self.window.events.closing += self.hide
         self.window.events.minimized += lambda: self.set_hidden(True)
         self.window.events.restored += lambda: self.set_hidden(False)
         self.window.events.shown += self.on_shown
+
+    def _set_window_icon(self) -> None:
+        # pywebview's Windows backend otherwise extracts python.exe's icon.
+        # The pinned WinForms backend publishes its form before before_show.
+        try:
+            from webview.platforms.winforms import BrowserView
+            from System.Drawing import Icon
+            self._native_icon = Icon(str(BASE_DIR / "app" / "assets" / "app-icon.ico"))
+            BrowserView.instances[self.window.uid].Icon = self._native_icon
+        except Exception:
+            logger.exception("设置窗口图标失败")
+
+    def set_theme(self, dark: bool) -> None:
+        if self.exiting or not self.window.events.shown.is_set():
+            return
+        try:
+            import ctypes
+            from webview.platforms.winforms import BrowserView
+            form = BrowserView.instances.get(self.window.uid)
+            if form:
+                value = ctypes.c_int(int(dark))
+                from ctypes import wintypes
+                setter = ctypes.windll.dwmapi.DwmSetWindowAttribute
+                setter.argtypes = [wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
+                setter(wintypes.HWND(form.Handle.ToInt64()), 20, ctypes.byref(value), ctypes.sizeof(value))
+        except Exception:
+            logger.debug("当前系统不支持窗口标题栏主题")
 
     def set_hidden(self, hidden: bool) -> None:
         self.hidden = hidden

@@ -3,18 +3,22 @@
 <head>
   <meta charset="utf-8">
   <title>{{ video.title if video else bvid }} - 本地采集报告</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>{{ appearance_js }}</script>
   <style>
-    body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; margin: 24px; color: #1f2933; letter-spacing: 0; }
+    body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; margin: 24px; color: var(--text); background:var(--bg); letter-spacing: 0; }
     h1 { font-size: 24px; }
     h2 { font-size: 18px; margin-top: 26px; }
     table { border-collapse: collapse; width: 100%; margin: 12px 0; }
-    th, td { border: 1px solid #d9dee7; padding: 8px; text-align: left; }
-    th { background: #f6f7f9; }
-    .notice { background: #f6f7f9; border: 1px solid #d9dee7; padding: 12px; border-radius: 6px; }
-    .empty { color: #687586; }
+    th, td { border: 1px solid var(--line); padding: 8px; text-align: left; }
+    th { background: var(--soft); }
+    .notice { background: var(--soft); border: 1px solid var(--line); padding: 12px; border-radius: 6px; }
+    .empty { color: var(--muted); }
   </style>
+  <style>{{ appearance_css }}</style>
 </head>
 <body>
+  <div style="text-align:right"><button type="button" data-theme-toggle aria-label="切换深浅色模式">☾</button></div>
   <h1>{{ video.title if video else "视频报告" }}</h1>
   <div class="notice">
     本报告由本地程序生成，只基于公开统计字段的数字变化做机械分析。公开网页接口可能变化，数据可能不稳定，使用者需要自行遵守平台规则。

@@ -1,0 +1,46 @@
+
+:root { --bg:#f2f4f6; --panel:#fff; --text:#212932; --muted:#6a7584; --line:#dadee6; --accent:#306963; --danger:#a83224; --warning:#a15c00; --soft:#f6f8f9; --success:#197443; --success-soft:#e7f5ec; --warning-soft:#fff3d6; --error-soft:#fde8e7; --stop-soft:#eef1f3; --header:#fff; --button-ink:#fff; color-scheme:light; }
+:root[data-theme="dark"] { --bg:#12171d; --panel:#1c242d; --text:#e5ebf2; --muted:#a5b2c1; --line:#374451; --accent:#78d3c4; --danger:#ff958b; --warning:#f5c766; --soft:#242f3a; --success:#85dda4; --success-soft:#213b2b; --warning-soft:#3b3320; --error-soft:#432928; --stop-soft:#303943; --header:#1c242d; --button-ink:#142924; color-scheme:dark; }
+body, main, section, p, h1, h2, h3, a, span, strong, code, label, td, th, summary { -webkit-user-select:text; user-select:text; }
+::selection { background:#ff75a570; }
+header { background:var(--header); color:var(--text); border-bottom:1px solid var(--line); gap:16px; }
+.brand, .brand:visited { display:flex; align-items:center; gap:10px; color:var(--text); text-decoration:none; min-width:0; }
+.brand img { width:34px; height:34px; object-fit:contain; }
+header nav { display:flex; align-items:center; gap:16px; }
+nav a { color:var(--text); margin:0; }
+a { color:var(--accent); }
+a:visited { color:var(--accent); }
+input, select, textarea { background:var(--panel); color:var(--text); }
+button, .button { color:var(--button-ink); border-color:var(--accent); }
+button.secondary, .button.secondary { background:var(--panel); color:var(--accent); }
+button.danger { color:var(--panel); }
+button[data-theme-toggle] { width:34px; height:34px; padding:0; font-size:22px; background:var(--soft); border-color:var(--line); color:var(--text); }
+th, .metric, .word-chip, code, .video-cover { background:var(--soft); }
+.badge { background:var(--success-soft); color:var(--success); }
+.badge.error { background:var(--error-soft); color:var(--danger); }
+.badge.paused, .badge.interrupted { background:var(--warning-soft); color:var(--warning); }
+.badge.stopped { background:var(--stop-soft); color:var(--muted); }
+.badge::before { content:""; width:6px; height:6px; display:inline-block; border-radius:50%; background:currentColor; margin-right:6px; vertical-align:2px; }
+.message { background:var(--success-soft); }
+.message.error { background:var(--error-soft); }
+.task-cards { display:flex; flex-direction:column; gap:12px; }
+.task-card { border:1px solid var(--line); border-radius:10px; padding:16px 20px 14px; }
+.task-card:hover { border-color:var(--accent); }
+.task-card-top { display:flex; align-items:flex-start; gap:12px; }
+.task-heading { flex:1; min-width:0; }
+.task-title { font-size:15.5px; font-weight:650; line-height:1.5; text-decoration:none; overflow-wrap:anywhere; }
+.task-title:hover { text-decoration:underline; text-underline-offset:3px; }
+.task-meta { font-size:12.5px; margin-top:4px; color:var(--muted); }
+.task-stats { display:grid; grid-template-columns:repeat(3,minmax(80px,1fr)) minmax(175px,1.6fr); gap:20px; background:var(--soft); border-radius:8px; padding:12px 16px; margin:14px 0; }
+.task-stat span { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+.task-stat strong { font-size:19px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.task-stat time { font-size:15px; font-weight:600; }
+.task-foot { display:flex; justify-content:flex-end; }
+.task-foot .actions { min-width:0; }
+.task-foot button { font-size:12.5px; padding:7px 12px; }
+.update-heading { display:flex; align-items:center; gap:16px; margin-bottom:16px; }
+.update-heading img { width:60px; height:60px; object-fit:contain; flex:none; }
+.update-heading h2 { margin:0 0 6px; }
+.update-heading p { margin:0; color:var(--muted); }
+.video-cover img:not(.is-ready) { visibility:hidden; }
+@media(max-width:760px) { header { flex-direction:row; flex-wrap:wrap; align-items:center; } header h1 { font-size:15px; } header nav { margin-left:auto; gap:12px; } .task-stats { grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; } .task-card { padding:14px; } .task-foot .actions { display:flex; flex-wrap:wrap; } .task-foot button { width:auto; } .task-foot .actions form { display:inline-flex; } }

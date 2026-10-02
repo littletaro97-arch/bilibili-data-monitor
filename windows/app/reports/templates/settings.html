@@ -14,7 +14,7 @@
       <tr><th>默认采集间隔</th><td>{{ settings.crawl.default_interval }} 秒</td></tr>
       <tr><th>最低采集间隔</th><td>{{ settings.crawl.min_interval }} 秒</td></tr>
       <tr><th>全局最小请求间隔</th><td>{{ settings.crawl.global_min_request_interval }} 秒</td></tr>
-      <tr><th>最大 running 任务数</th><td>{{ settings.crawl.max_active_tasks }}</td></tr>
+      <tr><th>最大运行任务数</th><td>{{ settings.crawl.max_active_tasks }}</td></tr>
       <tr><th>数据库</th><td><code>{{ settings.database.path }}</code></td></tr>
       <tr><th>报告目录</th><td><code>{{ settings.report.output_dir }}</code></td></tr>
       <tr><th>raw_json</th><td>{{ "开启" if settings.crawl.save_raw_json else "关闭" }}</td></tr>
@@ -23,8 +23,7 @@
 </section>
 
 <section id="version-updates">
-  <h2>版本更新</h2>
-  <p>当前电脑版：{{ app_version }} · 安装包第 {{ installer_revision }} 版</p>
+  <div class="update-heading"><img src="/assets/app-icon.png" alt="B站数据监控图标"><div><h2>版本更新</h2><p>B站数据监控 · 电脑版 {{ app_version }} · 安装包第 {{ installer_revision }} 版</p></div></div>
   <p>{{ update_service.status }}</p>
   <div class="actions">
     <form method="post" action="/settings/updates/check"><button type="submit">检查 GitHub 更新</button></form>
