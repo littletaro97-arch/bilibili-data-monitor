@@ -429,7 +429,7 @@ async def update_lan_settings(
 @router.post("/settings/launcher")
 async def update_launcher_settings(show_console: str | None = Form(None)):
     save_launcher_settings(show_console=show_console == "on")
-    return _flash_redirect("/settings", "启动设置已保存，下次运行 run.bat 时生效")
+    return _flash_redirect("/settings", "启动设置已保存，下次启动程序时生效")
 
 
 @router.post("/maintenance/clear-raw-json")

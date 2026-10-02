@@ -32,3 +32,9 @@ windows/.pytest_cache/
 
 # Release APKs are kept as local deliverables, not Git history.
 android/releases/**/*.apk
+windows/build/
+windows/dist/
+windows/packaging/*.spec
+windows/releases/**/*.exe
+windows/releases/**/*.log
+windows/build-installer.log

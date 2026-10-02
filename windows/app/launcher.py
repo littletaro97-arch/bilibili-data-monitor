@@ -16,7 +16,18 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--detached", action="store_true")
     parser.add_argument("--open-browser-only", action="store_true")
+    parser.add_argument("--server", action="store_true")
+    parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
+
+    if args.server:
+        from app.main import main as server_main
+        server_main()
+        return 0
+    if args.no_browser:
+        from app.main import main as server_main
+        server_main()
+        return 0
 
     current = load_settings()
     if args.open_browser_only:
@@ -40,14 +51,14 @@ def _run_visible() -> int:
         return 0
 
     opener = subprocess.Popen(
-        [sys.executable, "-m", "app.launcher", "--open-browser-only"],
+        _command("app.launcher", "--open-browser-only"),
         cwd=BASE_DIR,
         creationflags=_creationflags(hidden=True),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
     try:
-        return subprocess.call([sys.executable, "-m", "app.main"], cwd=BASE_DIR)
+        return subprocess.call(_command("app.main"), cwd=BASE_DIR)
     finally:
         if opener.poll() is None:
             opener.terminate()
@@ -65,7 +76,7 @@ def _run_hidden() -> int:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as log:
         process = subprocess.Popen(
-            [sys.executable, "-m", "app.main"],
+            _command("app.main"),
             cwd=BASE_DIR,
             creationflags=_creationflags(hidden=True),
             stdout=log,
@@ -79,7 +90,7 @@ def _run_hidden() -> int:
 def _start_detached_launcher() -> int:
     pythonw = _pythonw_path()
     subprocess.Popen(
-        [pythonw, "-m", "app.launcher", "--detached"],
+        _command("app.launcher", "--detached", executable=pythonw),
         cwd=BASE_DIR,
         creationflags=_creationflags(detached=True, hidden=True),
         stdout=subprocess.DEVNULL,
@@ -111,11 +122,19 @@ def _local_url(port: int) -> str:
 
 
 def _pythonw_path() -> str:
+    if getattr(sys, "frozen", False):
+        return sys.executable
     executable = Path(sys.executable)
     candidate = executable.with_name("pythonw.exe")
     if os.name == "nt" and candidate.exists():
         return str(candidate)
     return sys.executable
+
+
+def _command(module: str, *args: str, executable: str | None = None) -> list[str]:
+    if getattr(sys, "frozen", False):
+        return [sys.executable, *(["--server"] if module == "app.main" else []), *args]
+    return [executable or sys.executable, "-m", module, *args]
 
 
 def _creationflags(*, hidden: bool = False, detached: bool = False) -> int:

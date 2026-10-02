@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.config import BASE_DIR, load_settings
+from app.config import RUNTIME_DIR, load_settings
 from app.security import hash_password
 
 
@@ -71,6 +71,6 @@ session_cookie = "{current.lan.session_cookie}"
 [launcher]
 show_console = {str(launcher_show_console).lower()}
 """
-    target = BASE_DIR / "runtime-data" / "config.toml"
+    target = RUNTIME_DIR / "config.toml"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")

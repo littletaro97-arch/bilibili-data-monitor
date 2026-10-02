@@ -4,11 +4,22 @@ from dataclasses import dataclass
 from pathlib import Path
 import shutil
 import tomllib
+import os
+import sys
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = BASE_DIR.parent
-RUNTIME_DIR = BASE_DIR / "runtime-data"
+def runtime_directory() -> Path:
+    override = os.environ.get("BILIBILI_MONITOR_DATA_DIR")
+    if override:
+        return Path(override).resolve()
+    if getattr(sys, "frozen", False):
+        return Path(os.environ["LOCALAPPDATA"]) / "BilibiliMonitor" / "runtime-data"
+    return BASE_DIR / "runtime-data"
+
+
+RUNTIME_DIR = runtime_directory()
 
 
 @dataclass(frozen=True)
@@ -90,6 +101,8 @@ def _resolve(value: str) -> Path:
 def migrate_legacy_runtime_data() -> list[str]:
     """Copy legacy root runtime files once; never overwrite or delete the originals."""
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    if getattr(sys, "frozen", False):
+        return []
     migrated: list[str] = []
     mappings = {
         PROJECT_ROOT / "config.toml": RUNTIME_DIR / "config.toml",

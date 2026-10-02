@@ -29,7 +29,7 @@
     <label><input type="checkbox" name="show_console" {% if launcher_show_console %}checked{% endif %}> 启动程序时显示 CMD 调试窗口</label>
     <button type="submit">保存启动设置</button>
   </form>
-  <p class="muted">此设置会在下次运行 <code>run.bat</code> 时生效。当前正在运行的窗口不会被立即隐藏或显示。</p>
+  <p class="muted">此设置会在下次启动程序时生效。当前正在运行的窗口不会被立即隐藏或显示。</p>
 </section>
 
 <section>
@@ -43,7 +43,7 @@
   <p class="muted">其它设备必须和这台电脑连接到同一个 Wi-Fi 或局域网。启用后，手机或平板在浏览器地址栏输入“其它设备打开”的完整地址。非本机访问必须输入访问密码。</p>
   <p class="muted">已保存的访问密码不会以明文显示。忘记密码时，在本机电脑输入新密码并保存即可重置。</p>
   {% if restart_required %}
-    <p class="message error">配置已保存但尚未生效。请点击下方“退出程序”，然后重新运行 run.bat。</p>
+    <p class="message error">配置已保存但尚未生效。请点击下方“退出程序”，然后重新启动程序。</p>
   {% endif %}
   <form method="post" action="/settings/lan">
     <div class="row">
@@ -56,7 +56,7 @@
       <button type="submit">保存局域网设置</button>
     </div>
   </form>
-  <p class="muted">当前本机局域网 IP：{{ local_ip }}。保存后需要关闭并重新运行 <code>run.bat</code> 才能改变监听地址。</p>
+  <p class="muted">当前本机局域网 IP：{{ local_ip }}。保存后需要关闭并重新启动程序才能改变监听地址。</p>
 </section>
 
 <section>
@@ -99,7 +99,7 @@
 
 <section>
   <h2>退出程序</h2>
-  <p class="muted">点击后会关闭本地服务。再次使用时重新运行 <code>run.bat</code>。</p>
-  <form method="post" action="/shutdown" data-confirm="确认退出程序？当前采集服务会停止，之后需要重新运行 run.bat。"><button class="danger" type="submit">退出程序</button></form>
+  <p class="muted">点击后会关闭本地服务。再次使用时重新启动程序。</p>
+  <form method="post" action="/shutdown" data-confirm="确认退出程序？当前采集服务会停止，之后需要重新启动程序。"><button class="danger" type="submit">退出程序</button></form>
 </section>
 {% endblock %}
