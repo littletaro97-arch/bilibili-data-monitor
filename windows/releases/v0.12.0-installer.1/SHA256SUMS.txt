@@ -1,0 +1,1 @@
+bbbe9db3a858c75e6bf217113793a9ca3dceba397a82744a74322370950c187e  BilibiliMonitor-v0.12.0-installer.1-windows-x64-setup.exe

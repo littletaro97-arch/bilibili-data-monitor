@@ -1,5 +1,7 @@
 # 电脑版 GitHub 更新约定与面板讨论
 
+后续进展：电脑版 0.12.0 已实现 Evergreen 自有窗口、回收站及短链解析；下文“本次范围”和匿名访问结果是先前源码迭代记录。最新安装包检查与发布证据见 `windows/releases/v0.12.0-installer.1/`。
+
 ## 本次范围
 
 从 `4b8b1cd` 干净基线创建 `codex/windows-github-updates`。仅源码、安装脚本和测试迭代，不打包、不安装、不推送或创建 Release。未改变 Android 更新机制、用户安装位置或真实配置。可对本次提交执行 `git revert` 回退。

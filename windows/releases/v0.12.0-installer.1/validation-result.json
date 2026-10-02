@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-02",
+  "source_commit": "6813dfcaf4ade29dd240033155ce0468f9cd0232",
+  "installer_sha256": "bbbe9db3a858c75e6bf217113793a9ca3dceba397a82744a74322370950c187e",
+  "unit_tests": {
+    "passed": 122,
+    "includes_native_tray": true
+  },
+  "native_window": {
+    "native_dom_loaded": true,
+    "hide_pauses_refresh": true,
+    "native_document_hidden": false,
+    "restore_settings_loaded": true,
+    "repeat_launch_activates": true
+  },
+  "installer_verification_runs": [
+    {
+      "result": "PASS",
+      "profile": "independent temporary install and user-data directory",
+      "checks": [
+        "fresh-install-payload-matches-scanned-staging",
+        "fresh-install",
+        "homepage-settings-plotly",
+        "packaged-native-window-activation",
+        "report-export-config-write",
+        "upgrade-reinstall-original-directory-payload-matches-scanned-staging",
+        "upgrade-reinstall-original-directory",
+        "uninstall",
+        "all-user-data-retained"
+      ]
+    },
+    {
+      "result": "PASS",
+      "profile": "independent temporary install and user-data directory",
+      "checks": [
+        "fresh-install-payload-matches-scanned-staging",
+        "fresh-install",
+        "homepage-settings-plotly",
+        "packaged-native-window-activation",
+        "report-export-config-write",
+        "upgrade-reinstall-original-directory-payload-matches-scanned-staging",
+        "upgrade-reinstall-original-directory",
+        "uninstall",
+        "all-user-data-retained"
+      ]
+    }
+  ],
+  "security_scan": {
+    "tool": "gitleaks 8.30.1",
+    "history_commits_before_release_documentation": 69,
+    "history_actual_credentials": 0,
+    "payload_actual_credentials": 0,
+    "pyz_modules_extracted": 4113,
+    "pyz_candidates": 1,
+    "pyz_actual_credentials": 0,
+    "pyz_false_positive": "packaging.licenses._spdx: public HIDAPI / hippocratic-2.1 license identifiers"
+  },
+  "limitations": [
+    "Not tested in a clean Windows VM or all OEM devices",
+    "No manual verification of every wizard page",
+    "No new Android APK or physical Android acceptance in this release",
+    "No Authenticode signature"
+  ]
+}

@@ -13,9 +13,11 @@
 ## Windows
 
 电脑版 EXE 安装包与构建说明见 [windows/packaging/README.md](windows/packaging/README.md)。
-当前安装包在 `windows/releases/v0.11.1-installer.1/`，无需另装 Python，卸载保留用户数据。
+当前安装包为 `windows/releases/v0.12.0-installer.1/`，无需另装 Python，卸载保留用户数据。
+自有窗口使用共享 WebView2 Evergreen Runtime，关闭隐藏到托盘；缺少运行时时提示安装入口并使用浏览器。
+回收站停止链接检测，取回恢复原间隔；支持 BV、完整视频链接和 b23.tv 短链。视频仍通过默认浏览器打开。
 
-2026-10-02 的电脑版源码迭代新增系统托盘和详情页封面展示；本轮未打包。
+2026-10-02 前一轮源码迭代新增系统托盘和详情页封面展示，当时未打包；本版已将后续功能纳入安装包。
 双端功能差异、数据安全检查与验收证据见 [windows/docs/DESKTOP_ITERATION_20261002.md](windows/docs/DESKTOP_ITERATION_20261002.md)。
 
 设置页现支持检查 GitHub 电脑版更新并校验下载安装包；发布规则、原目录升级条件及自有面板讨论见 [windows/docs/GITHUB_UPDATES.md](windows/docs/GITHUB_UPDATES.md)。本次同样仅更新源码，没有打包或发布。

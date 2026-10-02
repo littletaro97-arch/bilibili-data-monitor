@@ -1,0 +1,26 @@
+{
+  "application_version": "0.12.0",
+  "installer_revision": 1,
+  "package_version": "0.12.0.1",
+  "source_commit": "6813dfcaf4ade29dd240033155ce0468f9cd0232",
+  "validation_date": "2026-10-02",
+  "installer": "BilibiliMonitor-v0.12.0-installer.1-windows-x64-setup.exe",
+  "bytes": 50140654,
+  "sha256": "bbbe9db3a858c75e6bf217113793a9ca3dceba397a82744a74322370950c187e",
+  "previous_installer_bytes": 49828021,
+  "increase_bytes": 312633,
+  "python": "3.13.5",
+  "dependencies": {
+    "pyinstaller": "6.18.0",
+    "pywebview": "6.1",
+    "pythonnet": "3.0.5",
+    "clr_loader": "0.2.10",
+    "fastapi": "0.135.3",
+    "uvicorn": "0.42.0",
+    "httpx": "0.28.1",
+    "plotly": "6.8.0",
+    "pystray": "0.19.5"
+  },
+  "browser_runtime": "shared WebView2 Evergreen; engine not bundled",
+  "authenticode_signed": false
+}
