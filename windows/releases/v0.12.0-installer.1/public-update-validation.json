@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-02",
+  "repository_visibility": "PUBLIC",
+  "release": "windows-v0.12.0-installer.1",
+  "release_published": true,
+  "release_url": "https://github.com/littletaro97-arch/bilibili-data-monitor/releases/tag/windows-v0.12.0-installer.1",
+  "anonymous_github_api_check": true,
+  "current_version_does_not_offer_same_version": true,
+  "simulated_old_version": "0.11.1.1",
+  "old_version_detects_update": true,
+  "simulation_scope": "PACKAGE_VERSION changed only in disposable probe process, no application files modified",
+  "public_https_download_verified": true,
+  "downloaded_bytes": 50140654,
+  "sha256": "bbbe9db3a858c75e6bf217113793a9ca3dceba397a82744a74322370950c187e",
+  "download_executed": false,
+  "existing_android_latest_preserved": "v0.12.3"
+}
