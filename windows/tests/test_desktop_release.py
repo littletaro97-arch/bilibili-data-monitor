@@ -94,13 +94,75 @@ def test_recycle_page_restore_and_desktop_activation_guard(tmp_path):
     panel.open.assert_called_once_with("/")
 
 
-def test_panel_close_hides_until_explicit_exit():
+def test_panel_close_hides_until_explicit_exit(monkeypatch):
+    import threading
     from app.desktop_panel import DesktopPanel
     panel = DesktopPanel.__new__(DesktopPanel)
     panel.window = Mock()
     panel.exiting = False
+    panel._destroyed = False
+    panel._gui_lock = threading.RLock()
+    monkeypatch.setattr("app.desktop_panel.threading.Thread", lambda target, **kwargs: type("InlineThread", (), {"start": lambda self: target()})())
     assert panel.hide() is False
     assert panel.hidden is True
     panel.window.hide.assert_called_once()
     panel.close()
     assert panel.exiting and panel.hide() is True
+
+
+def panel_stub():
+    import threading
+    from app.desktop_panel import DesktopPanel
+    panel = DesktopPanel.__new__(DesktopPanel)
+    panel.window = Mock()
+    panel.exiting = False
+    panel.hidden = False
+    panel._destroyed = False
+    panel._gui_lock = threading.RLock()
+    return panel
+
+
+def test_native_closing_callback_defers_gui_work(monkeypatch):
+    panel = panel_stub()
+    deferred = []
+    monkeypatch.setattr("app.desktop_panel.threading.Thread", lambda target, **kwargs: type("DeferredThread", (), {"start": lambda self: deferred.append(target)})())
+    assert panel.hide() is False
+    panel.window.hide.assert_not_called()
+    panel.window.evaluate_js.assert_not_called()
+    deferred[0]()
+    panel.window.hide.assert_called_once()
+
+
+def test_early_exit_destroys_only_after_engine_loaded():
+    panel = panel_stub()
+    panel.window.events.loaded.is_set.return_value = False
+    panel.close()
+    panel.window.destroy.assert_not_called()
+    panel.on_loaded()
+    panel.on_loaded()
+    panel.window.destroy.assert_called_once()
+
+
+def test_shutdown_waits_for_pending_native_javascript():
+    import threading
+    panel = panel_stub()
+    executing, release, closing = threading.Event(), threading.Event(), threading.Event()
+    def evaluate(script):
+        executing.set()
+        assert release.wait(3)
+    panel.window.evaluate_js.side_effect = evaluate
+    evaluating_thread = threading.Thread(target=panel.on_loaded)
+    evaluating_thread.start()
+    assert executing.wait(3)
+    def close():
+        closing.set()
+        panel.close()
+    closing_thread = threading.Thread(target=close)
+    closing_thread.start()
+    assert closing.wait(3)
+    panel.window.destroy.assert_not_called()
+    release.set()
+    evaluating_thread.join(3)
+    closing_thread.join(3)
+    assert not evaluating_thread.is_alive() and not closing_thread.is_alive()
+    panel.window.destroy.assert_called_once()

@@ -39,7 +39,11 @@ def verify():
             time.sleep(.2)
         assert panel.window.evaluate_js("document.querySelector('h1').textContent") == "B站公开视频本地分析"
         result["native_dom_loaded"] = True
-        assert panel.hide() is False
+        panel.window.destroy()  # Actual native FormClosing, which must cancel/hide.
+        for _ in range(100):
+            if panel.window.evaluate_js("window.__desktopHidden") is True:
+                break
+            time.sleep(.05)
         assert panel.window.evaluate_js("window.__desktopHidden") is True
         result["hide_pauses_refresh"] = True
         panel.open("/settings")

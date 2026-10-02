@@ -36,6 +36,8 @@ class DesktopPanel:
         self.url = f"http://127.0.0.1:{port}"
         self.hidden = False
         self.exiting = False
+        self._destroyed = False
+        self._gui_lock = threading.RLock()
         self.window = webview.create_window("B站数据监控", html="<p>正在启动监控服务…</p>", width=1150, height=800, min_size=(760, 560))
         self.window.events.closing += self.hide
         self.window.events.minimized += lambda: self.set_hidden(True)
@@ -49,38 +51,49 @@ class DesktopPanel:
         self.on_loaded()
 
     def on_loaded(self) -> None:
-        if self.exiting:
-            # CoreWebView2 now exists. Closing merely on Shown can trigger the
-            # renderer's BrowserProcessId cleanup before initialization finishes.
-            self.window.destroy()
-            return
-        try:
-            # pywebview fires event callbacks just before setting their wait flag;
-            # evaluate_js waits for that flag, avoiding a skipped visibility update.
-            self.window.evaluate_js(f"window.__desktopHidden = {str(self.hidden).lower()};")
-        except Exception:
-            logger.debug("panel visibility changed before page was ready")
+        with self._gui_lock:
+            if self.exiting:
+                self._destroy()
+                return
+            try:
+                self.window.evaluate_js(f"window.__desktopHidden = {str(self.hidden).lower()};")
+            except Exception:
+                logger.debug("panel visibility changed before page was ready")
 
     def hide(self) -> bool:
         if self.exiting:
             return True
-        self.set_hidden(True)
-        self.window.hide()
+        self.hidden = True
+        # FormClosing is synchronous on the GUI thread. Waiting for a JS result
+        # here blocks that same thread from completing the JS callback.
+        threading.Thread(target=self._hide_window, daemon=True).start()
         return False
 
+    def _hide_window(self) -> None:
+        with self._gui_lock:
+            if self.exiting:
+                return
+            self.window.hide()
+            self.set_hidden(True)
+
     def open(self, path="/") -> None:
-        if self.exiting:
-            return
-        self.window.show()
-        self.window.restore()
-        # get_current_url waits for loaded: querying it during early shutdown can
-        # leave pywebview's startup callback waiting after the window is destroyed.
-        self.window.load_url(self.url + path)
-        self.set_hidden(False)
+        with self._gui_lock:
+            if self.exiting:
+                return
+            self.window.show()
+            self.window.restore()
+            self.window.load_url(self.url + path)
+            self.set_hidden(False)
 
     def close(self) -> None:
-        self.exiting = True
-        if self.window.events.loaded.is_set():
+        with self._gui_lock:
+            self.exiting = True
+            if self.window.events.loaded.is_set():
+                self._destroy()
+
+    def _destroy(self) -> None:
+        if not self._destroyed:
+            self._destroyed = True
             self.window.destroy()
 
     def run(self, server) -> None:
