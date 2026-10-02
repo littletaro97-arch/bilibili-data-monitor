@@ -133,13 +133,13 @@ def test_native_closing_callback_defers_gui_work(monkeypatch):
     panel.window.hide.assert_called_once()
 
 
-def test_early_exit_destroys_only_after_engine_loaded():
+def test_early_exit_destroys_once_after_window_shown():
     panel = panel_stub()
-    panel.window.events.loaded.is_set.return_value = False
+    panel.window.events.shown.is_set.return_value = False
     panel.close()
     panel.window.destroy.assert_not_called()
-    panel.on_loaded()
-    panel.on_loaded()
+    panel.on_shown()
+    panel.on_shown()
     panel.window.destroy.assert_called_once()
 
 
@@ -181,5 +181,13 @@ def test_hidden_native_panel_pauses_refresh_without_blocking_javascript():
     assert client.get("/api/desktop/visibility").json() == {"hidden": False}
     panel.set_hidden(False)
     assert client.get("/api/desktop/visibility", headers=native).json() == {"hidden": False}
-    panel.on_loaded()
+    panel.on_shown()
     panel.window.evaluate_js.assert_not_called()
+
+
+def test_shutdown_does_not_wait_for_web_page_loading():
+    panel = panel_stub()
+    panel.window.events.shown.is_set.return_value = True
+    panel.window.events.loaded.is_set.return_value = False
+    panel.close()
+    panel.window.destroy.assert_called_once()

@@ -42,12 +42,12 @@ class DesktopPanel:
         self.window.events.closing += self.hide
         self.window.events.minimized += lambda: self.set_hidden(True)
         self.window.events.restored += lambda: self.set_hidden(False)
-        self.window.events.loaded += self.on_loaded
+        self.window.events.shown += self.on_shown
 
     def set_hidden(self, hidden: bool) -> None:
         self.hidden = hidden
 
-    def on_loaded(self) -> None:
+    def on_shown(self) -> None:
         with self._gui_lock:
             if self.exiting:
                 self._destroy()
@@ -80,7 +80,7 @@ class DesktopPanel:
     def close(self) -> None:
         with self._gui_lock:
             self.exiting = True
-            if self.window.events.loaded.is_set():
+            if self.window.events.shown.is_set():
                 self._destroy()
 
     def _destroy(self) -> None:
