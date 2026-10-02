@@ -38,3 +38,5 @@ windows/packaging/*.spec
 windows/releases/**/*.exe
 windows/releases/**/*.log
 windows/build-installer.log
+windows/final-build.log
+windows/final-compile.log

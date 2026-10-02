@@ -43,7 +43,8 @@
 
 <section>
   <h2>启动窗口</h2>
-  <p class="muted">程序运行时会显示系统托盘图标。左键打开浏览器面板；右键可立即检测、进入设置或退出程序。立即检测仅处理正在运行且不在冷却中的任务。</p>
+  <p class="muted">程序运行时会显示系统托盘图标。左键唤回监控面板；右键可立即检测、进入设置、用浏览器打开或退出程序。关闭自有窗口会隐藏到托盘。立即检测仅处理正在运行且不在冷却中的任务。</p>
+  <p><a class="button secondary" href="{{ local_url }}" target="_blank" rel="noreferrer">用浏览器打开面板</a></p>
   <p class="muted">关闭 CMD 窗口后，启动错误不会直接显示在屏幕上；隐藏启动时可查看 <code>runtime-data/logs/launcher.log</code> 和 <code>runtime-data/logs/app.log</code> 排查问题。</p>
   <form method="post" action="/settings/launcher" class="row">
     <label><input type="checkbox" name="show_console" {% if launcher_show_console %}checked{% endif %}> 启动程序时显示 CMD 调试窗口</label>

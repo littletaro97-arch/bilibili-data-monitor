@@ -36,9 +36,10 @@ class DesktopTray:
             drawing.rectangle((17, 19, 46, 39), outline="white", width=3)
             drawing.line((25, 47, 39, 47), fill="white", width=3)
             self.icon = pystray.Icon("bilibili-monitor", image, "B站数据监控", pystray.Menu(
-                pystray.MenuItem("打开浏览器面板", self.open_panel, default=True),
+                pystray.MenuItem("打开监控面板", self.open_panel, default=True),
                 pystray.MenuItem("立即检测", self.collect_now, enabled=lambda item: self._pending is None or self._pending.done()),
                 pystray.MenuItem("进入设置", self.open_settings),
+                pystray.MenuItem("用浏览器打开", self.open_browser),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("退出程序", self.exit_program),
             ))
@@ -62,6 +63,9 @@ class DesktopTray:
             self.panel_opener("/")
         else:
             webbrowser.open(self.url + "/")
+
+    def open_browser(self, icon=None, item=None) -> None:
+        webbrowser.open(self.url + "/")
 
     def open_settings(self, icon=None, item=None) -> None:
         if self.panel_opener:

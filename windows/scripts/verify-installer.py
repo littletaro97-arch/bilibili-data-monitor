@@ -32,6 +32,7 @@ def registered() -> bool:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("installer", type=Path)
+    parser.add_argument("--expected-payload", type=Path)
     args = parser.parse_args()
     if registered():
         raise RuntimeError("An existing installed copy is registered; refusing to replace its registration")
@@ -57,6 +58,14 @@ def main() -> None:
         assert (install / "BilibiliMonitor.exe").exists()
         assert registered()
         assert not list(install.rglob("*.db")), "User database must not be included"
+        if args.expected_payload:
+            expected = {str(p.relative_to(args.expected_payload)): hashlib.sha256(p.read_bytes()).hexdigest()
+                        for p in args.expected_payload.rglob("*") if p.is_file()}
+            for relative, digest in expected.items():
+                assert hashlib.sha256((install / relative).read_bytes()).hexdigest() == digest, relative
+            extras = {str(p.relative_to(install)) for p in install.rglob("*") if p.is_file()} - set(expected)
+            assert extras <= {"unins000.exe", "unins000.dat", "install-guide.txt"}, extras
+            checks.append(label + "-payload-matches-scanned-staging")
         checks.append(label)
 
     def launch() -> subprocess.Popen:
