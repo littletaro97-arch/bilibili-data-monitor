@@ -143,15 +143,16 @@ def test_early_exit_destroys_only_after_engine_loaded():
     panel.window.destroy.assert_called_once()
 
 
-def test_shutdown_waits_for_pending_native_javascript():
+def test_shutdown_waits_for_pending_native_window_operation():
     import threading
     panel = panel_stub()
     executing, release, closing = threading.Event(), threading.Event(), threading.Event()
-    def evaluate(script):
+    def show():
         executing.set()
         assert release.wait(3)
-    panel.window.evaluate_js.side_effect = evaluate
-    evaluating_thread = threading.Thread(target=panel.on_loaded)
+    panel.url = "http://127.0.0.1:18770"
+    panel.window.show.side_effect = show
+    evaluating_thread = threading.Thread(target=panel.open)
     evaluating_thread.start()
     assert executing.wait(3)
     def close():
@@ -166,3 +167,19 @@ def test_shutdown_waits_for_pending_native_javascript():
     closing_thread.join(3)
     assert not evaluating_thread.is_alive() and not closing_thread.is_alive()
     panel.window.destroy.assert_called_once()
+
+
+def test_hidden_native_panel_pauses_refresh_without_blocking_javascript():
+    from app.main import create_app
+    panel = panel_stub()
+    app = create_app()
+    app.state.desktop_panel = panel
+    client = TestClient(app)
+    native = {"User-Agent": "BilibiliMonitorDesktopPanel"}
+    panel.set_hidden(True)
+    assert client.get("/api/desktop/visibility", headers=native).json() == {"hidden": True}
+    assert client.get("/api/desktop/visibility").json() == {"hidden": False}
+    panel.set_hidden(False)
+    assert client.get("/api/desktop/visibility", headers=native).json() == {"hidden": False}
+    panel.on_loaded()
+    panel.window.evaluate_js.assert_not_called()

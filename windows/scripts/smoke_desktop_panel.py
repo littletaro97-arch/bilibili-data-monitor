@@ -41,17 +41,18 @@ def verify():
         result["native_dom_loaded"] = True
         panel.window.destroy()  # Actual native FormClosing, which must cancel/hide.
         for _ in range(100):
-            if panel.window.evaluate_js("window.__desktopHidden") is True:
+            if httpx.get(panel.url + "/api/desktop/visibility", headers={"User-Agent": "BilibiliMonitorDesktopPanel"}).json()["hidden"]:
                 break
             time.sleep(.05)
-        assert panel.window.evaluate_js("window.__desktopHidden") is True
+        assert httpx.get(panel.url + "/api/desktop/visibility", headers={"User-Agent": "BilibiliMonitorDesktopPanel"}).json()["hidden"] is True
         result["hide_pauses_refresh"] = True
+        result["native_document_hidden"] = panel.window.evaluate_js("document.hidden")
         panel.open("/settings")
         for _ in range(100):
-            if panel.window.evaluate_js("Boolean(document.querySelector('#version-updates')) && window.__desktopHidden === false"):
+            if panel.window.evaluate_js("Boolean(document.querySelector('#version-updates'))"):
                 break
             time.sleep(.1)
-        assert panel.window.evaluate_js("window.__desktopHidden") is False
+        assert httpx.get(panel.url + "/api/desktop/visibility", headers={"User-Agent": "BilibiliMonitorDesktopPanel"}).json()["hidden"] is False
         assert panel.window.evaluate_js("Boolean(document.querySelector('#version-updates'))") is True
         result["restore_settings_loaded"] = True
         assert httpx.post(panel.url + "/desktop/activate").json()["activated"]

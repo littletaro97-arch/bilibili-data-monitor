@@ -246,6 +246,13 @@ async def restore_recycled_task(request: Request, task_id: int):
         return _flash_redirect("/recycle-bin", str(exc), "error")
 
 
+@router.get("/api/desktop/visibility")
+async def desktop_visibility(request: Request):
+    panel = getattr(request.app.state, "desktop_panel", None)
+    native = "BilibiliMonitorDesktopPanel" in request.headers.get("user-agent", "")
+    return {"hidden": bool(native and panel and panel.hidden)}
+
+
 @router.post("/desktop/activate")
 async def activate_desktop(request: Request):
     from urllib.parse import urlsplit

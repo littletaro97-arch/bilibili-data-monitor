@@ -46,19 +46,11 @@ class DesktopPanel:
 
     def set_hidden(self, hidden: bool) -> None:
         self.hidden = hidden
-        if self.exiting or not self.window.events.loaded.is_set():
-            return
-        self.on_loaded()
 
     def on_loaded(self) -> None:
         with self._gui_lock:
             if self.exiting:
                 self._destroy()
-                return
-            try:
-                self.window.evaluate_js(f"window.__desktopHidden = {str(self.hidden).lower()};")
-            except Exception:
-                logger.debug("panel visibility changed before page was ready")
 
     def hide(self) -> bool:
         if self.exiting:
@@ -124,7 +116,7 @@ class DesktopPanel:
             self.webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
             # Reuse an app-private profile for cache/preferences. Private mode's
             # renderer cleanup queries BrowserProcessId before early initialization.
-            self.webview.start(ready, gui="edgechromium", private_mode=False, storage_path=str(RUNTIME_DIR / "webview"))
+            self.webview.start(ready, gui="edgechromium", user_agent="BilibiliMonitorDesktopPanel", private_mode=False, storage_path=str(RUNTIME_DIR / "webview"))
         finally:
             server.should_exit = True
             worker.join(timeout=15)

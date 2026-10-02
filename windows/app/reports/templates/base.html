@@ -198,8 +198,24 @@
         .replaceAll("'", "&#039;");
     }
 
+    // WebView2 does not reliably set document.hidden when its native window hides.
+    // Read one tiny state response per refresh cycle; avoid synchronous native JS callbacks.
+    let visibilityCheck = null;
+    async function panelHidden() {
+      if (document.hidden) return true;
+      if (!navigator.userAgent.includes("BilibiliMonitorDesktopPanel")) return false;
+      if (!visibilityCheck) {
+        visibilityCheck = fetch("/api/desktop/visibility", { cache: "no-store" })
+          .then(response => response.ok ? response.json() : { hidden: true })
+          .then(state => state.hidden === true)
+          .catch(() => true);
+        window.setTimeout(() => { visibilityCheck = null; }, 500);
+      }
+      return visibilityCheck;
+    }
+
     async function refreshLogs() {
-      if (document.hidden || window.__desktopHidden) return;
+      if (await panelHidden()) return;
       const body = document.querySelector("[data-log-body]");
       if (!body) return;
       const bvid = body.dataset.bvid;
@@ -292,7 +308,7 @@
     }
 
     async function refreshLatestVideoData() {
-      if (document.hidden || window.__desktopHidden) return;
+      if (await panelHidden()) return;
       const match = window.location.pathname.match(/^\/videos\/([^/]+)/);
       if (!match) return;
       try {
