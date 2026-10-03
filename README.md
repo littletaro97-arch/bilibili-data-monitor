@@ -13,6 +13,7 @@
 ## Windows
 
 电脑版 EXE 安装包与构建说明见 [windows/packaging/README.md](windows/packaging/README.md)。
+最新源码已接入扫码登录、评论与楼中楼分页、按分 P 的 protobuf 分段弹幕采集，支持暂停和断点继续。使用方式、覆盖限制与源码验收入口见 [登录文本采集说明](windows/docs/AUTHENTICATED_TEXT_COLLECTION_20261004.md)；尚未打包发布，不能将接口遍历结束视为完整历史。
 当前安装包为 `windows/releases/v0.12.0-installer.1/`，无需另装 Python，卸载保留用户数据。
 自有窗口使用共享 WebView2 Evergreen Runtime，关闭隐藏到托盘；缺少运行时时提示安装入口并使用浏览器。
 回收站停止链接检测，取回恢复原间隔；支持 BV、完整视频链接和 b23.tv 短链。视频仍通过默认浏览器打开。

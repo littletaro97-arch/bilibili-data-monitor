@@ -4,6 +4,8 @@ import csv
 from datetime import datetime
 from pathlib import Path
 import sqlite3
+from itertools import chain
+from collections.abc import Iterable
 
 from app.database import Repository
 
@@ -29,7 +31,7 @@ class ExportService:
         target.mkdir(parents=True, exist_ok=False)
         with self.repository.database.connect() as conn:
             for name, query in EXPORT_TABLES.items():
-                rows = conn.execute(query).fetchall()
+                rows = conn.execute(query)
                 _write_csv(target / f"{name}.csv", rows)
         (target / "README.txt").write_text(
             "本目录由程序导出，CSV 使用 UTF-8 with BOM 编码，可直接用 Excel 打开。\n"
@@ -40,12 +42,14 @@ class ExportService:
         return target
 
 
-def _write_csv(path: Path, rows: list[sqlite3.Row]) -> None:
+def _write_csv(path: Path, rows: Iterable[sqlite3.Row]) -> None:
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
-        if not rows:
+        iterator = iter(rows)
+        first = next(iterator, None)
+        if first is None:
             handle.write("")
             return
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(handle, fieldnames=list(first.keys()))
         writer.writeheader()
-        for row in rows:
+        for row in chain((first,), iterator):
             writer.writerow(dict(row))

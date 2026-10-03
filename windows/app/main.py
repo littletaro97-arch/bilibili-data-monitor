@@ -26,6 +26,10 @@ from app.services.phase2_service import Phase2Service
 from app.services.task_service import TaskScheduler
 from app.services.video_service import VideoService
 from app.services.update_service import UpdateService
+from app.services.bili_auth import BiliAuth
+from app.collectors.full_text import FullTextProvider
+from app.services.full_text_service import FullTextService
+from app.ui.full_text_api import router as full_text_router
 from app.security import verify_session_token
 from app.ui.pages import router, _request_shutdown
 
@@ -81,6 +85,8 @@ def create_app() -> FastAPI:
     )
     export_service = ExportService(repository, RUNTIME_DIR / "exports")
     history_exchange_service = HistoryExchangeService(repository)
+    bili_auth = BiliAuth(RUNTIME_DIR / 'auth' / 'bilibili-auth.dat', client)
+    full_text = FullTextService(repository, FullTextProvider(client, bili_auth), bili_auth)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -103,10 +109,14 @@ def create_app() -> FastAPI:
         finally:
             tray.stop()
             scheduler.shutdown()
+            await full_text.shutdown()
+            await bili_auth.close()
             logger.info("application shutdown")
 
     app = FastAPI(title="Bilibili Local Analytics", lifespan=lifespan)
     app.state.repository = repository
+    app.state.bili_auth = bili_auth
+    app.state.full_text = full_text
     app.state.cover_cache = CoverCache(RUNTIME_DIR / "cache" / "covers")
     app.state.video_service = video_service
     app.state.crawl_service = crawl_service
@@ -133,6 +143,7 @@ def create_app() -> FastAPI:
         return RedirectResponse("/lan/login", status_code=303)
 
     app.include_router(router)
+    app.include_router(full_text_router)
     return app
 
 

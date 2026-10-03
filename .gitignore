@@ -11,6 +11,8 @@ reports/output/
 reports/*.png
 
 .env
+cookies.json
+*auth.dat
 *.local
 config.toml
 windows/runtime-data/

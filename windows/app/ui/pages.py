@@ -252,7 +252,10 @@ async def resume_task(request: Request, task_id: int):
 
 @router.post("/tasks/{task_id}/stop")
 async def stop_task(request: Request, task_id: int):
+    task = request.app.state.repository.get_task(task_id)
     request.app.state.video_service.stop_task(task_id)
+    if task:
+        await request.app.state.full_text.cancel_video(task['bvid'])
     return _flash_redirect("/", "已放入回收站，停止检测，历史数据保留")
 
 

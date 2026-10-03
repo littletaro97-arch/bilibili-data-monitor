@@ -3,7 +3,8 @@
     <form class="inline" method="post" action="/videos/{{ video.bvid }}/comments/collect"><button class="secondary" type="submit">采样评论</button></form>
     <form class="inline inspection-collect" id="text-collect-form" method="post" action="/videos/{{ video.bvid }}/danmaku/collect"><input type="hidden" name="cid" id="text-collect-cid" value="{{ video.cid }}"><select name="scope" aria-label="弹幕采样范围"><option value="selected">仅所选 P</option><option value="all">全部 P（最多 10 个）</option></select><button type="submit">采样弹幕</button></form>
   </div></div>
-  <div class="inspection-scope" role="note"><strong>采样数据，非全量</strong><p id="text-coverage">公开 XML 是弹幕池样本；评论取一页及附带回复。样本结论不能代表整个评论区。</p><span id="text-scope-extra" class="muted"></span></div>
+  <div class="inspection-scope" role="note"><strong>本地文本，完整度未证实</strong><p id="text-coverage">公开 XML 是弹幕池样本；评论取一页及附带回复。样本结论不能代表整个评论区。</p><span id="text-scope-extra" class="muted"></span></div>
+  {% include "full_text_controls.html" %}
   <div class="inspection-tabs" role="tablist" aria-label="文本通道">
     <button type="button" role="tab" id="tab-danmaku" aria-controls="text-channel" aria-selected="true" data-channel="danmaku">弹幕通道 <span data-count="danmaku">0</span></button>
     <button type="button" role="tab" id="tab-comments" aria-controls="text-channel" aria-selected="false" tabindex="-1" data-channel="comments">评论通道 <span data-count="comments">0</span></button>
@@ -13,7 +14,7 @@
       <form id="text-filter"><h3>检视条件</h3>
         <label for="text-keyword">关键词（逗号或空格分隔）</label><input id="text-keyword" placeholder="例如：泪目 风神" maxlength="200">
         <label for="text-match">匹配规则</label><select id="text-match"><option value="any">任一词命中</option><option value="all">全部词命中</option></select>
-        <label for="text-origin">数据来源</label><select id="text-origin"><option value="public">公开采样</option><option value="local">本地导入／演示</option><option value="all">全部本地样本</option></select>
+        <label for="text-origin">数据来源</label><select id="text-origin"><option value="public">公开采集（含登录）</option><option value="local">本地导入／演示</option><option value="all">全部本地样本</option></select>
         <div id="text-part-filter"><label for="text-part">视频分 P</label><select id="text-part"></select></div>
         <label for="text-sort">明细顺序</label><select id="text-sort"><option value="position">视频位置／评论时间</option><option value="likes">点赞优先（评论）</option><option value="latest">发送时间优先</option></select>
         <div class="inspection-filter-actions"><button type="submit">应用筛选</button><button type="button" class="secondary" id="text-reset">重置</button></div>

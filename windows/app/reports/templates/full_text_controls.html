@@ -1,0 +1,37 @@
+<details id="full-text-control" class="chart-panel"><summary>登录后遍历评论与分段弹幕</summary>
+  <p class="muted">先到<a href="/settings#bili-account">设置扫码登录</a>。弹幕读取所选 P 的全部 6 分钟分段；评论读取稿件共用评论区及楼中楼。平台可能隐藏或截断内容，接口遍历结束不等于完整历史。</p>
+  <form id="full-text-form" class="actions"><label>内容<select id="full-text-kind"><option value="danmaku">分段弹幕</option><option value="comments">评论及楼中楼</option></select></label><label>弹幕范围<select id="full-text-scope"><option value="selected">仅下方所选 P</option><option value="all">全部 P</option></select></label><button type="submit">开始遍历</button></form>
+  <p id="full-text-progress" role="status">尚未开始</p>
+  <div class="actions"><button type="button" class="secondary" id="full-text-pause" hidden>暂停</button><button type="button" id="full-text-resume" hidden>从断点继续</button><a class="button secondary" href="/videos/{{ video.bvid }}#text-inspection">刷新本地结果</a></div>
+  <p class="muted">仅手动运行，和常规检测共用请求间隔；每轮最多处理 150 个批次后暂停。结果逐批保存，面板仅载入最近 10,000 条唯一文本，截断时会提示。</p>
+</details>
+<script>
+(() => {
+  const base='/api/text/jobs/{{ video.bvid }}', progress=document.getElementById('full-text-progress');
+  const pause=document.getElementById('full-text-pause'), resume=document.getElementById('full-text-resume');
+  let job=null,timer=null;
+  async function request(action,body){
+    const r=await fetch(base+(action?'/'+action:''),{method:action?'POST':'GET',headers:{'Content-Type':'application/json'},body:action?JSON.stringify(body):undefined});
+    const d=await r.json();if(!r.ok)throw Error(d.error||d.detail||'采集操作失败');return d.job;
+  }
+  function show(value){
+    job=value;if(!job)return;
+    progress.textContent=`${job.kind==='comments'?'评论及楼中楼':'分段弹幕'} · 已处理 ${job.responses} 批次 · 累计读取 ${job.received} 条（重复内容会合并） · ${job.message}${job.retry_after?` · 冷却剩余 ${job.retry_after} 秒`:''}`;
+    if(job.kind==='danmaku' && job.status!=='complete')progress.textContent+=` · 第 ${Math.min(job.part_index+1,job.parts.length)} / ${job.parts.length} 个 P，第 ${job.segment} 段`;
+    pause.hidden=job.status!=='running';resume.hidden=job.status!=='paused';resume.disabled=job.retry_after>0;
+    document.getElementById('full-text-form').querySelector('button').disabled=job.status==='running';
+  }
+  async function poll(){
+    clearTimeout(timer);
+    try{if(!document.hidden && !(typeof panelHidden==='function' && await panelHidden()))show(await request());}catch(e){progress.textContent=e.message;return;}
+    if(job && (job.status==='running'||job.retry_after>0))timer=setTimeout(poll,3000);
+  }
+  async function act(action,body){clearTimeout(timer);try{show(await request(action,body));poll();}catch(e){progress.textContent=e.message;}}
+  document.getElementById('full-text-form').onsubmit=e=>{
+    e.preventDefault();act('start',{kind:document.getElementById('full-text-kind').value,scope:document.getElementById('full-text-scope').value,cid:document.getElementById('text-part').value});
+  };
+  pause.onclick=()=>act('cancel',{id:job.id});resume.onclick=()=>act('resume',{id:job.id});
+  window.addEventListener('pagehide',()=>clearTimeout(timer),{once:true});poll();
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll();});
+})();
+</script>

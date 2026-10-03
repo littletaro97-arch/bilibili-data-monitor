@@ -13,9 +13,9 @@
   const make = (tag, text, className) => { const e=document.createElement(tag); if(text !== undefined) e.textContent=text; if(className) e.className=className; return e; };
   let channel='danmaku', keywords=[], page=0, range=null, listed=[];
   const pageSize=50;
-  $('text-coverage').textContent = `平台计数：评论 ${number(data.platform_comments)}、弹幕 ${number(data.platform_danmaku)}（跨分 P 总量）；本地保存：评论 ${number(data.stored_comments)}、去重弹幕 ${number(data.stored_danmaku)}。评论仅取一页及附带回复，弹幕为各分 P 的 XML 池样本，均非完整历史。`;
+  $('text-coverage').textContent = `平台计数：评论 ${number(data.platform_comments)}、弹幕 ${number(data.platform_danmaku)}（跨分 P 总量）；本地保存：评论 ${number(data.stored_comments)}、去重弹幕 ${number(data.stored_danmaku)}。普通采样读取一页评论／XML 池；登录遍历读取后续页面和分段。两者均不能证明完整历史，平台计数也不能直接当作文本覆盖率。`;
   const run = data.runs.find(r => r.kind === 'danmaku');
-  $('text-scope-extra').textContent = `${run ? `上次${run.metadata.scope === 'selected' ? '仅采样所选 P' : '按各分 P 采样'}：${run.metadata.parts.length} 个 P（视频共 ${run.metadata.total_parts} 个 P）${run.metadata.interrupted ? '，采集中断' : ''}。` : '旧记录未保留分 P 采样范围。'}已排除 ${number(data.duplicates)} 条重复弹幕记录。${data.truncated ? `分析仅加载最近 ${number(data.limit)} 条唯一内容，请注意截断。` : '已加载当前本地唯一样本。'} 平台计数时间：${time(data.platform_time)}。`;
+  $('text-scope-extra').textContent = `${run ? `上次${run.metadata.authenticated ? '登录遍历' : '公开采样'}${run.metadata.scope === 'selected' ? '仅所选 P' : '按各分 P 读取'}：${run.metadata.parts.length} 个 P（视频共 ${run.metadata.total_parts} 个 P）${run.metadata.interrupted ? '，采集中断' : ''}。` : '旧记录未保留分 P 采样范围。'}已排除 ${number(data.duplicates)} 条重复弹幕记录。${data.truncated ? `分析仅加载最近 ${number(data.limit)} 条唯一内容，请注意截断。` : '已加载当前本地唯一样本。'} 平台计数时间：${time(data.platform_time)}。`;
   for (const c of ['comments','danmaku']) root.querySelector(`[data-count=${c}]`).textContent=number(data[c].length);
   for (const part of data.parts) {
     const option=make('option', `${part.page ? `P${part.page} · ` : ''}${part.name} · CID ${part.cid}`);

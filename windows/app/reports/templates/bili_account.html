@@ -1,0 +1,43 @@
+<section id="bili-account">
+  <h2>Bilibili 登录采集</h2>
+  <p class="muted">扫码后可按时间分段读取弹幕、翻页读取评论及楼中楼。登录态仅在本机由 Windows 当前用户加密保存，退出登录会删除。</p>
+  <p id="bili-auth-status" aria-live="polite">正在读取登录状态…</p>
+  <div class="actions"><button type="button" id="bili-qr">扫码登录</button><button type="button" class="secondary" id="bili-logout">退出登录</button></div>
+  <img id="bili-qr-image" alt="请用 Bilibili 手机客户端扫码" width="200" height="200" hidden style="margin-top:12px;max-width:200px">
+  <details><summary>手动填写 SESSDATA</summary><p class="muted">仅作为扫码不可用时的替代。该值具有账户访问权限，请勿分享。</p><form id="bili-session-form"><label for="bili-session">SESSDATA</label><input id="bili-session" type="password" autocomplete="off" maxlength="4096" required><button type="submit" class="secondary">验证并保存</button></form></details>
+</section>
+<script>
+(() => {
+  const status=document.getElementById('bili-auth-status'), image=document.getElementById('bili-qr-image');
+  let timer=null, pending=false;
+  const visible=async()=>!document.hidden && !(typeof panelHidden==='function' && await panelHidden());
+  const stop=()=>{pending=false;clearTimeout(timer);image.hidden=true;image.removeAttribute('src');};
+  async function request(action,body) {
+    const response=await fetch('/api/text/auth'+(action?'/'+action:''),{method:action?'POST':'GET',headers:{'Content-Type':'application/json'},body:action?JSON.stringify(body||{}):undefined});
+    const data=await response.json();if(!response.ok) throw Error(data.error||data.detail||'登录操作失败');return data;
+  }
+  function show(data){status.textContent=(data.saved?`${data.name} · `:'')+data.message;}
+  async function poll(){
+    if(!pending)return;
+    try{
+      if(await visible()){
+        const data=await request('poll');
+        if(data.status==='ok'){stop();show(data);return;}
+        if(['expired','error'].includes(data.status)){stop();status.textContent='二维码过期或登录失败，请重新申请。';return;}
+        status.textContent=data.status==='scanned'?'已扫码，请在手机确认。':'请用 Bilibili 客户端扫码。';
+      }
+      timer=setTimeout(poll,3000);
+    }catch(e){stop();status.textContent=e.message;}
+  }
+  document.getElementById('bili-qr').onclick=async()=>{
+    stop();try{const data=await request('qr');image.src=data.image;image.hidden=false;pending=true;poll();}catch(e){status.textContent=e.message;}
+  };
+  document.getElementById('bili-logout').onclick=async()=>{stop();try{show(await request('logout'));}catch(e){status.textContent=e.message;}};
+  document.getElementById('bili-session-form').onsubmit=async e=>{
+    e.preventDefault();stop();const input=document.getElementById('bili-session');const value=input.value;input.value='';
+    try{show(await request('save',{sessdata:value}));}catch(e){status.textContent=e.message;}
+  };
+  window.addEventListener('pagehide',stop,{once:true});
+  request().then(show).catch(e=>{status.textContent=e.message;});
+})();
+</script>
