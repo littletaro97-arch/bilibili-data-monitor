@@ -159,7 +159,8 @@
       table { min-width: 620px; font-size: 13px; }
     }
   </style>
-  <link rel="stylesheet" href="/assets/appearance.css?v=20261003.2">
+  <link rel="stylesheet" href="/assets/appearance.css?v=20261003.3">
+  <style>.metric-time { grid-column:span 2; } .metric-time strong { font-size:clamp(14px,1.5vw,20px); white-space:nowrap; overflow-wrap:normal; } @media(max-width:760px) { .metric-time { grid-column:auto; } .metric-time strong { white-space:normal; word-break:normal; overflow-wrap:normal; } }</style>
   {% block page_styles %}{% endblock %}
   {% if needs_plotly %}
     <script defer src="/assets/charts.js" data-library-url="/assets/plotly.min.js?v={{ plotly_version }}"></script>
@@ -320,6 +321,13 @@
     function formatLatestValue(field, value) {
       if (value === null || value === undefined || value === "") return "暂无";
       if (field === "source_type") return value === "imported" ? "历史导入" : "自动采集";
+      if (field === "captured_at") {
+        const date = new Date(value);
+        if (!Number.isNaN(date.getTime())) {
+          const pad = n => String(n).padStart(2, "0");
+          return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        }
+      }
       return value;
     }
 
@@ -337,6 +345,7 @@
         }
         for (const node of document.querySelectorAll("[data-latest-field]")) {
           const field = node.dataset.latestField;
+          if (field === "captured_at") node.title = latest[field] || "";
           node.textContent = formatLatestValue(field, latest[field]);
         }
         const status = document.querySelector("[data-task-status]");
@@ -347,6 +356,8 @@
 
     restoreChartControls();
     restoreDetailsState();
+    // Event-driven motion only; no polling, snapshots or retained compositor layers.
+    {% include "motion.js" %}
     const latestRefreshRoot = document.querySelector("[data-latest-refresh-seconds]");
     if (latestRefreshRoot && document.querySelector("[data-latest-field]")) {
       const refreshSeconds = Math.max(30, Number(latestRefreshRoot.dataset.latestRefreshSeconds || "60"));

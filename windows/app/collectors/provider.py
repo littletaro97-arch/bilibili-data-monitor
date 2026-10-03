@@ -34,6 +34,7 @@ class BilibiliWebProvider(VideoDataProvider):
     VIEW_URL = "https://api.bilibili.com/x/web-interface/view"
     ONLINE_TOTAL_URL = "https://api.bilibili.com/x/player/online/total"
     DANMAKU_URL = "https://comment.bilibili.com/{cid}.xml"
+    COMMENTS_URL = "https://api.bilibili.com/x/v2/reply"
 
     def __init__(self, client: BilibiliClient, save_raw_json: bool = False):
         self.client = client
@@ -90,13 +91,55 @@ class BilibiliWebProvider(VideoDataProvider):
             return None
 
     async def fetch_comments(self, bvid: str, aid: int, max_root: int, max_child: int) -> list[VideoComment]:
-        raise ProviderError("第二版评论真实采集未启用：文档未指定稳定公开评论数据源，不能临时拼接接口")
+        limit = min(20, max(0, max_root))
+        if not limit:
+            return []
+        data = _require_success(await self.client.get_json(self.COMMENTS_URL,
+            {"type": 1, "oid": aid, "pn": 1, "ps": limit, "sort": 2}))
+        replies = data.get("replies") or []
+        if not isinstance(replies, list):
+            raise ProviderError("评论响应结构异常")
+        comments = []
+        seen = set()
+        def append(reply, parent=None):
+            if not isinstance(reply, dict):
+                return
+            rpid = str(reply.get("rpid_str") or reply.get("rpid") or "")
+            content = reply.get("content") or {}
+            member = reply.get("member") or {}
+            message = content.get("message") if isinstance(content, dict) else None
+            if not rpid or rpid in seen or not isinstance(message, str) or not message.strip():
+                return
+            seen.add(rpid)
+            comments.append(VideoComment(bvid=bvid, rpid=rpid, parent_rpid=parent,
+                user_mid=_as_int(member.get("mid")) if isinstance(member, dict) else None,
+                user_name=member.get("uname") if isinstance(member, dict) else None,
+                message=message, like_count=_as_int(reply.get("like")),
+                reply_count=_as_int(reply.get("rcount")), ctime=_as_int(reply.get("ctime"))))
+        for reply in replies[:limit]:
+            append(reply)
+            if not isinstance(reply, dict):
+                continue
+            children = reply.get("replies") or []
+            if isinstance(children, list):
+                for child in children[:min(5, max(0, max_child))]:
+                    append(child, str(reply.get("rpid_str") or reply.get("rpid") or ""))
+        return comments
 
     async def fetch_danmaku(self, bvid: str, cid: int) -> list[DanmakuItem]:
         xml_text = await self.client.get_text(self.DANMAKU_URL.format(cid=cid))
-        root = ET.fromstring(xml_text)
+        if len(xml_text) > 8 * 1024 * 1024 or "<!DOCTYPE" in xml_text.upper() or "<!ENTITY" in xml_text.upper():
+            raise ProviderError("弹幕响应过大或包含不支持的 XML 声明")
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError as exc:
+            raise ProviderError("弹幕接口未返回有效 XML") from exc
+        if root.tag != "i":
+            raise ProviderError("弹幕接口返回结构异常")
         items: list[DanmakuItem] = []
         for node in root.findall(".//d"):
+            if not node.text or not node.text.strip():
+                continue
             p = node.attrib.get("p", "")
             parts = p.split(",")
             progress_sec = _as_float(parts[0]) if len(parts) > 0 else None
@@ -111,6 +154,8 @@ class BilibiliWebProvider(VideoDataProvider):
                     raw_text=None,
                 )
             )
+            if len(items) >= 10000:
+                break
         return items
 
 

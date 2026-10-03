@@ -59,7 +59,7 @@
       <div class="metric"><span>弹幕</span><strong data-latest-field="danmaku_count">{{ latest.danmaku_count }}</strong></div>
       <div class="metric"><span>分享</span><strong data-latest-field="share_count">{{ latest.share_count }}</strong></div>
       <div class="metric"><span>当前观看人数</span><strong data-latest-field="online_text">{{ latest.online_text or latest.online_count or "暂无" }}</strong></div>
-      <div class="metric"><span>采集时间</span><strong data-latest-field="captured_at">{{ latest.captured_at }}</strong></div>
+      <div class="metric metric-time"><span>采集时间</span><strong data-latest-field="captured_at" title="{{ latest.captured_at }}">{{ latest.captured_at|local_time }}</strong></div>
       <div class="metric"><span>数据来源</span><strong data-latest-field="source_type">{{ "历史导入" if latest.source_type == "imported" else "自动采集" }}</strong></div>
     </div>
   {% else %}
@@ -161,11 +161,11 @@
 </section>
 
 <section>
-  <h2>第二版：评论与弹幕</h2>
-  <p class="muted">第二版内容只支持手动低频采集，不加入默认定时任务。弹幕可通过公开 XML 自动采集；评论真实采集需要明确、稳定的公开数据源后才能启用。你也可以导入本地文本或生成演示数据来测试分析功能。</p>
+  <h2>评论与弹幕</h2>
+  <p class="muted">手动采集公开文本，不加入定时任务，同类采集默认间隔 10 分钟。评论最多取一页 20 条主评论及接口附带的回复；弹幕取公开 XML 样本，均非完整历史。平台限制时停止请求，仍可导入本地文本。</p>
   <div class="actions">
     <form class="inline" method="post" action="/videos/{{ video.bvid }}/comments/collect"><button class="secondary" type="submit">手动采集评论</button></form>
-    <form class="inline" method="post" action="/videos/{{ video.bvid }}/danmaku/collect"><button class="secondary" type="submit">自动采集弹幕</button></form>
+    <form class="inline" method="post" action="/videos/{{ video.bvid }}/danmaku/collect"><button class="secondary" type="submit">手动采集弹幕</button></form>
     <form class="inline" method="post" action="/videos/{{ video.bvid }}/phase2/demo"><button type="submit">生成演示数据</button></form>
   </div>
 

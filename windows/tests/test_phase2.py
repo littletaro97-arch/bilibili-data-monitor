@@ -30,10 +30,65 @@ async def test_phase2_mock_comments_and_danmaku_are_saved(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_real_comment_provider_requires_documented_source():
-    provider = BilibiliWebProvider(BilibiliClient(min_interval_seconds=0))
+async def test_public_comments_single_page_and_child_limits():
+    class Client:
+        async def get_json(self, url, params):
+            assert url == BilibiliWebProvider.COMMENTS_URL
+            assert params == {"type":1, "oid":123456, "pn":1, "ps":20, "sort":2}
+            child = {"rpid_str":"9007199254740993", "content":{"message":"<unsafe>"}}
+            return {"code":0, "data":{"replies":[{"rpid":100, "content":{"message":"root"}, "replies":[child, child]}]}}
+    rows = await BilibiliWebProvider(Client()).fetch_comments("BV1xx411c7mD", 123456, 500, 20)
+    assert len(rows) == 2
+    assert rows[1].rpid == "9007199254740993"
+    assert rows[1].parent_rpid == "100"
+    assert rows[1].message == "<unsafe>"
+
+
+@pytest.mark.asyncio
+async def test_manual_collection_cools_down_and_updates_comments(tmp_path):
+    repo = make_repo(tmp_path)
+    service = Phase2Service(repo, MockVideoDataProvider(), 500, 20)
+    await service.collect_comments_once("BV1xx411c7mD")
+    with pytest.raises(ProviderError, match="剩余"):
+        await service.collect_comments_once("BV1xx411c7mD")
+    await service.collect_danmaku_once("BV1xx411c7mD")
+    service._last_attempt["评论"] -= 601
+    await service.collect_comments_once("BV1xx411c7mD")
+    assert len(repo.list_comments("BV1xx411c7mD")) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["<html>blocked</html>", "broken", '<!DOCTYPE i [<!ENTITY x "bad">]><i/>'])
+async def test_danmaku_invalid_xml_is_user_visible_error(text):
+    class Client:
+        async def get_text(self, url): return text
     with pytest.raises(ProviderError):
-        await provider.fetch_comments("BV1xx411c7mD", aid=123456, max_root=500, max_child=20)
+        await BilibiliWebProvider(Client()).fetch_danmaku("BV1xx411c7mD", 123)
+
+
+@pytest.mark.asyncio
+async def test_failed_comment_request_also_cools_down(tmp_path):
+    class FailedProvider(MockVideoDataProvider):
+        async def fetch_comments(self, *args, **kwargs):
+            raise ProviderError("接口限制")
+    service = Phase2Service(make_repo(tmp_path), FailedProvider(), 20, 5)
+    with pytest.raises(ProviderError, match="接口限制"):
+        await service.collect_comments_once("BV1xx411c7mD")
+    with pytest.raises(ProviderError, match="剩余"):
+        await service.collect_comments_once("BV1xx411c7mD")
+
+
+@pytest.mark.asyncio
+async def test_empty_and_denied_public_comments():
+    class Client:
+        payload = {"code":0, "data":{"replies":None}}
+        async def get_json(self, *args): return self.payload
+    client = Client()
+    provider = BilibiliWebProvider(client)
+    assert await provider.fetch_comments("BV1xx411c7mD", 123, 20, 5) == []
+    client.payload = {"code":-404, "message":"关闭"}
+    with pytest.raises(ProviderError):
+        await provider.fetch_comments("BV1xx411c7mD", 123, 20, 5)
 
 
 def test_import_comments_and_danmaku_text(tmp_path):

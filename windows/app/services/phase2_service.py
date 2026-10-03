@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from app.collectors.provider import VideoDataProvider
 from app.database import Repository
 from app.models import DanmakuItem, ProviderError, VideoComment
@@ -12,11 +14,24 @@ class Phase2Service:
         provider: VideoDataProvider,
         max_root_comments: int,
         max_child_comments: int,
+        comment_min_interval_seconds: int = 600,
+        danmaku_min_interval_seconds: int = 600,
     ):
         self.repository = repository
         self.provider = provider
         self.max_root_comments = max_root_comments
         self.max_child_comments = max_child_comments
+        self._intervals = {"评论": comment_min_interval_seconds, "弹幕": danmaku_min_interval_seconds}
+        self._last_attempt = {}
+
+    def _reserve_attempt(self, kind):
+        now = time.monotonic()
+        previous = self._last_attempt.get(kind)
+        interval = max(60, self._intervals[kind])
+        if previous is not None and now - previous < interval:
+            raise ProviderError(f"{kind}采集请稍后重试，剩余 {int(interval - (now - previous)) + 1} 秒")
+        # Reserve before awaiting: concurrent clicks and failed requests also cool down.
+        self._last_attempt[kind] = now
 
     async def collect_comments_once(self, bvid: str) -> int:
         video = self.repository.get_video(bvid)
@@ -25,6 +40,7 @@ class Phase2Service:
         aid = video["aid"]
         if aid is None:
             raise ProviderError("缺少 aid，无法采集评论")
+        self._reserve_attempt("评论")
         comments = await self.provider.fetch_comments(
             bvid,
             int(aid),
@@ -42,6 +58,7 @@ class Phase2Service:
         cid = video["cid"]
         if cid is None:
             raise ProviderError("缺少 cid，无法采集弹幕")
+        self._reserve_attempt("弹幕")
         items = await self.provider.fetch_danmaku(bvid, int(cid))
         count = self.repository.insert_danmaku(items)
         self.repository.add_log("INFO", f"弹幕采集完成：{count} 条", bvid=bvid)

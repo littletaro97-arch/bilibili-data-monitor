@@ -76,6 +76,8 @@ def create_app() -> FastAPI:
         provider,
         max_root_comments=settings.phase2.max_root_comments,
         max_child_comments=settings.phase2.max_child_comments,
+        comment_min_interval_seconds=settings.phase2.comment_min_interval_seconds,
+        danmaku_min_interval_seconds=settings.phase2.danmaku_min_interval_seconds,
     )
     export_service = ExportService(repository, RUNTIME_DIR / "exports")
     history_exchange_service = HistoryExchangeService(repository)
