@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "switches.html" import switch_card %}
 {% block title %}设置 - B站本地分析{% endblock %}
 {% block content %}
 <div class="page-actions">
@@ -17,7 +18,7 @@
       <tr><th>最大运行任务数</th><td>{{ settings.crawl.max_active_tasks }}</td></tr>
       <tr><th>数据库</th><td><code>{{ settings.database.path }}</code></td></tr>
       <tr><th>报告目录</th><td><code>{{ settings.report.output_dir }}</code></td></tr>
-      <tr><th>raw_json</th><td>{{ "开启" if settings.crawl.save_raw_json else "关闭" }}</td></tr>
+      <tr><th>原始数据备份</th><td>{{ "开启" if settings.crawl.save_raw_json else "关闭" }}</td></tr>
     </tbody>
   </table>
 </section>
@@ -37,54 +38,50 @@
     <p class="muted">{{ update_service.package.name }} · {{ '%.1f'|format(update_service.package.size / 1048576) }} MB</p>
     <details><summary>更新说明</summary><p style="white-space: pre-wrap; overflow-wrap: anywhere;">{{ update_service.package.notes }}</p></details>
   {% endif %}
-  <p class="muted">下载前会校验文件大小与 SHA-256。下载完成后，请先退出监控程序，再运行安装包；同一 Windows 用户下安装会默认沿用原安装目录，并保留数据。首次安装或便携版没有安装记录时，使用默认目录，可在向导中选择。</p>
+  <p class="muted">更新包会校验大小和 SHA-256。安装前请退出程序；同一 Windows 用户默认沿用安装目录并保留数据，无安装记录时可在向导中选择目录。</p>
 </section>
 
 <section>
   <h2>启动窗口</h2>
-  <p class="muted">程序运行时会显示系统托盘图标。左键唤回监控面板；右键可立即检测、进入设置、用浏览器打开或退出程序。关闭自有窗口会隐藏到托盘。立即检测仅处理正在运行且不在冷却中的任务。</p>
+  <p class="muted">关闭窗口会隐藏到托盘。左键打开面板，右键可检测、设置或退出；检测仅处理运行中且未冷却的任务。</p>
   <p><a class="button secondary" href="{{ local_url }}" target="_blank" rel="noreferrer">用浏览器打开面板</a></p>
-  <p class="muted">关闭 CMD 窗口后，启动错误不会直接显示在屏幕上；隐藏启动时可查看 <code>runtime-data/logs/launcher.log</code> 和 <code>runtime-data/logs/app.log</code> 排查问题。</p>
-  <form method="post" action="/settings/launcher" class="row">
-    <label><input type="checkbox" name="show_console" {% if launcher_show_console %}checked{% endif %}> 启动程序时显示 CMD 调试窗口</label>
+  <form method="post" action="/settings/launcher">
+    <div class="switch-stack">{{ switch_card('show-console', '显示 CMD 调试窗口', 'console', name='show_console', checked=launcher_show_console, hint='保存后下次启动生效') }}</div>
     <button type="submit">保存启动设置</button>
   </form>
-  <p class="muted">此设置会在下次启动程序时生效。当前正在运行的窗口不会被立即隐藏或显示。</p>
+  <details style="margin-top:14px"><summary>启动排错</summary><p class="muted">隐藏 CMD 时，可查看 <code>runtime-data/logs/launcher.log</code> 和 <code>runtime-data/logs/app.log</code>。</p></details>
 </section>
 
 <section>
-  <h2>第三版：局域网访问</h2>
+  <h2>局域网访问</h2>
   <div class="grid">
     <div class="metric"><span>本机电脑打开</span><strong>{{ local_url }}</strong></div>
     <div class="metric"><span>其它设备打开</span><strong>{{ lan_url }}</strong></div>
     <div class="metric"><span>当前运行状态</span><strong>{{ "局域网已启用" if runtime_lan_enabled else "仅本机访问" }}</strong></div>
     <div class="metric"><span>访问密码</span><strong>{{ "已设置" if lan_password_set else "未设置" }}</strong></div>
   </div>
-  <p class="muted">其它设备必须和这台电脑连接到同一个 Wi-Fi 或局域网。启用后，手机或平板在浏览器地址栏输入“其它设备打开”的完整地址。非本机访问必须输入访问密码。</p>
-  <p class="muted">已保存的访问密码不会以明文显示。忘记密码时，在本机电脑输入新密码并保存即可重置。</p>
+  <p class="muted">其它设备需连接同一 Wi-Fi 或局域网，用浏览器打开上方地址并输入访问密码。</p>
   {% if restart_required %}
-    <p class="message error">配置已保存但尚未生效。请点击下方“退出程序”，然后重新启动程序。</p>
+    <p class="message error">配置已保存，请退出并重启程序以生效。</p>
   {% endif %}
   <form method="post" action="/settings/lan">
-    <div class="row">
-      <label><input type="checkbox" name="enabled" {% if settings.lan.enabled %}checked{% endif %}> 启用局域网访问</label>
-      <div>
-        <label for="password">访问密码，留空表示不修改</label>
-        <input id="password" name="password" type="password" placeholder="启用前必须设置；忘记时输入新密码重置">
-        <label><input type="checkbox" data-toggle-password="password"> 显示正在输入的密码</label>
-      </div>
-      <button type="submit">保存局域网设置</button>
+    <div class="switch-stack">{{ switch_card('lan-enabled', '启用局域网访问', 'network', name='enabled', checked=settings.lan.enabled, hint='需设置密码，保存后重启生效') }}</div>
+    <div class="settings-password">
+      <label for="password">访问密码（留空不修改）</label>
+      <input id="password" name="password" type="password" placeholder="输入新密码可重置" autocomplete="new-password">
     </div>
+    <div class="switch-stack">{{ switch_card('show-password', '显示输入的密码', 'eye', toggle_target='password') }}</div>
+    <button type="submit">保存局域网设置</button>
   </form>
-  <p class="muted">当前本机局域网 IP：{{ local_ip }}。保存后需要关闭并重新启动程序才能改变监听地址。</p>
+  <p class="muted">已保存的密码不显示；忘记时输入新密码并保存。</p>
 </section>
 
 <section>
   <h2>维护</h2>
-  <p class="muted">raw_json 只用于本地排错，默认关闭。日志清理会删除页面日志，并尝试清空 <code>runtime-data/logs/app.log</code>。</p>
-  <form method="post" action="/maintenance/clear-raw-json"><button class="secondary" type="submit">清理 raw_json</button></form>
+  <p class="muted">原始数据仅用于排错，默认不保存。清理日志会删除页面记录，并尝试清空 <code>runtime-data/logs/app.log</code>。</p>
+  <form method="post" action="/maintenance/clear-raw-json"><button class="secondary" type="submit">清理原始数据</button></form>
   <form method="post" action="/maintenance/export-data" style="margin-top: 10px;"><button class="secondary" type="submit">导出全部数据</button></form>
-  <p class="muted">导出目录：<code>{{ export_output_dir }}</code>。导出后会生成一个按时间命名的文件夹，里面是 CSV 文件。</p>
+  <p class="muted">CSV 导出至 <code>{{ export_output_dir }}</code> 下的时间文件夹。</p>
   <p><a class="button secondary" href="/history-exchange/export">导出跨端历史 ZIP</a></p>
   <form method="post" action="/history-exchange/preview" enctype="multipart/form-data" style="margin-top: 10px;">
     <label for="exchange_zip">导入 Android/Windows 历史交换包</label>
@@ -119,7 +116,7 @@
 
 <section>
   <h2>退出程序</h2>
-  <p class="muted">点击后会关闭本地服务。再次使用时重新启动程序。</p>
-  <form method="post" action="/shutdown" data-confirm="确认退出程序？当前采集服务会停止，之后需要重新启动程序。"><button class="danger" type="submit">退出程序</button></form>
+  <p class="muted">退出会停止检测，再次使用需重新启动。</p>
+  <form method="post" action="/shutdown" data-confirm="退出程序并停止检测？"><button class="danger" type="submit">退出程序</button></form>
 </section>
 {% endblock %}

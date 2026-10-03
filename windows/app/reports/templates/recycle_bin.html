@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% block title %}回收站 - B站数据监控{% endblock %}
 {% block content %}
+<div class="page-actions">
+  <a class="button secondary" href="/">返回首页</a>
+</div>
 <section>
   <h2>回收站</h2>
-  <p class="muted">这里的链接已经停止检测，已有历史保留。取回后按原间隔恢复正常检测；若运行任务数已达上限，请先暂停一个任务。</p>
+  <p class="muted">检测已停止，历史保留。取回后按原间隔恢复；任务满额时需先暂停一个。</p>
   {% if tasks %}
     <table><thead><tr><th>视频</th><th>原检测间隔</th><th>放入时间</th><th>操作</th></tr></thead><tbody>
     {% for task in tasks %}
