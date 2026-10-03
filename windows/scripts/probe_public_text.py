@@ -23,7 +23,9 @@ async def probe(bvid):
         repo.upsert_video(video)
         service = Phase2Service(repo, provider, 20, 5)
         result = {"bvid": bvid, "storage": "disposable", "cookies": False}
-        for kind, operation in [("comments", service.collect_comments_once), ("danmaku", service.collect_danmaku_once)]:
+        async def all_danmaku(bvid):
+            return await service.collect_danmaku_once(bvid, all_parts=True)
+        for kind, operation in [("comments", service.collect_comments_once), ("danmaku", all_danmaku)]:
             try:
                 result[kind] = {"saved": await operation(bvid)}
                 rows = repo.list_comments(bvid, 10000) if kind == "comments" else repo.list_danmaku(bvid, 10000)
@@ -31,7 +33,8 @@ async def probe(bvid):
                 result[kind]["nonempty"] = sum(bool(row[field]) for row in rows)
             except Exception as exc:
                 result[kind] = {"error": str(exc), "type": type(exc).__name__}
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        result["scope"] = repo.text_dashboard_data(bvid)["runs"]
+        print(json.dumps(result, ensure_ascii=True, indent=2))
 
 
 if __name__ == "__main__":

@@ -79,3 +79,4 @@ class DanmakuItem:
     text: str | None = None
     send_time: int | None = None
     raw_text: str | None = None
+    source_id: str | None = None

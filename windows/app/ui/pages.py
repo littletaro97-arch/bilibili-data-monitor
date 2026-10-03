@@ -25,16 +25,15 @@ from app.security import session_token, verify_password
 from app.services.analysis_service import (
     METRICS,
     build_chart_blocks,
-    build_danmaku_density_chart,
     build_dual_axis_chart,
     build_ratio_chart,
     build_summary,
     count_imported_snapshots,
-    top_words,
 )
 from app.services.history_import_service import parse_history_csv
 from app.services.history_exchange_service import MAX_ZIP_BYTES
 from app.ui.dashboard import templates
+from app.services.text_inspection import build_text_panel
 
 
 router = APIRouter()
@@ -347,8 +346,7 @@ async def video_detail(
     video = repo.get_video(bvid)
     task = repo.get_task_by_bvid(bvid)
     snapshots = repo.list_snapshots(bvid)
-    comments = repo.list_comments(bvid, limit=200)
-    danmaku = repo.list_danmaku(bvid, limit=500)
+    text_panel = build_text_panel(repo.text_dashboard_data(bvid), video, snapshots[-1] if snapshots else None)
     metric_fields = {field for field, _title in METRICS}
     if left_metric not in metric_fields:
         left_metric = "view_count"
@@ -380,11 +378,7 @@ async def video_detail(
             "latest_refresh_seconds": settings.crawl.min_interval,
             "report_output_dir": settings.report_output_dir,
             "reports": _recent_reports(bvid),
-            "comments": comments[:30],
-            "danmaku": danmaku[:50],
-            "comment_top_words": top_words(comments, field="message", limit=20),
-            "danmaku_top_words": top_words(danmaku, field="text", limit=20),
-            "danmaku_density_chart": build_danmaku_density_chart(danmaku, lazy=True),
+            "text_panel": text_panel,
             "message": message,
             "level": level,
             "needs_plotly": True,
@@ -403,12 +397,23 @@ async def collect_comments(request: Request, bvid: str):
 
 
 @router.post("/videos/{bvid}/danmaku/collect")
-async def collect_danmaku(request: Request, bvid: str):
+async def collect_danmaku(request: Request, bvid: str, cid: int | None = Form(None), scope: str = Form("selected")):
     try:
-        count = await request.app.state.phase2_service.collect_danmaku_once(bvid)
-        return _flash_redirect(f"/videos/{bvid}", f"弹幕采集完成：{count} 条")
+        if scope not in {"selected", "all"}:
+            raise AppError("无效的采样范围")
+        count = await request.app.state.phase2_service.collect_danmaku_once(bvid, cid, all_parts=scope == "all")
+        return _flash_redirect(f"/videos/{bvid}", f"弹幕采样完成：{count} 条（{'全部分 P' if scope == 'all' else '仅所选分 P'}），非完整历史")
     except AppError as exc:
         request.app.state.repository.add_log("WARNING", "弹幕采集未完成", bvid=bvid, detail=str(exc))
+        return _flash_redirect(f"/videos/{bvid}", str(exc), "error")
+
+
+@router.post("/videos/{bvid}/danmaku/parts")
+async def discover_danmaku_parts(request: Request, bvid: str):
+    try:
+        parts = await request.app.state.phase2_service.discover_danmaku_parts(bvid)
+        return _flash_redirect(f"/videos/{bvid}", f"已读取 {len(parts)} 个分 P，未采样弹幕")
+    except AppError as exc:
         return _flash_redirect(f"/videos/{bvid}", str(exc), "error")
 
 

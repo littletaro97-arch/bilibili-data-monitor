@@ -27,6 +27,9 @@ class VideoDataProvider(ABC):
     async def fetch_danmaku(self, bvid: str, cid: int) -> list[DanmakuItem]:
         raise NotImplementedError
 
+    async def fetch_danmaku_parts(self, bvid: str) -> list[dict]:
+        return []
+
 
 class BilibiliWebProvider(VideoDataProvider):
     """Fixed public webpage data source. No fallback endpoints are attempted."""
@@ -152,11 +155,20 @@ class BilibiliWebProvider(VideoDataProvider):
                     text=node.text or "",
                     send_time=send_time,
                     raw_text=None,
+                    source_id=parts[7] if len(parts) > 7 and parts[7].isdigit() else None,
                 )
             )
             if len(items) >= 10000:
                 break
         return items
+
+    async def fetch_danmaku_parts(self, bvid: str) -> list[dict]:
+        data = _require_success(await self.client.get_json(self.VIEW_URL, {"bvid": bvid}))
+        pages = data.get("pages") or []
+        if not isinstance(pages, list):
+            raise ProviderError("视频分 P 信息异常")
+        return [{"cid": int(page["cid"]), "page": page.get("page"), "name": page.get("part") or "", "duration": page.get("duration")}
+            for page in pages if isinstance(page, dict) and _as_int(page.get("cid")) is not None]
 
 
 class MockVideoDataProvider(VideoDataProvider):

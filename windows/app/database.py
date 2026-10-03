@@ -154,6 +154,15 @@ class Database:
 
                 CREATE INDEX IF NOT EXISTS idx_danmaku_bvid_time
                 ON danmaku(bvid, captured_at);
+
+                CREATE TABLE IF NOT EXISTS text_collection_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bvid TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    captured_at TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_text_runs_bvid ON text_collection_runs(bvid, id);
                 """
             )
             _ensure_column(conn, "video_stats_snapshot", "source_type", "TEXT NOT NULL DEFAULT 'collected'")
@@ -162,6 +171,8 @@ class Database:
             _ensure_column(conn, "video_stats_snapshot", "online_text", "TEXT")
             _ensure_column(conn, "video_stats_snapshot", "collection_source", "TEXT NOT NULL DEFAULT 'UNKNOWN'")
             _ensure_column(conn, "video_stats_snapshot", "exchange_digest", "TEXT")
+            _ensure_column(conn, "danmaku", "source_id", "TEXT")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_danmaku_identity ON danmaku(bvid,cid,progress_sec,send_time)")
             conn.execute("PRAGMA user_version = 1")
 
 
@@ -568,6 +579,33 @@ class Repository:
                 (bvid, limit),
             ).fetchall()
 
+    def text_dashboard_data(self, bvid: str, limit: int = 10000):
+        """Bound the browser payload, not analysis to the old first 200/500 rows."""
+        import json
+        with self.database.connect() as conn:
+            comments = conn.execute("SELECT * FROM comments WHERE bvid=? ORDER BY captured_at DESC,id DESC LIMIT ?", (bvid, limit)).fetchall()
+            # Repeated XML fetches must not inflate density or word frequencies.
+            groups = "cid,source_id,progress_sec,send_time,text,CASE WHEN raw_text IS NULL THEN 'public' ELSE 'local' END"
+            # Match legacy rows to newer identified records without rewriting user data.
+            where = """FROM danmaku d WHERE bvid=? AND (source_id IS NOT NULL OR raw_text IS NOT NULL OR NOT EXISTS (
+                SELECT 1 FROM danmaku n WHERE n.source_id IS NOT NULL AND n.bvid=d.bvid AND n.cid IS d.cid
+                AND n.progress_sec IS d.progress_sec AND n.send_time IS d.send_time AND n.text IS d.text))"""
+            dm = conn.execute(f"SELECT cid,progress_sec,send_time,text,MAX(captured_at) AS captured_at,CASE WHEN raw_text IS NULL THEN 'public' ELSE 'local' END AS origin {where} GROUP BY {groups} ORDER BY captured_at DESC LIMIT ?", (bvid, limit)).fetchall()
+            comment_count = conn.execute("SELECT COUNT(*) FROM comments WHERE bvid=?", (bvid,)).fetchone()[0]
+            dm_count = conn.execute(f"SELECT COUNT(*) FROM (SELECT 1 {where} GROUP BY {groups})", (bvid,)).fetchone()[0]
+            raw_count = conn.execute("SELECT COUNT(*) FROM danmaku WHERE bvid=?", (bvid,)).fetchone()[0]
+            runs = conn.execute("SELECT kind,captured_at,metadata_json FROM text_collection_runs WHERE bvid=? ORDER BY id DESC LIMIT 10", (bvid,)).fetchall()
+        return {"comments": [dict(row) for row in comments], "danmaku": [dict(row) for row in dm],
+            "stored_comments": comment_count, "stored_danmaku": dm_count, "raw_danmaku": raw_count,
+            "limit": limit, "truncated": comment_count > limit or dm_count > limit,
+            "runs": [{"kind": row["kind"], "captured_at": row["captured_at"], "metadata": json.loads(row["metadata_json"])} for row in runs]}
+
+    def record_text_collection(self, bvid: str, kind: str, metadata):
+        import json
+        with self.database.connect() as conn:
+            conn.execute("INSERT INTO text_collection_runs(bvid,kind,captured_at,metadata_json) VALUES(?,?,?,?)",
+                (bvid, kind, iso_now(), json.dumps(metadata, ensure_ascii=False)))
+
     def insert_danmaku(self, items: list[DanmakuItem], captured_at: str | None = None) -> int:
         if not items:
             return 0
@@ -577,8 +615,8 @@ class Repository:
             conn.executemany(
                 """
                 INSERT INTO danmaku (
-                    bvid, cid, progress_sec, text, send_time, captured_at, raw_text
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    bvid, cid, progress_sec, text, send_time, captured_at, raw_text, source_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -589,6 +627,7 @@ class Repository:
                         item.send_time,
                         captured_at,
                         item.raw_text,
+                        item.source_id,
                     )
                     for item in items
                 ],

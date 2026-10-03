@@ -21,7 +21,7 @@ class Phase2Service:
         self.provider = provider
         self.max_root_comments = max_root_comments
         self.max_child_comments = max_child_comments
-        self._intervals = {"评论": comment_min_interval_seconds, "弹幕": danmaku_min_interval_seconds}
+        self._intervals = {"评论": comment_min_interval_seconds, "弹幕": danmaku_min_interval_seconds, "分 P 列表": 60}
         self._last_attempt = {}
 
     def _reserve_attempt(self, kind):
@@ -48,10 +48,20 @@ class Phase2Service:
             max_child=self.max_child_comments,
         )
         count = self.repository.insert_comments(comments)
+        self.repository.record_text_collection(bvid, "comments", {"scope": "一页主评论及附带回复，非全量", "returned": len(comments), "complete": False})
         self.repository.add_log("INFO", f"评论采集完成：{count} 条", bvid=bvid)
         return count
 
-    async def collect_danmaku_once(self, bvid: str) -> int:
+    async def discover_danmaku_parts(self, bvid: str):
+        video = self.repository.get_video(bvid)
+        if not video:
+            raise ProviderError("视频不存在")
+        self._reserve_attempt("分 P 列表")
+        parts = await self.provider.fetch_danmaku_parts(bvid)
+        self.repository.record_text_collection(bvid, "parts", {"parts": parts, "total_parts": len(parts), "metadata_only": True})
+        return parts
+
+    async def collect_danmaku_once(self, bvid: str, target_cid: int | None = None, *, all_parts: bool = False) -> int:
         video = self.repository.get_video(bvid)
         if not video:
             raise ProviderError("视频不存在，无法采集弹幕")
@@ -59,9 +69,22 @@ class Phase2Service:
         if cid is None:
             raise ProviderError("缺少 cid，无法采集弹幕")
         self._reserve_attempt("弹幕")
-        items = await self.provider.fetch_danmaku(bvid, int(cid))
-        count = self.repository.insert_danmaku(items)
-        self.repository.add_log("INFO", f"弹幕采集完成：{count} 条", bvid=bvid)
+        parts = await self.provider.fetch_danmaku_parts(bvid) or [{"cid": int(cid), "page": 1, "name": "当前分 P"}]
+        selected = parts[:10] if all_parts else [p for p in parts if int(p["cid"]) == (target_cid if target_cid is not None else int(cid))]
+        if not selected:
+            raise ProviderError("所选 CID 不属于这个视频，请重新读取分 P 列表")
+        count = 0
+        collected = []
+        try:
+            for part in selected:
+                items = await self.provider.fetch_danmaku(bvid, int(part["cid"]))
+                count += self.repository.insert_danmaku(items)
+                collected.append({**part, "returned": len(items)})
+        except ProviderError:
+            self.repository.record_text_collection(bvid, "danmaku", {"parts": collected, "total_parts": len(parts), "requested_parts": len(selected), "scope": "all" if all_parts else "selected", "complete": False, "interrupted": True})
+            raise
+        self.repository.record_text_collection(bvid, "danmaku", {"parts": collected, "total_parts": len(parts), "requested_parts": len(selected), "scope": "all" if all_parts else "selected", "complete": False, "interrupted": False})
+        self.repository.add_log("INFO", f"弹幕采样完成：{count} 条，{len(collected)}/{len(parts)} 个分 P；非全量", bvid=bvid)
         return count
 
     def import_comments_text(self, bvid: str, text: str) -> int:
