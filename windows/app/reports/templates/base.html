@@ -159,7 +159,8 @@
       table { min-width: 620px; font-size: 13px; }
     }
   </style>
-  <link rel="stylesheet" href="/assets/appearance.css">
+  <link rel="stylesheet" href="/assets/appearance.css?v=20261003.2">
+  {% block page_styles %}{% endblock %}
   {% if needs_plotly %}
     <script defer src="/assets/charts.js" data-library-url="/assets/plotly.min.js?v={{ plotly_version }}"></script>
   {% endif %}

@@ -46,23 +46,4 @@ th, .metric, .word-chip, code, .video-cover { background:var(--soft); }
 .update-heading h2 { margin:0 0 6px; }
 .update-heading p { margin:0; color:var(--muted); }
 .video-cover img:not(.is-ready) { visibility:hidden; }
-.switch-stack { display:grid; gap:12px; margin:16px 0; }
-.switch-card { position:relative; display:flex; align-items:center; gap:14px; min-height:74px; padding:14px 16px; margin:0; border:1px solid var(--line); border-radius:16px; background:var(--soft); color:var(--text); cursor:pointer; }
-.switch-card:has(input:checked) { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 9%,var(--panel)); }
-.switch-card:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:3px; }
-.switch-icon { display:grid; place-items:center; flex:none; width:42px; height:42px; border-radius:12px; background:var(--line); color:var(--muted); }
-.switch-card:has(input:checked) .switch-icon { background:var(--accent); color:var(--button-ink); }
-.switch-icon svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
-.switch-copy { flex:1; min-width:0; }
-.switch-title { display:block; font-size:14px; font-weight:650; }
-.switch-hint { display:block; margin-top:4px; color:var(--muted); font-size:12px; font-weight:400; }
-/* A real checkbox keeps form submission, Space toggling and label activation. */
-.switch-card input[type="checkbox"] { position:absolute; right:16px; width:50px; height:30px; min-height:0; margin:0; padding:0; opacity:0; cursor:pointer; }
-.switch-track { flex:none; position:relative; width:50px; height:30px; border-radius:999px; background:var(--muted); pointer-events:none; transition:background-color var(--motion-fast); }
-.switch-track::after { content:""; position:absolute; top:4px; left:4px; width:22px; height:22px; border-radius:50%; background:var(--panel); box-shadow:0 1px 3px #0003; transition:transform var(--motion-fast); }
-.switch-card input:checked + .switch-track { background:var(--accent); }
-.switch-card input:checked + .switch-track::after { transform:translateX(20px); }
-.settings-password { width:min(100%,480px); margin:16px 0; }
-.settings-password input { width:100%; }
-@media(prefers-reduced-motion:reduce) { .switch-track, .switch-track::after { transition:none; } }
 @media(max-width:760px) { header { flex-direction:row; flex-wrap:wrap; align-items:center; } header h1 { font-size:15px; } header nav { margin-left:auto; gap:12px; } .task-stats { grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; } .task-card { padding:14px; } .task-foot .actions { display:flex; flex-wrap:wrap; } .task-foot button { width:auto; } .task-foot .actions form { display:inline-flex; } }
