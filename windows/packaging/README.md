@@ -1,6 +1,6 @@
 # Windows 安装包
 
-当前电脑版应用版本为 0.12.0，安装包编号为 `v0.12.0-installer.1`。
+当前电脑版源码版本为 0.13.0，待构建安装包编号为 `v0.13.0-installer.1`。版本号已更新，不代表安装包已构建或发布。
 包含正式根目录当前 Windows 源码，不使用历史源码目录，也不沿用 Android 的版本号。
 
 ## 安装与数据
@@ -41,7 +41,7 @@ cd E:\课外项目\Bilibili-monitor\windows
 $env:BILIBILI_MONITOR_DATA_DIR = Join-Path $env:TEMP 'bilibili-unit-tests'
 python -m pytest -q
 Remove-Item Env:\BILIBILI_MONITOR_DATA_DIR
-python scripts\verify-installer.py releases\v0.12.0-installer.1\BilibiliMonitor-v0.12.0-installer.1-windows-x64-setup.exe --expected-payload dist\BilibiliMonitor
+python scripts\verify-installer.py releases\v0.13.0-installer.1\BilibiliMonitor-v0.13.0-installer.1-windows-x64-setup.exe --expected-payload dist\BilibiliMonitor
 ```
 
 安装验证拒绝覆盖已注册的正式安装。它在临时中文路径中安装，用隔离的 `LOCALAPPDATA`

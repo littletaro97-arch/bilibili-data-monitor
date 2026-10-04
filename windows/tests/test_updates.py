@@ -6,9 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.services.update_service import REPOSITORY, UpdateService, UpdateError, safe_download_url
+from app.version import APP_VERSION, INSTALLER_REVISION
+
+CURRENT = tuple(map(int, APP_VERSION.split(".")))
+NEXT_VERSION = ".".join(map(str, CURRENT[:2] + (CURRENT[2] + 1,)))
 
 
-def release(version="0.12.1", revision=1, content=b"synthetic installer bytes"):
+def release(version=NEXT_VERSION, revision=1, content=b"synthetic installer bytes"):
     name = f"BilibiliMonitor-v{version}-installer.{revision}-windows-x64-setup.exe"
     tag = f"windows-v{version}-installer.{revision}"
     return {"tag_name": tag, "draft": False, "prerelease": False, "body": "<script>notes</script>", "assets": [{
@@ -25,14 +29,14 @@ async def test_select_windows_numeric_version_and_installer_revision(tmp_path):
     prerelease["prerelease"] = True
     draft = release("3.0.0")
     draft["draft"] = True
-    data = [android, prerelease, draft, release("0.9.9"), release("0.12.0"), release("0.12.0", 2)]
+    data = [android, prerelease, draft, release("0.9.9"), release(APP_VERSION, INSTALLER_REVISION), release(APP_VERSION, INSTALLER_REVISION + 1)]
     service = UpdateService(tmp_path, httpx.MockTransport(lambda request: httpx.Response(200, json=data)))
     await service.check()
-    assert service.available and service.package.version == (0, 12, 0, 2)
+    assert service.available and service.package.version == CURRENT + (INSTALLER_REVISION + 1,)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("version,revision,available", [("0.12.0", 1, False), ("0.12.0", 2, True), ("0.11.1", 99, False)])
+@pytest.mark.parametrize("version,revision,available", [(APP_VERSION, INSTALLER_REVISION, False), (APP_VERSION, INSTALLER_REVISION + 1, True), ("0.12.0", 1, False), ("0.11.1", 99, False)])
 async def test_compare_current_version(tmp_path, version, revision, available):
     service = UpdateService(tmp_path, httpx.MockTransport(lambda request: httpx.Response(200, json=[release(version, revision)])))
     await service.check()
