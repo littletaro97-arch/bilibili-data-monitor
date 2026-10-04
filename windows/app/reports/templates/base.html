@@ -6,7 +6,7 @@
   <title>{% block title %}B站本地分析{% endblock %}</title>
   <link rel="icon" href="/assets/app-icon.ico" type="image/x-icon">
   <script>window.bllaMetricNames = {{ chart_metric_names|tojson }};</script>
-  <script src="/assets/appearance.js"></script>
+  <script src="/assets/appearance.js?v=20261004.1"></script>
   {% if metric_options %}<script>restoreChartPreferences({{ metric_options|map(attribute=0)|list|tojson }});</script>{% endif %}
   {% if cover_url %}<link rel="preload" as="image" href="{{ cover_url }}" referrerpolicy="no-referrer">{% endif %}
   <style>

@@ -78,10 +78,10 @@ for(const card of document.querySelectorAll('[data-detail-url]')){
   const interactive=target=>target.closest('a,button,form,input,select,textarea,label,[role="button"],.task-foot');
   card.addEventListener('click',e=>{
     if(interactive(e.target)||window.getSelection().toString()||e.button!==0)return;
-    window.location.assign(card.dataset.detailUrl);
+    window.location.assign(window.bllaDetailUrl(new URL(card.dataset.detailUrl,location.href).href));
   });
   card.addEventListener('keydown',e=>{
-    if(e.target===card && e.key==='Enter'){e.preventDefault();window.location.assign(card.dataset.detailUrl);}
+    if(e.target===card && e.key==='Enter'){e.preventDefault();window.location.assign(window.bllaDetailUrl(new URL(card.dataset.detailUrl,location.href).href));}
   });
 }
 </script>

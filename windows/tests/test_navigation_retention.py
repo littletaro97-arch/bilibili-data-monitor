@@ -75,3 +75,47 @@ def test_task_clicks_floating_directory_and_settings(tmp_path):
             assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth')
             assert not errors
         finally:browser.close()
+
+
+@pytest.mark.skipif(os.environ.get('BILIBILI_MONITOR_HEADLESS_TEST')!='1',reason='opt-in headless browser')
+def test_card_navigation_restores_preferences_once_without_blank_animation(tmp_path):
+    from playwright.sync_api import sync_playwright,expect
+    from app.main import create_app
+    repo=repo_at(tmp_path);repo.create_task(BV,300,60,10)
+    app=create_app();app.state.repository=repo
+    client=TestClient(app,client=('127.0.0.1',9000),base_url='http://127.0.0.1')
+    documents=[]
+    def serve(route):
+        req=route.request;url=urlsplit(req.url)
+        if req.resource_type=='document':documents.append(url.path+'?'+url.query)
+        result=client.get(url.path+('?' + url.query if url.query else ''))
+        route.fulfill(status=result.status_code,headers={k:v for k,v in result.headers.items() if k.lower() not in {'content-length','content-encoding'}},body=result.content)
+    with sync_playwright() as pw:
+        browser=pw.chromium.launch(headless=True)
+        try:
+            page=browser.new_page();page.route('**/*',serve)
+            page.add_init_script('''
+              window.mainFrames=[];
+              const animate=Element.prototype.animate;
+              Element.prototype.animate=function(frames,options){
+                if(this.tagName==='MAIN')window.mainFrames.push(frames);
+                return animate.call(this,frames,options);
+              };
+            ''')
+            for keyboard in [False,True]:
+                page.goto('http://127.0.0.1/')
+                page.evaluate('(bv)=>localStorage.setItem(`blla:/videos/${bv}:select:left_metric`,"like_count")',BV)
+                documents.clear()
+                if keyboard:
+                    page.locator('.task-card').focus();page.keyboard.press('Enter')
+                else:page.locator('.task-stats').click()
+                expect(page).to_have_url(f'http://127.0.0.1/videos/{BV}?left_metric=like_count')
+                page.wait_for_load_state('load')
+                assert documents==[f'/videos/{BV}?left_metric=like_count']
+                assert page.evaluate('mainFrames.every(frames=>frames.every(f=>f.opacity===undefined || Number(f.opacity)===1))')
+            page.locator('nav a[href="/settings"]').click()
+            page.wait_for_url('**/settings');page.wait_for_load_state('load')
+            assert page.evaluate('mainFrames.every(frames=>frames.every(f=>f.opacity===undefined || Number(f.opacity)===1))')
+            page.go_back();page.wait_for_load_state('load')
+            assert page.locator('main').evaluate('e=>getComputedStyle(e).opacity')=='1'
+        finally:browser.close()

@@ -18,6 +18,9 @@
     }
     return url.toString();
   }
+  // Cards and ordinary links must resolve the same URL before navigation.
+  // Otherwise the head script restores preferences with a second document load.
+  window.bllaDetailUrl = href => preferenceUrl(href, window.bllaMetricNames || []);
   window.restoreChartPreferences = metrics => {
     const target = preferenceUrl(location.href, metrics);
     // Direct entry also restores before parsing body/images.
@@ -25,7 +28,7 @@
   };
   document.addEventListener('DOMContentLoaded', () => {
     const prepareLink = link => {
-      if (link && link.origin === location.origin && /^\/videos\/[^/]+$/.test(link.pathname)) link.href = preferenceUrl(link.href, window.bllaMetricNames || []);
+      if (link && link.origin === location.origin && /^\/videos\/[^/]+$/.test(link.pathname)) link.href = window.bllaDetailUrl(link.href);
     };
     for (const link of document.querySelectorAll('a[href]')) prepareLink(link);
     document.addEventListener('click', event => prepareLink(event.target.closest('a[href]')));
