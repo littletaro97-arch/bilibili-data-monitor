@@ -2,9 +2,7 @@
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const main = document.querySelector('main');
   if (!Element.prototype.animate) return;
-  // This script runs after body parsing: content may already have painted.
-  // Never turn that visible content transparent again, even during slow loads.
-  if (!reduced.matches && main) main.animate([{transform:'translateY(2px)'}, {transform:'none'}], {duration:120, easing:'ease-out'});
+  if (!reduced.matches && main) main.animate([{opacity:0, transform:'translateY(4px)'}, {opacity:1, transform:'none'}], {duration:160, easing:'ease-out'});
   document.addEventListener('click', event => {
     const link = event.target.closest('a[href]');
     if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || !link || link.target || link.hasAttribute('download') || reduced.matches || !main) return;
@@ -13,8 +11,7 @@
     event.preventDefault();
     if (main.dataset.leaving) return;
     main.dataset.leaving = '1';
-    // Keep the outgoing page visible while the next document is loading.
-    main.animate([{transform:'none'}, {transform:'translateY(-2px)'}], {duration:80, fill:'forwards'}).finished.then(() => location.assign(url.href)).catch(() => { delete main.dataset.leaving; });
+    main.animate([{opacity:1}, {opacity:0}], {duration:120, fill:'forwards'}).finished.then(() => location.assign(url.href)).catch(() => { delete main.dataset.leaving; });
   });
   for (const detail of document.querySelectorAll('details')) {
     const summary = detail.querySelector(':scope > summary');

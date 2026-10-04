@@ -78,7 +78,7 @@ def test_task_clicks_floating_directory_and_settings(tmp_path):
 
 
 @pytest.mark.skipif(os.environ.get('BILIBILI_MONITOR_HEADLESS_TEST')!='1',reason='opt-in headless browser')
-def test_card_navigation_restores_preferences_once_without_blank_animation(tmp_path):
+def test_card_navigation_restores_preferences_once_with_page_fade(tmp_path):
     from playwright.sync_api import sync_playwright,expect
     from app.main import create_app
     repo=repo_at(tmp_path);repo.create_task(BV,300,60,10)
@@ -112,10 +112,11 @@ def test_card_navigation_restores_preferences_once_without_blank_animation(tmp_p
                 expect(page).to_have_url(f'http://127.0.0.1/videos/{BV}?left_metric=like_count')
                 page.wait_for_load_state('load')
                 assert documents==[f'/videos/{BV}?left_metric=like_count']
-                assert page.evaluate('mainFrames.every(frames=>frames.every(f=>f.opacity===undefined || Number(f.opacity)===1))')
+                assert page.evaluate('mainFrames.some(frames=>frames[0].opacity===0 && frames[1].opacity===1 && frames[0].transform==="translateY(4px)")')
             page.locator('nav a[href="/settings"]').click()
             page.wait_for_url('**/settings');page.wait_for_load_state('load')
-            assert page.evaluate('mainFrames.every(frames=>frames.every(f=>f.opacity===undefined || Number(f.opacity)===1))')
+            assert page.evaluate('mainFrames.some(frames=>frames[0].opacity===0 && frames[1].opacity===1)')
             page.go_back();page.wait_for_load_state('load')
+            page.wait_for_function('document.querySelector("main").getAnimations().length===0')
             assert page.locator('main').evaluate('e=>getComputedStyle(e).opacity')=='1'
         finally:browser.close()
