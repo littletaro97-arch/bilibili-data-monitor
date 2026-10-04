@@ -29,23 +29,39 @@
     return data[channel].filter(r => (origin === 'all' || r.origin === origin) && (channel === 'comments' || String(r.cid) === $('text-part').value));
   }
   function matches(row) { const text=row.text.toLocaleLowerCase(); return !keywords.length || ( $('text-match').value === 'all' ? keywords.every(k=>text.includes(k)) : keywords.some(k=>text.includes(k)) ); }
+  const dictionaryKey=`blla-word-dictionary-${root.dataset.bvid}`;
+  let customTerms=[];
+  try { customTerms=window.BllaSampleWords.parseDictionary(localStorage.getItem(dictionaryKey)||''); }
+  catch (_) { $('text-dictionary-status').textContent='保存的专名词典无法读取，当前使用默认词典。'; }
+  $('text-dictionary').value=customTerms.join('\n');
+  let tokenizer=new window.BllaSampleWords.Tokenizer(customTerms);
+  const rankings=new Map();
   function showWords(rows) {
-    const counts=new Map();
-    const stop=new Set(['这个','视频','一个','真的','我们','你们','他们','就是','还是','了啊','哈哈']);
-    for (const row of rows) {
-      const text=row.text.toLocaleLowerCase();
-      for (const word of text.match(/[a-z][a-z0-9_]{1,30}/g) || []) counts.set(word,(counts.get(word)||0)+1);
-      for (const phrase of text.match(/[\u4e00-\u9fff]{2,}/g) || []) for(let i=0;i<phrase.length-1;i++) {
-        const word=phrase.slice(i,i+2); if(!stop.has(word)) counts.set(word,(counts.get(word)||0)+1);
-      }
+    const key=JSON.stringify([channel,$('text-part').value,$('text-origin').value]);
+    if(!rankings.has(key)) {
+      if(rankings.size>=12) rankings.delete(rankings.keys().next().value);
+      rankings.set(key,tokenizer.rank(rows));
     }
+    const result=rankings.get(key);
     $('text-words').replaceChildren();
-    for (const [word,count] of [...counts].sort((a,b)=>b[1]-a[1]).slice(0,12)) {
+    for (const {word,count} of result.items) {
       const b=make('button'); b.type='button'; b.append(make('span',word),make('span',number(count)));
       b.addEventListener('click',()=>{ $('text-keyword').value=word; apply(); }); $('text-words').append(b);
     }
-    if (!counts.size) $('text-words').append(make('p','暂无文本样本','empty'));
+    if(!result.items.length) $('text-words').append(make('p',rows.length?'暂无可排行词语':'暂无文本样本','empty'));
+    $('text-word-status').textContent=`${result.native?'中文分词＋专名保护':'当前内核不支持中文分词，仅显示受保护专名和英文词'}；${result.relaxed?'样本较少，显示出现 1 次的词':'仅列出现至少 2 次的词'}。同一条内重复出现会重复计数；点击词语按原文包含关系筛选。`;
   }
+  $('text-dictionary-form').addEventListener('submit',event=>{
+    event.preventDefault();
+    let terms;
+    try { terms=window.BllaSampleWords.parseDictionary($('text-dictionary').value); }
+    catch(error) { $('text-dictionary-status').textContent=error.message; return; }
+    tokenizer=new window.BllaSampleWords.Tokenizer(terms);rankings.clear();
+    let saved=true;
+    try { localStorage.setItem(dictionaryKey,terms.join('\n')); } catch (_) { saved=false; }
+    $('text-dictionary-status').textContent=saved?`已保存 ${terms.length} 个专名，仅用于本视频、当前设备的词语排行。`:'专名已应用，但当前浏览器无法保存；刷新后失效。';
+    render();
+  });
   function kpi(title,value,note) { const e=make('div',undefined,'inspection-kpi');e.append(make('span',title),make('strong',value),make('small',note));return e; }
   function showDensity(rows) {
     const valid=rows.filter(r => r.position !== null);
