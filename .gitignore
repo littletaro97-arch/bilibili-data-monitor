@@ -42,3 +42,7 @@ windows/releases/**/*.log
 windows/build-installer.log
 windows/final-build.log
 windows/final-compile.log
+
+# Private release security/validation working files
+windows/releases/**/gitleaks-*.json
+windows/releases/**/validation-plan.json

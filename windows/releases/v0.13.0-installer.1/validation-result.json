@@ -1,0 +1,18 @@
+{
+  "result": "PASS",
+  "checks": [
+    "fresh-install-payload-matches-scanned-staging",
+    "fresh-install",
+    "homepage-settings-plotly",
+    "packaged-server-no-visible-test-window",
+    "report-export-config-write",
+    "upgrade-reinstall-original-directory-payload-matches-scanned-staging",
+    "upgrade-reinstall-original-directory",
+    "uninstall",
+    "all-user-data-retained"
+  ],
+  "visual_wizard_verification": "separate manual report",
+  "validation_mode": "Same staged payload and installer configuration, separate test AppId to preserve real installation; no visible window test",
+  "unit_tests_passed": 188,
+  "production_source_commit": "82a6c7b4ea0285fb8583e8610556d820c97e7b8f"
+}
