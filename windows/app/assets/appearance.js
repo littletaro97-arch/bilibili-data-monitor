@@ -8,6 +8,11 @@
     root.style.colorScheme = theme;
     window.dispatchEvent(new CustomEvent('appearancechange'));
   }
+  let navigation={enabled:true,side:'right'};
+  try{const saved=JSON.parse(read('bilibili-detail-navigation')||'{}');navigation={enabled:saved.enabled!==false,side:saved.side==='left'?'left':'right'};}catch{}
+  window.bllaNavigationPreferences=navigation;root.dataset.detailNav=String(navigation.enabled);root.dataset.navSide=navigation.side;
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches && Element.prototype.animate)root.dataset.pageEntering='true';
+  document.addEventListener('DOMContentLoaded',()=>{delete root.dataset.pageEntering;},{once:true});
   apply(read('blla:theme') || (system.matches ? 'dark' : 'light'));
   system.addEventListener('change', () => { if (!read('blla:theme')) apply(system.matches ? 'dark' : 'light'); });
   function preferenceUrl(href, metrics) {

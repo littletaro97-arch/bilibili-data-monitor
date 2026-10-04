@@ -73,6 +73,18 @@ def root(identity,children=0,parent=None):
 
 
 @pytest.mark.asyncio
+async def test_explicit_continuous_traversal_crosses_default_batch_and_stops_on_risk(tmp_path):
+    repo,s,a,p=setup(tmp_path,budget=1)
+    p.roots=AsyncMock(side_effect=[{'replies':[root('1')],'cursor':{'is_end':False,'pagination_reply':{'next_offset':'next'}}},
+                                 {'replies':[root('2')],'cursor':{'is_end':True}}])
+    j=await s.start(BV,'comments','all',0,continuous=True);await s.task
+    assert s.load(j['id'])['status']=='complete' and len(repo.list_comments(BV))==2
+    p.roots=AsyncMock(side_effect=RiskControlError('stop'))
+    j=await s.start(BV,'comments','all',0,continuous=True);await s.task
+    assert s.load(j['id'])['status']=='paused' and p.roots.await_count==1
+
+
+@pytest.mark.asyncio
 async def test_comments_children_pagination_and_pinned_dedup(tmp_path):
     repo,s,a,p=setup(tmp_path,budget=2)
     p.roots=AsyncMock(side_effect=[{'replies':[root('1',21)],'cursor':{'is_end':False,'pagination_reply':{'next_offset':'next'}}},
@@ -254,11 +266,11 @@ def test_login_and_job_frontend(tmp_path):
         def latest(self,bvid):return current['job']
         def load(self,identity):return current['job']
         def public(self,j):return j
-        async def start(self,bvid,kind,scope,cid):
+        async def start(self,bvid,kind,scope,cid,*,continuous=False):
             calls.append((bvid,kind,scope,cid));current['job']={'id':'test-job','bvid':bvid,'kind':kind,'status':'running','message':'测试采集','responses':1,'received':20,'retry_after':0,'parts':[{'cid':10}],'part_index':0,'segment':1};return current['job']
         async def cancel(self,identity=None):
             if current['job']:current['job']['status']='paused'
-        async def resume(self,identity):current['job']['status']='complete';current['job']['message']='接口遍历结束';return current['job']
+        async def resume(self,identity,*,continuous=False):current['job']['status']='complete';current['job']['message']='接口遍历结束';return current['job']
     app.state.bili_auth=Auth();app.state.full_text=Service()
     client=TestClient(app,client=('127.0.0.1',9000),base_url='http://127.0.0.1')
     def serve(route):

@@ -1,6 +1,7 @@
 (() => {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const main = document.querySelector('main');
+  delete document.documentElement.dataset.pageEntering;
   if (!Element.prototype.animate) return;
   if (!reduced.matches && main) main.animate([{opacity:0, transform:'translateY(4px)'}, {opacity:1, transform:'none'}], {duration:160, easing:'ease-out'});
   document.addEventListener('click', event => {
@@ -30,7 +31,7 @@
       if (animation) animation.cancel();
       detail.open = true;
       body.style.overflow = 'hidden';
-      animation = body.animate([{height:`${height}px`, opacity:expanded ? 0.6 : 1}, {height:expanded ? `${body.scrollHeight}px` : '0px', opacity:expanded ? 1 : 0}], {duration:160, easing:'ease-out'});
+      animation = body.animate([{height:`${height}px`, opacity:expanded ? 0.6 : 1}, {height:expanded ? `${body.scrollHeight}px` : '0px', opacity:expanded ? 1 : 0}], {duration:220, easing:'cubic-bezier(.4,0,.2,1)'});
       const current = animation;
       current.finished.then(() => {
         if (animation !== current) return;

@@ -2,7 +2,7 @@
   const root = document.querySelector('#text-inspection');
   const data = JSON.parse(document.querySelector('#text-panel-data').textContent);
   const $ = id => root.querySelector(`#${id}`);
-  if (!data.comments) { $('text-coverage').textContent = '面板已更新。请退出程序后重新启动，加载新的检视服务。'; return; }
+  if (!data.comments) { root.textContent = '面板已更新。请退出程序后重新启动，加载新的检视服务。'; return; }
   const number = n => n === null || n === undefined ? '未知' : Number(n).toLocaleString('zh-CN');
   const position = value => value === null ? '位置未知' : `${String(Math.floor(value/60)).padStart(2,'0')}:${String(Math.floor(value%60)).padStart(2,'0')}`;
   const time = value => {
@@ -13,9 +13,6 @@
   const make = (tag, text, className) => { const e=document.createElement(tag); if(text !== undefined) e.textContent=text; if(className) e.className=className; return e; };
   let channel='danmaku', keywords=[], page=0, range=null, listed=[];
   const pageSize=50;
-  $('text-coverage').textContent = `平台计数：评论 ${number(data.platform_comments)}、弹幕 ${number(data.platform_danmaku)}（跨分 P 总量）；本地保存：评论 ${number(data.stored_comments)}、去重弹幕 ${number(data.stored_danmaku)}。普通采样读取一页评论／XML 池；登录遍历读取后续页面和分段。两者均不能证明完整历史，平台计数也不能直接当作文本覆盖率。`;
-  const run = data.runs.find(r => r.kind === 'danmaku');
-  $('text-scope-extra').textContent = `${run ? `上次${run.metadata.authenticated ? '登录遍历' : '公开采样'}${run.metadata.scope === 'selected' ? '仅所选 P' : '按各分 P 读取'}：${run.metadata.parts.length} 个 P（视频共 ${run.metadata.total_parts} 个 P）${run.metadata.interrupted ? '，采集中断' : ''}。` : '旧记录未保留分 P 采样范围。'}已排除 ${number(data.duplicates)} 条重复弹幕记录。${data.truncated ? `分析仅加载最近 ${number(data.limit)} 条唯一内容，请注意截断。` : '已加载当前本地唯一样本。'} 平台计数时间：${time(data.platform_time)}。`;
   for (const c of ['comments','danmaku']) root.querySelector(`[data-count=${c}]`).textContent=number(data[c].length);
   for (const part of data.parts) {
     const option=make('option', `${part.page ? `P${part.page} · ` : ''}${part.name} · CID ${part.cid}`);
@@ -26,7 +23,7 @@
   if (publicPart) $('text-part').value=String(publicPart.cid);
   function sourceRows() {
     const origin=$('text-origin').value;
-    return data[channel].filter(r => (origin === 'all' || r.origin === origin) && (channel === 'comments' || String(r.cid) === $('text-part').value));
+    return data[channel].filter(r => (origin === 'all' || r.origin === origin) && ($('text-visibility').value==='all'||(r.visibility||'unknown')===$('text-visibility').value) && (channel === 'comments' || String(r.cid) === $('text-part').value));
   }
   function matches(row) { const text=row.text.toLocaleLowerCase(); return !keywords.length || ( $('text-match').value === 'all' ? keywords.every(k=>text.includes(k)) : keywords.some(k=>text.includes(k)) ); }
   const dictionaryKey=`blla-word-dictionary-${root.dataset.bvid}`;
@@ -37,7 +34,7 @@
   let tokenizer=new window.BllaSampleWords.Tokenizer(customTerms);
   const rankings=new Map();
   function showWords(rows) {
-    const key=JSON.stringify([channel,$('text-part').value,$('text-origin').value]);
+    const key=JSON.stringify([channel,$('text-part').value,$('text-origin').value,$('text-visibility').value]);
     if(!rankings.has(key)) {
       if(rankings.size>=12) rankings.delete(rankings.keys().next().value);
       rankings.set(key,tokenizer.rank(rows));
@@ -104,6 +101,8 @@
     for(const row of listed.slice(page*pageSize,(page+1)*pageSize)) {
       const card=make('article',undefined,'inspection-item');
       const meta = channel==='danmaku' ? `${position(row.position)} · 发送 ${time(row.sent)}` : `${row.author} · ${row.parent ? '回复' : '主评论'} · 点赞 ${number(row.likes)} · 回复数 ${number(row.replies)} · 发布 ${time(row.sent)}`;
+      const visibility=row.origin==='local'?'本地文本':row.visibility==='observed'?'上次采集可见':row.visibility==='placeholder'?'疑似已删除（接口占位）':'当前可见性未核验';
+      card.append(make('div',`${visibility}${row.checked?` · 核验 ${time(row.checked)}`:''}`,'inspection-meta'));
       card.append(make('div',`${meta} · ${row.origin==='local' ? '本地导入／演示' : '公开采样'}`,'inspection-meta'));
       const body=make('p');highlight(body,row.text);card.append(body);$('text-list').append(card);
     }
@@ -134,8 +133,8 @@
   }
   function apply() { keywords=[...new Set($('text-keyword').value.toLocaleLowerCase().split(/[\s,，]+/).filter(Boolean))].slice(0,12);page=0;range=null;render(); }
   $('text-filter').addEventListener('submit',event=>{event.preventDefault();apply();});
-  for(const id of ['text-origin','text-part','text-match','text-sort']) $(id).addEventListener('change',apply);
-  $('text-reset').addEventListener('click',()=>{ $('text-keyword').value='';$('text-match').value='any';$('text-origin').value='public';$('text-sort').value='position';apply(); });
+  for(const id of ['text-origin','text-part','text-match','text-sort','text-visibility']) $(id).addEventListener('change',apply);
+  $('text-reset').addEventListener('click',()=>{ $('text-keyword').value='';$('text-match').value='any';$('text-origin').value='public';$('text-visibility').value='all';$('text-sort').value='position';apply(); });
   $('text-clear-range').addEventListener('click',()=>{range=null;page=0;render();});
   $('text-prev').addEventListener('click',()=>{page=Math.max(0,page-1);showList();});$('text-next').addEventListener('click',()=>{page++;showList();});
   const tabs=[...root.querySelectorAll('[data-channel]')];

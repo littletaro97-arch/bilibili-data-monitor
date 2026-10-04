@@ -6,7 +6,7 @@
   <title>{% block title %}B站本地分析{% endblock %}</title>
   <link rel="icon" href="/assets/app-icon.ico" type="image/x-icon">
   <script>window.bllaMetricNames = {{ chart_metric_names|tojson }};</script>
-  <script src="/assets/appearance.js?v=20261004.1"></script>
+  <script src="/assets/appearance.js?v=20261004.2"></script>
   {% if metric_options %}<script>restoreChartPreferences({{ metric_options|map(attribute=0)|list|tojson }});</script>{% endif %}
   {% if cover_url %}<link rel="preload" as="image" href="{{ cover_url }}" referrerpolicy="no-referrer">{% endif %}
   <style>
@@ -94,6 +94,7 @@
     button.secondary, .button.secondary { background: white; color: var(--accent); }
     button.danger { background: var(--danger); border-color: var(--danger); }
     button, .button, section, .metric, details { transition: border-color var(--motion-normal) var(--motion-ease), background-color var(--motion-normal) var(--motion-ease), color var(--motion-normal) var(--motion-ease), box-shadow var(--motion-normal) var(--motion-ease); }
+    .interval-dialog{width:min(420px,90vw);border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);padding:20px}.interval-dialog::backdrop{background:#0005}.interval-dialog input{width:100%}
     table { width: 100%; min-width: 680px; border-collapse: collapse; font-size: 14px; }
     th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
     th { color: var(--muted); font-weight: 600; background: #fbfcfd; }
@@ -156,11 +157,14 @@
       .metric strong { font-size: 18px; }
       .video-heading { grid-template-columns: 1fr; gap: 16px; }
       .video-heading-content h2 { font-size: 18px; }
-      table { min-width: 620px; font-size: 13px; }
+      .interval-dialog{width:min(420px,90vw);border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);padding:20px}.interval-dialog::backdrop{background:#0005}.interval-dialog input{width:100%}
+    table { min-width: 620px; font-size: 13px; }
     }
   </style>
   <link rel="stylesheet" href="/assets/appearance.css?v=20261003.3">
   <style>.metric-time { grid-column:span 2; } .metric-time strong { font-size:clamp(14px,1.5vw,20px); white-space:nowrap; overflow-wrap:normal; } @media(max-width:760px) { .metric-time { grid-column:auto; } .metric-time strong { white-space:normal; word-break:normal; overflow-wrap:normal; } }</style>
+  {% include "floating_nav_styles.html" %}
+  <style>html[data-page-entering="true"] main{opacity:0;transform:translateY(4px)}</style>
   {% block page_styles %}{% endblock %}
   {% if needs_plotly %}
     <script defer src="/assets/charts.js" data-library-url="/assets/plotly.min.js?v={{ plotly_version }}"></script>
@@ -175,7 +179,7 @@
       <button type="button" data-theme-toggle aria-label="切换深浅色模式">☾</button>
     </nav>
   </header>
-  <main>
+  <main class="{% block main_class %}{% endblock %}">
     {% if message %}
       <div class="message {{ level }}">{{ message }}</div>
     {% endif %}

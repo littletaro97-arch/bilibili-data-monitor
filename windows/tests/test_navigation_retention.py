@@ -65,12 +65,12 @@ def test_task_clicks_floating_directory_and_settings(tmp_path):
             assert nav.get_attribute('data-side')=='right'
             nav.get_by_role('link',name='04 历史导入').click()
             assert page.locator('[data-chart-panel="history-import"]').evaluate('e=>e.open')
-            page.goto('http://127.0.0.1/settings');page.locator('#navigation-side').select_option('left');page.locator('#navigation-preferences button').click()
+            page.goto('http://127.0.0.1/settings');page.locator('#navigation-side').select_option('left')
             page.goto(f'http://127.0.0.1/videos/{BV}');assert page.locator('#floating-nav').get_attribute('data-side')=='left'
             page.set_viewport_size({'width':900,'height':800});expect(page.locator('#floating-nav-menu')).to_be_visible()
             assert page.locator('.floating-nav-toggle').count()==0
             nav.get_by_role('link',name='01 视频概况').click();expect(page.locator('#floating-nav-menu')).to_be_visible()
-            page.goto('http://127.0.0.1/settings');page.locator('#navigation-enabled').uncheck();page.locator('#navigation-preferences button').click()
+            page.goto('http://127.0.0.1/settings');page.locator('#navigation-enabled').uncheck()
             page.goto(f'http://127.0.0.1/videos/{BV}');expect(page.locator('#floating-nav')).to_be_hidden()
             assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth')
             assert not errors

@@ -241,6 +241,15 @@ async def pause_task(request: Request, task_id: int):
     return _flash_redirect("/", "任务已暂停")
 
 
+@router.post("/tasks/{task_id}/interval")
+async def change_task_interval(request: Request, task_id: int, interval_seconds: int = Form(...)):
+    try:
+        request.app.state.repository.set_task_interval(task_id, interval_seconds, settings.crawl.min_interval)
+        return _flash_redirect('/', f'采集间隔已改为 {interval_seconds} 秒')
+    except AppError as exc:
+        return _flash_redirect('/', str(exc), 'error')
+
+
 @router.post("/tasks/{task_id}/resume")
 async def resume_task(request: Request, task_id: int):
     try:

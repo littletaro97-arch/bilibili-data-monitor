@@ -67,7 +67,7 @@ class FullTextService:
         task=self.repo.get_task_by_bvid(bvid)
         if task and task['status']=='stopped': raise ProviderError('链接在回收站中，请先取回后采集')
 
-    async def start(self,bvid,kind,scope,cid):
+    async def start(self,bvid,kind,scope,cid,*,continuous=False):
         async with self.lock:
             self.idle()
             self.check_cooldown()
@@ -81,7 +81,7 @@ class FullTextService:
             j={'id':uuid.uuid4().hex,'bvid':bvid,'kind':kind,'status':'running','message':'正在采集',
                 'state':{'owner':self.auth.account,'aid':aid,'parts':selected,'total_parts':len(parts),
                     'scope':'shared' if kind=='comments' else scope,'part_index':0,'segment':1,
-                    'offset':'','pending':None,'responses':0,'received':0,'saved_new':0}}
+                    'offset':'','pending':None,'responses':0,'received':0,'saved_new':0,'continuous':bool(continuous)}}
             self.save(j)
             self.repo.record_text_collection(bvid,kind,{'parts':selected,'total_parts':len(parts),'scope':scope,
                 'authenticated':True,'complete':False,'interrupted':True,'job':j['id']})
@@ -91,7 +91,7 @@ class FullTextService:
         self.active=j['id']; self.provider.keys=None
         self.task=asyncio.create_task(self.run(j))
 
-    async def resume(self,identity):
+    async def resume(self,identity,*,continuous=False):
         async with self.lock:
             self.idle(); self.check_cooldown(); j=self.load(identity)
             self.ensure_video(j['bvid'])
@@ -100,6 +100,7 @@ class FullTextService:
             if not self.auth.cookies: raise ProviderError('请先登录')
             await self.auth.validate()
             if j['state']['owner']!=self.auth.account: raise ProviderError('请使用创建该任务的 Bilibili 账户继续')
+            if continuous:j['state']['continuous']=True
             j['status']='running'; j['message']='从断点继续'; self.save(j); self.launch(j); return self.public(j)
 
     async def cancel(self,identity=None):
@@ -118,11 +119,13 @@ class FullTextService:
         with self.db.connect() as c:
             before=c.total_changes
             for r in items:
-                c.execute('''INSERT INTO danmaku(bvid,cid,progress_sec,text,send_time,captured_at,raw_text,source_id)
-                    SELECT ?,?,?,?,?,?,NULL,? WHERE NOT EXISTS (
+                c.execute('''INSERT INTO danmaku(bvid,cid,progress_sec,text,send_time,captured_at,raw_text,source_id,visibility,visibility_checked_at)
+                    SELECT ?,?,?,?,?,?,NULL,?,'observed',? WHERE NOT EXISTS (
                     SELECT 1 FROM danmaku WHERE bvid=? AND cid=? AND source_id=?)''',
-                    (r.bvid,r.cid,r.progress_sec,r.text,r.send_time,iso_now(),r.source_id,r.bvid,r.cid,r.source_id))
-            return c.total_changes-before
+                    (r.bvid,r.cid,r.progress_sec,r.text,r.send_time,iso_now(),r.source_id,iso_now(),r.bvid,r.cid,r.source_id))
+            added=c.total_changes-before
+            for r in items:c.execute("UPDATE danmaku SET visibility='observed',visibility_checked_at=? WHERE bvid=? AND cid=? AND source_id=?",(iso_now(),r.bvid,r.cid,r.source_id))
+            return added
 
     async def dm_step(self,j):
         s=j['state']; parts=s['parts']
@@ -189,7 +192,10 @@ class FullTextService:
 
     async def run(self,j):
         try:
-            for _ in range(self.budget):
+            # Explicitly requested continuous traversal still has a hard bound;
+            # platform restrictions and errors stop immediately, never auto-retry.
+            limit=self.budget*40 if j['state'].get('continuous') else self.budget
+            for _ in range(limit):
                 self.ensure_video(j['bvid'])
                 complete=j['state'].get('traversed',False)
                 if not complete:
@@ -205,7 +211,7 @@ class FullTextService:
                     break
                 await asyncio.sleep(0)  # Give cancellation and normal monitoring a scheduling point.
             else:
-                j['status']='paused'; j['message']=f'本轮已处理 {self.budget} 个批次，点击继续读取后续数据'
+                j['status']='paused'; j['message']=f'本轮已处理 {limit} 个批次，点击继续读取后续数据'
         except asyncio.CancelledError:
             j['status']='paused'; j['message']='已暂停，已保存的数据和断点保留'
         except RiskControlError:

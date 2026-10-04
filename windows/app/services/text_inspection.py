@@ -6,6 +6,7 @@ def build_text_panel(raw, video, latest):
     comments = [{"id": r["rpid"], "text": r.get("message") or "", "author": r.get("user_name") or "匿名",
         "likes": r.get("like_count") or 0, "replies": r.get("reply_count") or 0,
         "parent": r.get("parent_rpid"), "sent": r.get("ctime"), "captured": r["captured_at"],
+        "visibility":r.get("visibility","unknown"),"checked":r.get("visibility_checked_at"),
         "origin": "local" if r["rpid"].startswith("local-comment-") else "public"} for r in raw["comments"]]
     dm = []
     for row in raw["danmaku"]:
@@ -13,7 +14,7 @@ def build_text_panel(raw, video, latest):
         if position is not None and (not math.isfinite(position) or position < 0):
             position = None
         dm.append({"cid": row["cid"], "text": row.get("text") or "", "position": position,
-            "sent": row.get("send_time"), "captured": row["captured_at"], "origin": row["origin"]})
+            "sent": row.get("send_time"), "captured": row["captured_at"], "origin": row["origin"],"visibility":row.get("visibility","unknown"),"checked":row.get("visibility_checked_at")})
     parts = {}
     # Most recent metadata wins, including previously sampled parts on interrupted runs.
     for run in raw["runs"]:

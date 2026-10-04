@@ -176,6 +176,9 @@ class Database:
             _ensure_column(conn, "video_stats_snapshot", "collection_source", "TEXT NOT NULL DEFAULT 'UNKNOWN'")
             _ensure_column(conn, "video_stats_snapshot", "exchange_digest", "TEXT")
             _ensure_column(conn, "danmaku", "source_id", "TEXT")
+            for table in ("comments", "danmaku"):
+                _ensure_column(conn, table, "visibility", "TEXT NOT NULL DEFAULT 'unknown'")
+                _ensure_column(conn, table, "visibility_checked_at", "TEXT")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_danmaku_identity ON danmaku(bvid,cid,progress_sec,send_time)")
             conn.execute("PRAGMA user_version = 1")
 
@@ -314,6 +317,18 @@ class Repository:
                 (status, now, task_id),
             )
 
+    def set_task_interval(self, task_id: int, seconds: int, minimum: int) -> None:
+        if isinstance(seconds, bool) or not isinstance(seconds, int) or not minimum <= seconds <= 31536000:
+            raise RateLimitError(f"采集间隔须为 {minimum} 至 31536000 秒的整数")
+        now = local_now()
+        with self.database.connect() as conn:
+            task = conn.execute('SELECT * FROM crawl_tasks WHERE id=?', (task_id,)).fetchone()
+            if not task or task['status']=='stopped':
+                raise RateLimitError('任务不存在或已在回收站中')
+            # Leave status, failure count and platform cooldown intact.
+            conn.execute('UPDATE crawl_tasks SET interval_seconds=?,next_run_at=?,updated_at=? WHERE id=?',
+                         (seconds,(now+timedelta(seconds=seconds)).isoformat(),now.isoformat(),task_id))
+
     def update_task_schedule(self, bvid: str, next_run_at: datetime) -> None:
         now = iso_now()
         with self.database.connect() as conn:
@@ -330,6 +345,9 @@ class Repository:
         next_run = local_now() + timedelta(seconds=interval_seconds + jitter_seconds)
         now = iso_now()
         with self.database.connect() as conn:
+            current = conn.execute('SELECT interval_seconds FROM crawl_tasks WHERE bvid=?', (bvid,)).fetchone()
+            if current:
+                next_run = local_now() + timedelta(seconds=current['interval_seconds'] + jitter_seconds)
             conn.execute(
                 """
                 UPDATE crawl_tasks
@@ -545,8 +563,8 @@ class Repository:
                 """
                 INSERT INTO comments (
                     bvid, rpid, parent_rpid, user_mid, user_name, message,
-                    like_count, reply_count, ctime, captured_at, raw_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    like_count, reply_count, ctime, captured_at, raw_json, visibility, visibility_checked_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(bvid, rpid) DO UPDATE SET
                     parent_rpid=excluded.parent_rpid,
                     user_mid=excluded.user_mid,
@@ -556,7 +574,9 @@ class Repository:
                     reply_count=excluded.reply_count,
                     ctime=CASE WHEN excluded.ctime IS NULL OR excluded.ctime=0 THEN comments.ctime ELSE excluded.ctime END,
                     captured_at=excluded.captured_at,
-                    raw_json=excluded.raw_json
+                    raw_json=excluded.raw_json,
+                    visibility=CASE WHEN excluded.visibility='unknown' THEN comments.visibility ELSE excluded.visibility END,
+                    visibility_checked_at=CASE WHEN excluded.visibility='unknown' THEN comments.visibility_checked_at ELSE excluded.visibility_checked_at END
                 """,
                 [
                     (
@@ -571,6 +591,8 @@ class Repository:
                         item.ctime,
                         captured_at,
                         item.raw_json,
+                        ('unknown' if item.rpid.startswith('local-comment-') or not item.message else 'placeholder' if item.message in ('[已删除]','该评论已被删除','该评论已被删除。','评论已删除') else 'observed'),
+                        captured_at,
                     )
                     for item in comments
                 ],
@@ -600,7 +622,7 @@ class Repository:
             where = """FROM danmaku d WHERE bvid=? AND (source_id IS NOT NULL OR raw_text IS NOT NULL OR NOT EXISTS (
                 SELECT 1 FROM danmaku n WHERE n.source_id IS NOT NULL AND n.bvid=d.bvid AND n.cid IS d.cid
                 AND n.progress_sec IS d.progress_sec AND n.send_time IS d.send_time AND n.text IS d.text))"""
-            dm = conn.execute(f"SELECT cid,progress_sec,send_time,text,MAX(captured_at) AS captured_at,CASE WHEN raw_text IS NULL THEN 'public' ELSE 'local' END AS origin {where} GROUP BY {groups} ORDER BY captured_at DESC LIMIT ?", (bvid, limit)).fetchall()
+            dm = conn.execute(f"SELECT cid,progress_sec,send_time,text,MAX(captured_at) AS captured_at,CASE WHEN MAX(CASE WHEN visibility='observed' THEN 1 ELSE 0 END)=1 THEN 'observed' ELSE 'unknown' END AS visibility,MAX(visibility_checked_at) AS visibility_checked_at,CASE WHEN raw_text IS NULL THEN 'public' ELSE 'local' END AS origin {where} GROUP BY {groups} ORDER BY captured_at DESC LIMIT ?", (bvid, limit)).fetchall()
             comment_count = conn.execute("SELECT COUNT(*) FROM comments WHERE bvid=?", (bvid,)).fetchone()[0]
             dm_count = conn.execute(f"SELECT COUNT(*) FROM (SELECT 1 {where} GROUP BY {groups})", (bvid,)).fetchone()[0]
             raw_count = conn.execute("SELECT COUNT(*) FROM danmaku WHERE bvid=?", (bvid,)).fetchone()[0]
@@ -625,8 +647,8 @@ class Repository:
             conn.executemany(
                 """
                 INSERT INTO danmaku (
-                    bvid, cid, progress_sec, text, send_time, captured_at, raw_text, source_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    bvid, cid, progress_sec, text, send_time, captured_at, raw_text, source_id, visibility, visibility_checked_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -638,6 +660,8 @@ class Repository:
                         captured_at,
                         item.raw_text,
                         item.source_id,
+                        'observed' if item.raw_text is None else 'unknown',
+                        captured_at if item.raw_text is None else None,
                     )
                     for item in items
                 ],

@@ -63,11 +63,11 @@ async def job(bvid:str,action:str,request:Request):
         if action=='start':
             try: cid=int(value.get('cid') or 0)
             except (TypeError,ValueError): raise ProviderError('分 P 参数不正确') from None
-            result=await service.start(bvid,value.get('kind'),value.get('scope','selected'),cid)
+            result=await service.start(bvid,value.get('kind'),value.get('scope','selected'),cid,continuous=value.get('continuous') is True)
         elif action in {'resume','cancel'}:
             identity=str(value.get('id') or '')
             if service.load(identity)['bvid']!=bvid: raise ProviderError('任务视频不匹配')
-            if action=='resume': result=await service.resume(identity)
+            if action=='resume': result=await service.resume(identity,continuous=value.get('continuous') is True)
             else: await service.cancel(identity); result=service.public(service.load(identity))
         else: raise HTTPException(404)
         return {'job':result}

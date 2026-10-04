@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block page_styles %}{% include "text_panel_styles.html" %}{% endblock %}
 {% block title %}{{ video.title if video else "视频详情" }} - B站本地分析{% endblock %}
+{% block main_class %}detail-page{% endblock %}
 {% block content %}
 <div class="page-actions">
   <a class="button secondary" href="/">返回首页</a>
