@@ -163,6 +163,10 @@ class Database:
                     metadata_json TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_text_runs_bvid ON text_collection_runs(bvid, id);
+                CREATE TABLE IF NOT EXISTS comment_text_history (
+                    bvid TEXT NOT NULL,rpid TEXT NOT NULL,message TEXT NOT NULL,
+                    captured_at TEXT NOT NULL, UNIQUE(bvid,rpid,message)
+                );
                 """
             )
             _ensure_column(conn, "video_stats_snapshot", "source_type", "TEXT NOT NULL DEFAULT 'collected'")
@@ -530,6 +534,12 @@ class Repository:
             return 0
         captured_at = captured_at or iso_now()
         with self.database.connect() as conn:
+            # Preserve previously observed text before any platform edit or tombstone.
+            for item in comments:
+                conn.execute('''INSERT OR IGNORE INTO comment_text_history(bvid,rpid,message,captured_at)
+                    SELECT bvid,rpid,message,captured_at FROM comments
+                    WHERE bvid=? AND rpid=? AND message IS NOT NULL AND message<>'' AND message IS NOT ?''',
+                    (item.bvid,item.rpid,item.message))
             before = conn.total_changes
             conn.executemany(
                 """
@@ -540,11 +550,11 @@ class Repository:
                 ON CONFLICT(bvid, rpid) DO UPDATE SET
                     parent_rpid=excluded.parent_rpid,
                     user_mid=excluded.user_mid,
-                    user_name=excluded.user_name,
-                    message=excluded.message,
+                    user_name=CASE WHEN excluded.user_name IS NULL OR excluded.user_name='' THEN comments.user_name ELSE excluded.user_name END,
+                    message=CASE WHEN excluded.message IS NULL OR excluded.message IN ('','[已删除]','该评论已被删除','该评论已被删除。','评论已删除') THEN comments.message ELSE excluded.message END,
                     like_count=excluded.like_count,
                     reply_count=excluded.reply_count,
-                    ctime=excluded.ctime,
+                    ctime=CASE WHEN excluded.ctime IS NULL OR excluded.ctime=0 THEN comments.ctime ELSE excluded.ctime END,
                     captured_at=excluded.captured_at,
                     raw_json=excluded.raw_json
                 """,

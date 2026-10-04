@@ -23,10 +23,10 @@
   {% if tasks %}
     <div class="task-cards">
       {% for task in tasks %}
-      <article class="task-card">
+      <article class="task-card" data-detail-url="/videos/{{ task.bvid }}" tabindex="0" aria-label="查看{{ task.title or task.bvid }}的详情">
         <div class="task-card-top">
           <div class="task-heading">
-            <a class="task-title" href="/videos/{{ task.bvid }}">{{ task.title or task.bvid }}</a>
+            <a class="task-title" href="https://www.bilibili.com/video/{{ task.bvid }}/" target="_blank" rel="noopener noreferrer" title="在浏览器打开视频">{{ task.title or task.bvid }}</a>
             <div class="task-meta">{{ task.bvid }} · {{ task.owner_name or "UP 未知" }} · 每 {{ task.interval_seconds }} 秒采集</div>
           </div>
           <span class="badge {{ task|task_style }}" title="{{ task.last_error or task.status|task_label }}">{{ task|task_display }}</span>
@@ -73,4 +73,16 @@
   </div>
 </section>
 
+<script>
+for(const card of document.querySelectorAll('[data-detail-url]')){
+  const interactive=target=>target.closest('a,button,form,input,select,textarea,label,[role="button"],.task-foot');
+  card.addEventListener('click',e=>{
+    if(interactive(e.target)||window.getSelection().toString()||e.button!==0)return;
+    window.location.assign(card.dataset.detailUrl);
+  });
+  card.addEventListener('keydown',e=>{
+    if(e.target===card && e.key==='Enter'){e.preventDefault();window.location.assign(card.dataset.detailUrl);}
+  });
+}
+</script>
 {% endblock %}

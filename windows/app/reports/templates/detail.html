@@ -7,7 +7,7 @@
   <a class="button secondary" href="/settings">进入设置</a>
 </div>
 
-<section class="video-overview">
+<section class="video-overview" id="video-overview" data-nav-title="视频概况">
   <div class="video-heading">
     <figure class="video-cover">
       <img data-video-cover {% if cover_url %}src="{{ cover_url }}"{% else %}hidden{% endif %} alt="{{ video.title or '视频' }}的封面" referrerpolicy="no-referrer" decoding="async">
@@ -48,7 +48,7 @@
   {% endif %}
 </section>
 
-<section data-latest-refresh-seconds="{{ latest_refresh_seconds }}">
+<section id="latest-data" data-nav-title="最新数据" data-latest-refresh-seconds="{{ latest_refresh_seconds }}">
   <h2>最新数据</h2>
   {% if latest %}
     <div class="grid">
@@ -68,7 +68,7 @@
   {% endif %}
 </section>
 
-<section>
+<section id="trend-charts" data-nav-title="趋势图表">
   <h2>趋势图表</h2>
   <p>{{ summary }}</p>
   {% if imported_snapshot_count %}
@@ -148,7 +148,7 @@
     </form>
   </details>
 
-  <details class="chart-panel" data-chart-panel="history-import">
+  <details class="chart-panel" data-chart-panel="history-import" data-nav-title="历史导入">
     <summary>导入历史记录</summary>
     <p class="muted">导入的数据会标记为“历史导入”，用于和程序自动采集的数据区分。CSV 第一行必须是表头，至少包含 <code>captured_at</code> 和一个指标字段。</p>
     <form method="post" action="/videos/{{ video.bvid }}/history/import">

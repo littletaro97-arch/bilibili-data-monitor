@@ -25,6 +25,13 @@
 </section>
 
 {% include "bili_account.html" %}
+<section id="detail-navigation-settings"><h2>详情页目录</h2>
+  <form id="navigation-preferences">
+    <div class="switch-stack">{{ switch_card('navigation-enabled','显示悬浮目录','network',checked=true,hint='仅详情页显示；窄窗口收为目录按钮') }}</div>
+    <label for="navigation-side">位置</label><select id="navigation-side"><option value="right">右侧</option><option value="left">左侧</option></select>
+    <button type="submit">保存目录设置</button><p id="navigation-status" role="status" class="muted">偏好保存在当前面板中。</p>
+  </form>
+</section>
 <section id="version-updates">
   <div class="update-heading"><img src="/assets/app-icon.png" alt="B站数据监控图标"><div><h2>版本更新</h2><p>B站数据监控 · 电脑版 {{ app_version }} · 安装包第 {{ installer_revision }} 版</p></div></div>
   <p>{{ update_service.status }}</p>

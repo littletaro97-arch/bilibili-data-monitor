@@ -1,0 +1,49 @@
+<style>
+  .floating-nav{position:fixed;right:12px;top:50%;transform:translateY(-50%);z-index:30;font-size:13px;max-height:70vh;width:140px}
+  .floating-nav[data-side="left"]{right:auto;left:12px}
+  .floating-nav-menu{padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:10px;max-height:65vh;overflow:auto;box-shadow:0 3px 12px #0001}
+  .floating-nav-menu a{display:block;padding:8px 6px;border-radius:6px;text-decoration:none;color:var(--muted)}
+  .floating-nav-menu a[aria-current="location"]{background:var(--bg);color:var(--accent);font-weight:600}
+  .floating-nav-toggle{display:none;font-size:12px;padding:8px}
+  [data-nav-title]{scroll-margin-top:18px}
+  .task-card[data-detail-url]{cursor:pointer}.task-card[data-detail-url]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  @media(max-width:1599px){.floating-nav{width:auto}.floating-nav-toggle{display:block}.floating-nav-menu{display:none;position:absolute;right:44px;width:140px;top:50%;transform:translateY(-50%)}.floating-nav[data-side="left"] .floating-nav-menu{left:44px;right:auto}.floating-nav[data-expanded="true"] .floating-nav-menu{display:block}}
+  @keyframes nav-appear{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+  @media(prefers-reduced-motion:reduce){.floating-nav-menu{animation:none!important}}
+</style>
+<nav id="floating-nav" class="floating-nav" hidden aria-label="详情页目录"><button class="floating-nav-toggle secondary" type="button" aria-expanded="false" aria-controls="floating-nav-menu">目录</button><div id="floating-nav-menu" class="floating-nav-menu"></div></nav>
+<script>
+(() => {
+  const key='bilibili-detail-navigation',nav=document.getElementById('floating-nav'),menu=document.getElementById('floating-nav-menu');
+  const targets=[...document.querySelectorAll('[data-nav-title]')];
+  let preferences={enabled:true,side:'right'};
+  try{const saved=JSON.parse(localStorage.getItem(key)||'{}');preferences={enabled:saved.enabled!==false,side:saved.side==='left'?'left':'right'};}catch{}
+  const apply=()=>{nav.hidden=!preferences.enabled||targets.length<2;nav.dataset.side=preferences.side;};
+  const links=new Map();
+  for(const [index,target] of targets.entries()){
+    if(!target.id)target.id=`detail-section-${index}`;
+    const a=document.createElement('a');a.href='#'+target.id;a.textContent=`${String(index+1).padStart(2,'0')} ${target.dataset.navTitle}`;
+    a.onclick=e=>{
+      e.preventDefault();let ancestor=target;
+      while(ancestor){if(ancestor.tagName==='DETAILS')ancestor.open=true;ancestor=ancestor.parentElement;}
+      target.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
+      nav.dataset.expanded='false';nav.querySelector('button').setAttribute('aria-expanded','false');
+      for(const link of links.values())link.removeAttribute('aria-current');a.setAttribute('aria-current','location');
+    };menu.append(a);links.set(target,a);
+  }
+  if(targets.length && 'IntersectionObserver' in window){
+    const observer=new IntersectionObserver(entries=>{
+      const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);
+      if(visible.length){for(const a of links.values())a.removeAttribute('aria-current');links.get(visible[0].target).setAttribute('aria-current','location');}
+    },{rootMargin:'-5% 0px -70% 0px'});targets.forEach(target=>observer.observe(target));
+  }
+  nav.querySelector('button').onclick=()=>{const opened=nav.dataset.expanded!=='true';nav.dataset.expanded=String(opened);nav.querySelector('button').setAttribute('aria-expanded',String(opened));};
+  nav.addEventListener('keydown',e=>{if(e.key==='Escape'){nav.dataset.expanded='false';nav.querySelector('button').setAttribute('aria-expanded','false');nav.querySelector('button').focus();}});
+  const form=document.getElementById('navigation-preferences');
+  if(form){
+    const enabled=document.getElementById('navigation-enabled'),side=document.getElementById('navigation-side');enabled.checked=preferences.enabled;side.value=preferences.side;
+    form.onsubmit=e=>{e.preventDefault();preferences={enabled:enabled.checked,side:side.value};try{localStorage.setItem(key,JSON.stringify(preferences));apply();document.getElementById('navigation-status').textContent='已保存，详情页立即生效。';}catch{document.getElementById('navigation-status').textContent='当前环境无法保存偏好。';}};
+  }
+  apply();
+})();
+</script>

@@ -1,6 +1,6 @@
-<section id="text-inspection" aria-label="评论与弹幕检视台">
+<section id="text-inspection" aria-label="评论与弹幕检视台" data-nav-title="评论与弹幕">
   <div class="inspection-heading"><div><h2>评论与弹幕检视台</h2><p class="muted">先定位样本热点，再查看原文证据。</p></div><div class="actions">
-    <form class="inline" method="post" action="/videos/{{ video.bvid }}/comments/collect"><button class="secondary" type="submit">采样评论</button></form>
+    <form class="inline" method="post" action="/videos/{{ video.bvid }}/comments/collect"><button class="secondary" type="submit" title="仅读取一页及附带回复；更多评论使用下方登录遍历">单页采样评论</button></form>
     <form class="inline inspection-collect" id="text-collect-form" method="post" action="/videos/{{ video.bvid }}/danmaku/collect"><input type="hidden" name="cid" id="text-collect-cid" value="{{ video.cid }}"><select name="scope" aria-label="弹幕采样范围"><option value="selected">仅所选 P</option><option value="all">全部 P（最多 10 个）</option></select><button type="submit">采样弹幕</button></form>
   </div></div>
   <div class="inspection-scope" role="note"><strong>本地文本，完整度未证实</strong><p id="text-coverage">公开 XML 是弹幕池样本；评论取一页及附带回复。样本结论不能代表整个评论区。</p><span id="text-scope-extra" class="muted"></span></div>
@@ -31,7 +31,7 @@
         <div id="text-bars" class="inspection-bars" aria-label="弹幕样本时间分布"></div>
         <div id="text-peaks" class="inspection-peaks"></div>
       </div>
-      <div class="inspection-title"><h3>原文证据</h3><button type="button" class="secondary" id="text-clear-range" hidden>清除片段筛选</button></div>
+      <div class="inspection-title" id="text-evidence" data-nav-title="原文证据"><h3>原文证据</h3><button type="button" class="secondary" id="text-clear-range" hidden>清除片段筛选</button></div>
       <p id="text-list-scope" class="muted inspection-small" aria-live="polite"></p><div id="text-list" class="inspection-list"></div>
       <div class="inspection-pagination"><button type="button" class="secondary" id="text-prev">上一页</button><span id="text-page"></span><button type="button" class="secondary" id="text-next">下一页</button></div>
     </div>

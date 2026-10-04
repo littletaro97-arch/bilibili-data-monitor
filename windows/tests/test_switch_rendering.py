@@ -37,8 +37,8 @@ def test_switch_dimensions_and_interaction_survive_stale_shared_css(tmp_path, sh
             page.route("**/*", respond)
             page.goto("http://127.0.0.1/settings", wait_until="networkidle")
             cards = page.locator(".switch-card")
-            assert cards.count() == 3
-            for i in range(3):
+            assert cards.count() == 4
+            for i in range(cards.count()):
                 card = cards.nth(i)
                 box = card.bounding_box()
                 assert 74 <= box["height"] <= 100

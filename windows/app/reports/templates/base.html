@@ -181,6 +181,7 @@
     {% endif %}
     {% block content %}{% endblock %}
   </main>
+  {% include "floating_nav.html" %}
   <script>
     const coverImage = document.querySelector("[data-video-cover]");
     const coverPlaceholder = document.querySelector("[data-cover-placeholder]");

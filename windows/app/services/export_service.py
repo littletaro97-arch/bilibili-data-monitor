@@ -15,6 +15,7 @@ EXPORT_TABLES = {
     "crawl_tasks": "SELECT * FROM crawl_tasks ORDER BY created_at ASC, id ASC",
     "video_stats_snapshot": "SELECT * FROM video_stats_snapshot ORDER BY bvid ASC, captured_at ASC, id ASC",
     "comments": "SELECT * FROM comments ORDER BY bvid ASC, captured_at ASC, id ASC",
+    "comment_text_history": "SELECT * FROM comment_text_history ORDER BY bvid,rpid,captured_at",
     "danmaku": "SELECT * FROM danmaku ORDER BY bvid ASC, captured_at ASC, id ASC",
     "crawl_logs": "SELECT * FROM crawl_logs ORDER BY created_at ASC, id ASC",
 }

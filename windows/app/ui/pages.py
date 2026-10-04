@@ -393,7 +393,7 @@ async def video_detail(
 async def collect_comments(request: Request, bvid: str):
     try:
         count = await request.app.state.phase2_service.collect_comments_once(bvid)
-        return _flash_redirect(f"/videos/{bvid}", f"评论采集完成：{count} 条")
+        return _flash_redirect(f"/videos/{bvid}", f"评论单页采样完成：本次保存或更新 {count} 条，并非全量。更多评论请展开“登录后遍历评论与分段弹幕”，选择“评论及楼中楼”。")
     except AppError as exc:
         request.app.state.repository.add_log("WARNING", "评论采集未完成", bvid=bvid, detail=str(exc))
         return _flash_redirect(f"/videos/{bvid}", str(exc), "error")
