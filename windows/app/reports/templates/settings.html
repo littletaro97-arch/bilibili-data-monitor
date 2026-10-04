@@ -1,15 +1,25 @@
 {% extends "base.html" %}
 {% from "switches.html" import switch_card %}
-{% block page_styles %}{% include "switch_styles.html" %}{% endblock %}
+{% block page_styles %}{% include "switch_styles.html" %}
+<style>
+  .settings-overview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start;margin-bottom:18px}
+  .settings-overview>section{min-width:0;margin-bottom:0;overflow-wrap:anywhere}
+  .runtime-table{min-width:0;table-layout:fixed;font-size:13px}
+  .runtime-table th{width:38%}.runtime-table th,.runtime-table td{padding:7px 8px}
+  .runtime-table code{display:block;max-width:100%;white-space:nowrap;overflow-x:auto}
+  .settings-overview input{min-width:0;width:100%}
+  @media(max-width:900px){.settings-overview{grid-template-columns:1fr}}
+</style>{% endblock %}
 {% block title %}设置 - B站本地分析{% endblock %}
 {% block content %}
 <div class="page-actions">
   <a class="button secondary" href="/">返回首页</a>
 </div>
 
-<section>
+<div class="settings-overview">
+<section id="runtime-settings">
   <h2>运行设置</h2>
-  <table>
+  <table class="runtime-table">
     <tbody>
       <tr><th>本机监听地址</th><td><code>{{ settings.app.host }}</code></td></tr>
       <tr><th>端口</th><td>{{ settings.app.port }}</td></tr>
@@ -17,17 +27,18 @@
       <tr><th>最低采集间隔</th><td>{{ settings.crawl.min_interval }} 秒</td></tr>
       <tr><th>全局最小请求间隔</th><td>{{ settings.crawl.global_min_request_interval }} 秒</td></tr>
       <tr><th>最大运行任务数</th><td>{{ settings.crawl.max_active_tasks }}</td></tr>
-      <tr><th>数据库</th><td><code>{{ settings.database.path }}</code></td></tr>
-      <tr><th>报告目录</th><td><code>{{ settings.report.output_dir }}</code></td></tr>
+      <tr><th>数据库</th><td><code tabindex="0" title="{{ settings.database.path }}">{{ settings.database.path }}</code></td></tr>
+      <tr><th>报告目录</th><td><code tabindex="0" title="{{ settings.report.output_dir }}">{{ settings.report.output_dir }}</code></td></tr>
       <tr><th>原始数据备份</th><td>{{ "开启" if settings.crawl.save_raw_json else "关闭" }}</td></tr>
     </tbody>
   </table>
 </section>
 
 {% include "bili_account.html" %}
+</div>
 <section id="detail-navigation-settings"><h2>详情页目录</h2>
   <form id="navigation-preferences">
-    <div class="switch-stack">{{ switch_card('navigation-enabled','显示悬浮目录','network',checked=true,hint='仅详情页显示；窄窗口收为目录按钮') }}</div>
+    <div class="switch-stack">{{ switch_card('navigation-enabled','显示悬浮目录','network',checked=true,hint='仅详情页显示，默认展开所有目录项') }}</div>
     <label for="navigation-side">位置</label><select id="navigation-side"><option value="right">右侧</option><option value="left">左侧</option></select>
     <button type="submit">保存目录设置</button><p id="navigation-status" role="status" class="muted">偏好保存在当前面板中。</p>
   </form>

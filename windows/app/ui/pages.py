@@ -482,9 +482,11 @@ async def delete_snapshots_before(
 
 
 @router.post("/videos/{bvid}/report")
-async def generate_report(request: Request, bvid: str):
+async def generate_report(request: Request, bvid: str, open_report: bool = Form(False)):
     try:
         path = request.app.state.report_service.generate(bvid)
+        if open_report:
+            return RedirectResponse(f"/reports/{path.name}", status_code=303)
         return _flash_redirect(f"/videos/{bvid}", f"报告已生成：{path.name}；保存位置：{path.parent}")
     except Exception as exc:
         request.app.state.repository.add_log("ERROR", "报告生成失败", bvid=bvid, detail=str(exc))

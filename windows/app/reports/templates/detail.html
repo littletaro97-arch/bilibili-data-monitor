@@ -23,16 +23,14 @@
           <div class="metric"><span>任务状态</span><strong data-task-status>{{ task.status|task_label if task else "无任务" }}</strong></div>
         </div>
       {% endif %}
-      <p class="muted">本工具只保存公开统计字段；raw_json 默认关闭，报告不包含完整原始响应。</p>
       <div class="actions">
         {% if video.bvid %}
           <a class="button secondary" href="https://www.bilibili.com/video/{{ video.bvid }}/" target="_blank" rel="noreferrer">打开 B 站视频</a>
         {% endif %}
-        <form class="inline" method="post" action="/videos/{{ video.bvid }}/report"><button type="submit">生成 HTML 报告</button></form>
+        <form class="inline" method="post" action="/videos/{{ video.bvid }}/report"><input type="hidden" name="open_report" value="true"><button type="submit">打开 HTML 报告</button></form>
       </div>
     </div>
   </div>
-  <p class="muted">报告保存目录：<code>{{ report_output_dir }}</code>。生成后可在下方“最近报告”直接打开。</p>
   {% if reports %}
     <details class="chart-panel" data-chart-panel="reports">
       <summary>最近报告</summary>
