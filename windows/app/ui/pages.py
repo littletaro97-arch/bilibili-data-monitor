@@ -9,7 +9,7 @@ import threading
 import time
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 import plotly
 import httpx
 from PIL import UnidentifiedImageError, Image
@@ -167,7 +167,7 @@ async def api_video_latest(request: Request, bvid: str):
 
 @router.get("/assets/{name}")
 async def branding_asset(name: str):
-    allowed = {"app-icon.png", "app-icon.ico", "appearance.js", "appearance.css", "charts.js"}
+    allowed = {"app-icon.png", "app-icon.ico", "appearance.js", "appearance.css", "charts.js", "settings.js"}
     if name == "plotly.min.js":
         # Stream the installed asset instead of materializing several MB per request.
         return FileResponse(Path(plotly.__file__).parent / "package_data" / "plotly.min.js",
@@ -559,19 +559,26 @@ async def download_desktop_update(request: Request):
 
 @router.post("/settings/lan")
 async def update_lan_settings(
+    request: Request,
     enabled: str | None = Form(None),
     password: str = Form(""),
 ):
     try:
         save_lan_settings(enabled=enabled == "on", password=password.strip() or None)
+        if "application/json" in request.headers.get("accept", ""):
+            return JSONResponse({"message": "已自动保存，重启程序后生效"})
         return _flash_redirect("/settings", "局域网访问设置已保存，重启程序后生效")
     except ValueError as exc:
+        if "application/json" in request.headers.get("accept", ""):
+            return JSONResponse({"error": str(exc)}, status_code=400)
         return _flash_redirect("/settings", str(exc), "error")
 
 
 @router.post("/settings/launcher")
-async def update_launcher_settings(show_console: str | None = Form(None)):
+async def update_launcher_settings(request: Request, show_console: str | None = Form(None)):
     save_launcher_settings(show_console=show_console == "on")
+    if "application/json" in request.headers.get("accept", ""):
+        return JSONResponse({"message": "已自动保存，下次启动生效"})
     return _flash_redirect("/settings", "启动设置已保存，下次启动程序时生效")
 
 

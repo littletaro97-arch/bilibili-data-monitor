@@ -22,14 +22,15 @@
           <div class="metric"><span>UP 主</span><strong>{{ video.owner_name or "未知" }}</strong></div>
           <div class="metric"><span>发布时间</span><strong>{{ video.pubdate or "未知" }}</strong></div>
           <div class="metric"><span>任务状态</span><strong data-task-status>{{ task.status|task_label if task else "无任务" }}</strong></div>
-        </div>
-      {% endif %}
-      <div class="actions">
+      <div class="overview-links">
         {% if video.bvid %}
           <a class="button secondary" href="https://www.bilibili.com/video/{{ video.bvid }}/" target="_blank" rel="noreferrer">打开 B 站视频</a>
         {% endif %}
         <form class="inline" method="post" action="/videos/{{ video.bvid }}/report"><input type="hidden" name="open_report" value="true"><button type="submit">打开 HTML 报告</button></form>
       </div>
+        </div>
+      {% endif %}
+
     </div>
   </div>
   {% if reports %}

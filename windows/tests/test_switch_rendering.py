@@ -26,6 +26,10 @@ def test_switch_dimensions_and_interaction_survive_stale_shared_css(tmp_path, sh
         if path == "/assets/appearance.css":
             route.fulfill(status=404 if shared_css_missing else 200, content_type="text/css", body="" if shared_css_missing else stale_css)
             return
+        if route.request.method == "POST" and path in {"/settings/launcher", "/settings/lan"}:
+            # Auto-save UI is mocked here: rendering must not mutate configuration.
+            route.fulfill(status=200, content_type="application/json", body='{"message":"saved"}')
+            return
         assert route.request.method == "GET", "Rendering tests must not save settings"
         response = client.get(path)
         route.fulfill(status=response.status_code, headers={k:v for k,v in response.headers.items() if k.lower() not in {"content-length", "content-encoding"}}, body=response.content)

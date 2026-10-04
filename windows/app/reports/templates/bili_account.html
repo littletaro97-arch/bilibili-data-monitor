@@ -1,10 +1,11 @@
+<style>.manual-session{margin-top:16px}.manual-session>summary{margin-bottom:12px}#bili-session-form{display:grid;gap:10px}#bili-session-form label{margin:0}#bili-session-form input{box-sizing:border-box;width:100%}#bili-session-form button{justify-self:start}</style>
 <section id="bili-account">
   <h2>Bilibili 登录采集</h2>
   <p class="muted">扫码后可按时间分段读取弹幕、翻页读取评论及楼中楼。登录态仅在本机由 Windows 当前用户加密保存，退出登录会删除。</p>
   <p id="bili-auth-status" aria-live="polite">正在读取登录状态…</p>
   <div class="actions"><button type="button" id="bili-qr">扫码登录</button><button type="button" class="secondary" id="bili-logout">退出登录</button></div>
   <img id="bili-qr-image" alt="请用 Bilibili 手机客户端扫码" width="200" height="200" hidden style="margin-top:12px;max-width:200px">
-  <details><summary>手动填写 SESSDATA</summary><p class="muted">仅作为扫码不可用时的替代。该值具有账户访问权限，请勿分享。</p><form id="bili-session-form"><label for="bili-session">SESSDATA</label><input id="bili-session" type="password" autocomplete="off" maxlength="4096" required><button type="submit" class="secondary">验证并保存</button></form></details>
+  <details open class="manual-session"><summary>手动填写 SESSDATA</summary><p class="muted">仅作为扫码不可用时的替代。该值具有账户访问权限，请勿分享。</p><form id="bili-session-form"><label for="bili-session">SESSDATA</label><input id="bili-session" type="password" autocomplete="off" maxlength="4096" required><button type="submit" class="secondary">验证并保存</button></form></details>
 </section>
 <script>
 (() => {
