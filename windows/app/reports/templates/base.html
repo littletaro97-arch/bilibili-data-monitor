@@ -55,6 +55,9 @@
     form.inline { display: inline; }
     .row { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
     .row > *, form { min-width: 0; }
+    .up-add-form>div:first-child{flex:1;min-width:min(260px,100%)}
+    .up-add-form input{width:100%}.up-add-form>div:not(:first-child){width:190px;max-width:100%}
+    .up-monitor .task-card{margin-top:12px}
     label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
     input, select {
       min-height: 36px;
@@ -374,9 +377,20 @@
       window.setInterval(refreshLatestVideoData, refreshSeconds * 1000);
     }
 
-    for (const form of document.querySelectorAll("form[data-confirm]")) {
-      form.addEventListener("submit", (event) => {
-        if (!window.confirm(form.dataset.confirm || "确认继续？")) event.preventDefault();
+    const confirmDialog=document.createElement('dialog');confirmDialog.className='interval-dialog';confirmDialog.setAttribute('aria-label','确认操作');
+    confirmDialog.innerHTML='<h2>确认操作</h2><p data-confirm-text></p><div class="actions"><button type="button" data-confirm-yes>确定</button><button type="button" class="secondary" data-confirm-no>取消</button></div>';
+    document.body.append(confirmDialog);let pendingConfirm=null;
+    confirmDialog.querySelector('[data-confirm-no]').onclick=()=>{pendingConfirm=null;window.bllaMotion.closeDialog(confirmDialog);};
+    confirmDialog.querySelector('[data-confirm-yes]').onclick=async()=>{
+      const form=pendingConfirm;pendingConfirm=null;await window.bllaMotion.closeDialog(confirmDialog);
+      if(form){form.dataset.confirmed='1';form.requestSubmit();}
+    };
+    for (const form of document.querySelectorAll('form[data-confirm]')) {
+      form.addEventListener('submit', event => {
+        if(form.dataset.confirmed)return;
+        event.preventDefault();pendingConfirm=form;
+        confirmDialog.querySelector('[data-confirm-text]').textContent=form.dataset.confirm || '确认继续？';
+        window.bllaMotion.showDialog(confirmDialog);
       });
     }
 

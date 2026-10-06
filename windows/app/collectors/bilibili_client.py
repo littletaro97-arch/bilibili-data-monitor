@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from app.database import Repository
-from app.models import ProviderError, RiskControlError
+from app.models import ProviderError, RiskControlError, LoginRequiredError
 
 
 RISK_STATUS_CODES = {403, 412}
@@ -86,7 +86,9 @@ class BilibiliClient:
                 async with httpx.AsyncClient(timeout=self.timeout) as session:
                     async with session.stream("GET",url,params=params,cookies=cookies,
                         headers={"User-Agent":self.user_agent,"Referer":"https://www.bilibili.com/"}) as response:
-                        if response.status_code in {401,403,412,429}:
+                        if response.status_code == 401:
+                            raise LoginRequiredError("登录已失效，请重新扫码登录")
+                        if response.status_code in {403,412,429}:
                             raise RiskControlError(f"平台拒绝请求，HTTP {response.status_code}；已停止，稍后再继续")
                         if response.status_code == 304:
                             raise ProviderError("平台返回未修改响应，不能作为分段已采集的依据")
@@ -101,7 +103,9 @@ class BilibiliClient:
                         payload = __import__('json').loads(content)
                         if not isinstance(payload,dict):
                             raise ProviderError('平台响应结构异常，进度已保留')
-                        if payload.get('code') in {403,412,-403,-412,-352,-101,-111}:
+                        if payload.get('code') == -101:
+                            raise LoginRequiredError('登录已失效，请重新扫码登录')
+                        if payload.get('code') in {403,412,-403,-412,-352,-111}:
                             raise RiskControlError('平台限制或登录失效，任务已停止')
                         if payload.get("code") != 0:
                             raise ProviderError(f"平台接口失败：code={payload.get('code')}；任务未完成")

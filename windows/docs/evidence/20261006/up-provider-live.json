@@ -1,0 +1,10 @@
+{
+  "result": "PASS",
+  "mid": 546195,
+  "primary_uploads_on_first_page": 27,
+  "space_total_including_collaborations": 678,
+  "no_persistent_monitor_created": true,
+  "returned_on_first_page": 30,
+  "collaborations_on_first_page": 3,
+  "selection": "include all space-listed uploads, including collaborations, per user clarification"
+}

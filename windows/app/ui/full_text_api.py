@@ -46,7 +46,11 @@ async def account(action:str,request:Request):
             if action=='qr': return await auth.qrcode()
             if action=='poll': return await auth.poll()
             if action=='save': return await auth.save_sessdata(str((await body(request)).get('sessdata','')))
-            if action=='logout': await auth.logout(); return auth.status()
+            if action=='logout':
+                await auth.logout()
+                if hasattr(request.app.state,"up_monitor"):
+                    request.app.state.up_monitor.store.require_login()
+                return auth.status()
             raise HTTPException(404)
     except ProviderError as e: return JSONResponse({'error':str(e)},status_code=400)
 

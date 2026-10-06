@@ -31,7 +31,7 @@
     }catch(e){stop();status.textContent=e.message;}
   }
   document.getElementById('bili-qr').onclick=async()=>{
-    stop();try{const data=await request('qr');image.src=data.image;image.hidden=false;pending=true;poll();}catch(e){status.textContent=e.message;}
+    stop();try{const data=await request('qr');image.src=data.image;image.hidden=false;window.bllaMotion?.enter(image);pending=true;poll();}catch(e){status.textContent=e.message;}
   };
   document.getElementById('bili-logout').onclick=async()=>{stop();try{show(await request('logout'));}catch(e){status.textContent=e.message;}};
   document.getElementById('bili-session-form').onsubmit=async e=>{

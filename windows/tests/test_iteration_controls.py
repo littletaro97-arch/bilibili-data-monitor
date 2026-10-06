@@ -70,9 +70,11 @@ def test_prepaint_layout_auto_preferences_animated_highlight_and_interval_dialog
             buttons=page.locator('.task-foot button').all_text_contents()
             assert buttons[:3]==['立即采集','修改采集时间','暂停']
             page.get_by_role('button',name='修改采集时间').click()
-            expect(page.locator('.interval-dialog')).to_be_visible()
+            expect(page.get_by_role('dialog',name='修改采集时间')).to_be_visible()
             assert page.url=='http://127.0.0.1/'
-            page.locator('#task-interval').fill('900');page.locator('.interval-dialog button[type=submit]').click()
+            page.locator('#task-interval').fill('900')
+            with page.expect_response('**/tasks/'+str(identity)+'/interval'):
+                page.get_by_role('dialog',name='修改采集时间').locator('button[type=submit]').click()
             assert repo.get_task(identity)['interval_seconds']==900
             page.goto('http://127.0.0.1/settings')
             assert page.locator('#navigation-preferences button').count()==0

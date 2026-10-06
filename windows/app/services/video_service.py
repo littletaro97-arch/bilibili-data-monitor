@@ -6,7 +6,7 @@ from app.collectors.provider import VideoDataProvider
 from app.collectors.video_info import resolve_bvid
 from app.database import Repository
 from app.logger import logger
-from app.models import DuplicateTaskError, RateLimitError
+from app.models import DuplicateTaskError, RateLimitError, ProviderError
 
 
 class VideoService:
@@ -24,13 +24,15 @@ class VideoService:
         self.default_interval = default_interval
         self.max_active_tasks = max_active_tasks
 
-    async def add_video_task(self, text: str, interval_seconds: int | None = None) -> str:
+    async def add_video_task(self, text: str, interval_seconds: int | None = None, *, should_add=None) -> str:
         bvid = await resolve_bvid(text)
         interval = interval_seconds or self.default_interval
         if interval < self.min_interval:
             raise RateLimitError(f"采集间隔不得低于 {self.min_interval} 秒")
 
         info = await self.provider.fetch_video_info(bvid)
+        if should_add is not None and not should_add():
+            raise ProviderError("UP 检测已暂停或移除，不新增视频任务")
         self.repository.upsert_video(info)
         try:
             self.repository.create_task(

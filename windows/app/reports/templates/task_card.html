@@ -1,0 +1,29 @@
+{% macro task_card(task, monitor_id=None) %}
+      <article class="task-card" data-detail-url="/videos/{{ task.bvid }}" tabindex="0" aria-label="查看{{ task.title or task.bvid }}的详情">
+        <div class="task-card-top">
+          <div class="task-heading">
+            <a class="task-title" href="https://www.bilibili.com/video/{{ task.bvid }}/" target="_blank" rel="noopener noreferrer" title="在浏览器打开视频">{{ task.title or task.bvid }}</a>
+            <div class="task-meta">{{ task.bvid }} · {{ task.owner_name or "UP 未知" }} · 每 {{ task.interval_seconds }} 秒采集</div>
+          </div>
+          <span class="badge {{ task|task_style }}" title="{{ task.last_error or task.status|task_label }}">{{ task|task_display }}</span>
+        </div>
+        {% if task.last_error %}<p class="muted">{{ task.last_error }}</p>{% endif %}
+        <div class="task-stats">
+          <div class="task-stat"><span>播放</span><strong>{{ task.view_count|count_display }}</strong></div>
+          <div class="task-stat"><span>点赞</span><strong>{{ task.like_count|count_display }}</strong></div>
+          <div class="task-stat"><span>当前观看</span><strong>{{ task.online_text or (task.online_count|count_display) }}</strong></div>
+          <div class="task-stat"><span>上次采集</span><time title="{{ task.latest_captured_at or '暂无' }}">{{ task.latest_captured_at|local_time }}</time></div>
+        </div>
+        <div class="task-foot"><div class="actions">
+          <form class="inline" method="post" action="/tasks/{{ task.id }}/collect"><button type="submit">立即采集</button></form>
+          <button class="secondary" type="button" data-interval-edit data-task-id="{{ task.id }}" data-interval="{{ task.interval_seconds }}">修改采集时间</button>
+          {% if task.status == "paused" %}
+            <form class="inline" method="post" action="/tasks/{{ task.id }}/resume"><button class="secondary" type="submit">恢复</button></form>
+          {% else %}
+            <form class="inline" method="post" action="/tasks/{{ task.id }}/pause"><button class="secondary" type="submit">暂停</button></form>
+          {% endif %}
+          {% if monitor_id %}<form class="inline" method="post" action="/up-monitors/{{ monitor_id }}/promote"><input type="hidden" name="bvid" value="{{ task.bvid }}"><button class="secondary" type="submit">移至任务列表</button></form>{% endif %}
+          <form class="inline" method="post" action="/tasks/{{ task.id }}/stop"><button class="danger" type="submit">放入回收站</button></form>
+        </div></div>
+      </article>
+{% endmacro %}

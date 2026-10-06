@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "task_card.html" import task_card %}
 {% block title %}任务 - B站本地分析{% endblock %}
 {% block content %}
 
@@ -23,38 +24,15 @@
   {% if tasks %}
     <div class="task-cards">
       {% for task in tasks %}
-      <article class="task-card" data-detail-url="/videos/{{ task.bvid }}" tabindex="0" aria-label="查看{{ task.title or task.bvid }}的详情">
-        <div class="task-card-top">
-          <div class="task-heading">
-            <a class="task-title" href="https://www.bilibili.com/video/{{ task.bvid }}/" target="_blank" rel="noopener noreferrer" title="在浏览器打开视频">{{ task.title or task.bvid }}</a>
-            <div class="task-meta">{{ task.bvid }} · {{ task.owner_name or "UP 未知" }} · 每 {{ task.interval_seconds }} 秒采集</div>
-          </div>
-          <span class="badge {{ task|task_style }}" title="{{ task.last_error or task.status|task_label }}">{{ task|task_display }}</span>
-        </div>
-        {% if task.last_error %}<p class="muted">{{ task.last_error }}</p>{% endif %}
-        <div class="task-stats">
-          <div class="task-stat"><span>播放</span><strong>{{ task.view_count|count_display }}</strong></div>
-          <div class="task-stat"><span>点赞</span><strong>{{ task.like_count|count_display }}</strong></div>
-          <div class="task-stat"><span>当前观看</span><strong>{{ task.online_text or (task.online_count|count_display) }}</strong></div>
-          <div class="task-stat"><span>上次采集</span><time title="{{ task.latest_captured_at or '暂无' }}">{{ task.latest_captured_at|local_time }}</time></div>
-        </div>
-        <div class="task-foot"><div class="actions">
-          <form class="inline" method="post" action="/tasks/{{ task.id }}/collect"><button type="submit">立即采集</button></form>
-          <button class="secondary" type="button" data-interval-edit data-task-id="{{ task.id }}" data-interval="{{ task.interval_seconds }}">修改采集时间</button>
-          {% if task.status == "paused" %}
-            <form class="inline" method="post" action="/tasks/{{ task.id }}/resume"><button class="secondary" type="submit">恢复</button></form>
-          {% else %}
-            <form class="inline" method="post" action="/tasks/{{ task.id }}/pause"><button class="secondary" type="submit">暂停</button></form>
-          {% endif %}
-          <form class="inline" method="post" action="/tasks/{{ task.id }}/stop"><button class="danger" type="submit">放入回收站</button></form>
-        </div></div>
-      </article>
+      {{ task_card(task) }}
       {% endfor %}
     </div>
   {% else %}
     <p class="empty">暂无任务。</p>
   {% endif %}
 </section>
+
+{% include "up_monitors.html" %}
 
 <section class="compact-section">
   <div class="compact-lan">
@@ -79,12 +57,31 @@ const intervalDialog=document.createElement('dialog');
 intervalDialog.className='interval-dialog';intervalDialog.setAttribute('aria-label','修改采集时间');
 intervalDialog.innerHTML='<form method="post"><h2>修改采集时间</h2><label for="task-interval">视频统计采集间隔（秒）</label><input id="task-interval" name="interval_seconds" type="number" step="1" min="{{ min_interval }}" max="31536000" required><p class="muted">保存后按新间隔安排下一次采集，评论和弹幕不受此设置影响。</p><div class="actions"><button type="submit">保存</button><button type="button" class="secondary" data-interval-cancel>取消</button></div></form>';
 document.body.append(intervalDialog);
-intervalDialog.querySelector('[data-interval-cancel]').onclick=()=>intervalDialog.close();
+intervalDialog.querySelector('[data-interval-cancel]').onclick=()=>window.bllaMotion.closeDialog(intervalDialog);
 for(const button of document.querySelectorAll('[data-interval-edit]'))button.onclick=()=>{
   intervalDialog.querySelector('form').action=`/tasks/${button.dataset.taskId}/interval`;
   const input=intervalDialog.querySelector('input');input.value=button.dataset.interval;
-  intervalDialog.showModal();input.select();
+  window.bllaMotion.showDialog(intervalDialog);input.select();
 };
+const upRoot=document.getElementById('up-monitors');
+if(Number(upRoot.dataset.monitorCount)>0){
+  let upTimer;
+  const dirty=()=>[...document.querySelectorAll('main input,main textarea,main select')].some(e=>e.matches('input[type=checkbox]')?e.checked!==e.defaultChecked:e.value!==e.defaultValue && !e.matches('select'));
+  async function refreshUp(){
+    try{
+      if(!document.hidden && !(typeof panelHidden==='function' && await panelHidden())){
+        const response=await fetch('/api/up-monitors/status',{cache:'no-store'});
+        if(response.ok){const state=await response.json();
+          for(const [id,text] of Object.entries(state.checked)){const label=document.querySelector(`[data-up-checked="${id}"]`);if(label)label.textContent=text;}
+          const editing=document.activeElement?.matches('input,textarea,select')||document.querySelector('dialog[open]')||dirty()||window.getSelection().toString();
+          if(state.revision!==upRoot.dataset.upRevision && !editing){location.reload();return;}
+        }
+      }
+    }catch{}
+    upTimer=setTimeout(refreshUp,60000);
+  }
+  upTimer=setTimeout(refreshUp,60000);window.addEventListener('pagehide',()=>clearTimeout(upTimer),{once:true});
+}
 for(const card of document.querySelectorAll('[data-detail-url]')){
   const interactive=target=>target.closest('a,button,form,input,select,textarea,label,[role="button"],.task-foot');
   card.addEventListener('click',e=>{

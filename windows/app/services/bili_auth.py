@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from app.models import ProviderError
+from app.models import ProviderError, LoginRequiredError
 
 NAV = "https://api.bilibili.com/x/web-interface/nav"
 PASSPORT = "https://passport.bilibili.com/x/passport-login/web/qrcode/"
@@ -55,7 +55,7 @@ class BiliAuth:
         payload=await self.client.authenticated_response(NAV,self.cookies if cookies is None else cookies)
         data=payload.get('data') or {}
         if not data.get('isLogin') or not data.get('mid'):
-            raise ProviderError('登录已失效，请重新扫码登录')
+            raise LoginRequiredError('登录已失效，请重新扫码登录')
         return data
 
     async def save(self,cookies):

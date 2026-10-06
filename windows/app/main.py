@@ -24,6 +24,8 @@ from app.services.history_exchange_service import HistoryExchangeService
 from app.services.report_service import ReportService
 from app.services.phase2_service import Phase2Service
 from app.services.task_service import TaskScheduler
+from app.services.up_monitor_service import UpMonitorService
+from app.collectors.up_provider import UpVideoProvider
 from app.services.video_service import VideoService
 from app.services.update_service import UpdateService
 from app.services.bili_auth import BiliAuth
@@ -87,6 +89,9 @@ def create_app() -> FastAPI:
     history_exchange_service = HistoryExchangeService(repository)
     bili_auth = BiliAuth(RUNTIME_DIR / 'auth' / 'bilibili-auth.dat', client)
     full_text = FullTextService(repository, FullTextProvider(client, bili_auth), bili_auth)
+    up_monitor = UpMonitorService(repository, UpVideoProvider(client, bili_auth), video_service, crawl_service,
+        settings.crawl.global_risk_cooldown_seconds, settings.crawl.failure_cooldown_seconds)
+    scheduler.up_monitor = up_monitor
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -114,6 +119,7 @@ def create_app() -> FastAPI:
             logger.info("application shutdown")
 
     app = FastAPI(title="Bilibili Local Analytics", lifespan=lifespan)
+    app.state.up_monitor = up_monitor
     app.state.repository = repository
     app.state.bili_auth = bili_auth
     app.state.full_text = full_text

@@ -139,7 +139,7 @@
   $('text-prev').addEventListener('click',()=>{page=Math.max(0,page-1);showList();});$('text-next').addEventListener('click',()=>{page++;showList();});
   const tabs=[...root.querySelectorAll('[data-channel]')];
   for(const tab of tabs) {
-    tab.addEventListener('click',()=>{channel=tab.dataset.channel;page=0;range=null;for(const t of tabs){t.setAttribute('aria-selected',String(t===tab));t.tabIndex=t===tab?0:-1;}$('text-channel').setAttribute('aria-labelledby',tab.id);render();});
+    tab.addEventListener('click',()=>{channel=tab.dataset.channel;page=0;range=null;for(const t of tabs){t.setAttribute('aria-selected',String(t===tab));t.tabIndex=t===tab?0:-1;}$('text-channel').setAttribute('aria-labelledby',tab.id);render();window.bllaMotion?.enter($('text-channel'));});
     tab.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const next=tabs.find(t=>t!==tab);next.focus();next.click();}});
   }
   render();

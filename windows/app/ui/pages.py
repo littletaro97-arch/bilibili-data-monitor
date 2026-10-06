@@ -40,7 +40,9 @@ router = APIRouter()
 
 
 def _flash_redirect(url: str, message: str, level: str = "info") -> RedirectResponse:
-    return RedirectResponse(f"{url}?message={message}&level={level}", status_code=303)
+    from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+    parts=urlsplit(url);query=dict(parse_qsl(parts.query));query.update(message=message,level=level)
+    return RedirectResponse(urlunsplit((parts.scheme,parts.netloc,parts.path,urlencode(query),parts.fragment)),status_code=303)
 
 
 def _log_payload(rows) -> list[dict[str, str | None]]:
@@ -131,11 +133,15 @@ async def index(request: Request, message: str | None = None, level: str = "info
     repo = request.app.state.repository
     current_settings = load_settings()
     local_ip = _local_ip()
+    tasks, up_groups = request.app.state.up_monitor.layout(repo.list_tasks())
+    up_detect_interval, up_video_interval = request.app.state.up_monitor.store.defaults(settings.crawl.default_interval)
     return templates.TemplateResponse(
         request,
         "index.html",
         {
-            "tasks": repo.list_tasks(),
+            "tasks": tasks,
+            "up_groups": up_groups, "up_detect_interval": up_detect_interval, "up_video_interval": up_video_interval,
+            "up_revision": request.app.state.up_monitor.state_snapshot()["revision"],
             "message": message,
             "level": level,
             "default_interval": settings.crawl.default_interval,
@@ -389,7 +395,7 @@ async def video_detail(
             "summary": build_summary(snapshots),
             "latest_refresh_seconds": settings.crawl.min_interval,
             "report_output_dir": settings.report_output_dir,
-            "reports": _recent_reports(bvid),
+            "reports": request.app.state.report_service.recent(bvid),
             "text_panel": text_panel,
             "message": message,
             "level": level,
@@ -492,10 +498,14 @@ async def delete_snapshots_before(
 
 @router.post("/videos/{bvid}/report")
 async def generate_report(request: Request, bvid: str, open_report: bool = Form(False)):
+    if open_report:
+        from app.ui.full_text_api import local
+        local(request)
     try:
         path = request.app.state.report_service.generate(bvid)
         if open_report:
-            return RedirectResponse(f"/reports/{path.name}", status_code=303)
+            request.app.state.report_service.open(path.name)
+            return _flash_redirect(f"/videos/{bvid}", "报告已在系统浏览器打开")
         return _flash_redirect(f"/videos/{bvid}", f"报告已生成：{path.name}；保存位置：{path.parent}")
     except Exception as exc:
         request.app.state.repository.add_log("ERROR", "报告生成失败", bvid=bvid, detail=str(exc))
@@ -503,11 +513,14 @@ async def generate_report(request: Request, bvid: str, open_report: bool = Form(
 
 
 @router.get("/reports/{filename}")
-async def download_report(filename: str):
-    path = settings.report_output_dir / Path(filename).name
-    if not path.exists():
-        return RedirectResponse("/", status_code=303)
-    return FileResponse(path)
+async def download_report(request: Request, filename: str):
+    try:
+        record=request.app.state.report_service.known(filename)
+        path=Path(record["path"])
+        if not path.is_file():raise AppError("报告路径已改变或文件已不存在")
+        return FileResponse(path)
+    except AppError:
+        return HTMLResponse("报告路径已改变或文件已删除。请返回应用重新生成报告。",status_code=404)
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -654,3 +667,58 @@ async def shutdown_app(request: Request):
         "shutdown.html",
         {"message": "程序正在退出，可以关闭这个浏览器页面。"},
     )
+
+
+@router.post('/up-monitors')
+async def add_up_monitor(request: Request, up_input: str = Form(...), detect_interval: int = Form(300), video_interval: int = Form(300)):
+    from app.ui.full_text_api import local
+    local(request)
+    try:
+        await request.app.state.up_monitor.add(up_input,detect_interval,video_interval)
+        return _flash_redirect('/#up-monitors','UP 检测已添加，首次投稿作为基线，不补录旧视频')
+    except AppError as exc:return _flash_redirect('/#up-monitors',str(exc),'error')
+
+@router.post('/up-monitors/{identity}/{action}')
+async def update_up_monitor(request: Request, identity: int, action: str, detect_interval: int = Form(300), video_interval: int = Form(300), bvid: str = Form('')):
+    from app.ui.full_text_api import local
+    local(request);service=request.app.state.up_monitor
+    try:
+        if not service.store.get(identity):raise AppError('UP 检测不存在')
+        if action=='pause':service.store.state(identity,'paused')
+        elif action=='resume':
+            await service.provider.page(service.store.get(identity)['mid'])
+            service.store.state(identity,'running')
+        elif action=='remove':service.store.remove(identity)
+        elif action=='check':await service.poll(identity)
+        elif action=='promote':service.store.promote(identity,bvid)
+        elif action=='interval':
+            service.validate_intervals(detect_interval,video_interval);service.store.intervals(identity,detect_interval,video_interval)
+        else:raise AppError('UP 操作不正确')
+        return _flash_redirect('/#up-monitors','UP 检测设置已更新')
+    except AppError as exc:return _flash_redirect('/#up-monitors',str(exc),'error')
+
+@router.post('/reports/{filename}/open')
+async def open_report_external(request: Request, filename: str):
+    from app.ui.full_text_api import local
+    local(request)
+    try:
+        bvid=request.app.state.report_service.open(filename)
+        return _flash_redirect(f'/videos/{bvid}','报告已在系统浏览器打开')
+    except AppError as exc:return _flash_redirect(f'/videos/{filename.split("_")[0]}',str(exc),'error')
+
+@router.post('/reports/{filename}/delete')
+async def delete_report(request: Request, filename: str):
+    from app.ui.full_text_api import local
+    local(request)
+    try:
+        bvid=request.app.state.report_service.delete(filename)
+        return _flash_redirect(f'/videos/{bvid}','报告已删除')
+    except (AppError,OSError):return _flash_redirect('/', '报告无法删除，请检查文件位置或占用情况','error')
+
+
+@router.get('/api/up-monitors/status')
+async def up_monitor_status(request: Request):
+    from app.ui.dashboard import local_time
+    state=request.app.state.up_monitor.state_snapshot()
+    state['checked']={k:local_time(v) for k,v in state['checked'].items()}
+    return JSONResponse(state,headers={'Cache-Control':'no-store'})

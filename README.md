@@ -72,4 +72,4 @@ Windows 设置页和 Android 设置页均可导入、导出 `bilibili-history-ex
 - Git commit、branch 和 tag 是源码回档依据。
 - 不覆盖旧 APK、旧 Tag 或历史发布目录。
 - `config.toml`、SQLite、运行日志、用户导出 ZIP、虚拟环境、Gradle 缓存、签名文件和设备信息不得提交。
-- 当前采集仅使用公开数据范围，不处理登录 Cookie、验证码、代理池或风控绕过。
+- 当前采集仅使用公开数据范围。Windows 登录态经当前用户加密保存，仅用于评论、弹幕和 UP 主投稿列表的固定平台接口；不转发、不提交 Git，不实现验证码、代理池或风控绕过。

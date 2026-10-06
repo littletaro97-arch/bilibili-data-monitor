@@ -19,6 +19,8 @@ def panel(tmp_path,monkeypatch):
     db=Database(tmp_path/'layout.db');db.initialize();repo=Repository(db)
     repo.upsert_video(VideoInfo('BV1xx411c7mD',title='布局验收视频'))
     app=create_app();app.state.repository=repo
+    app.state.browser_opens=[]
+    monkeypatch.setattr("app.services.report_service.webbrowser.open",lambda url: app.state.browser_opens.append(url) or True)
     reports=tmp_path/'reports'
     app.state.report_service=ReportService(repo,reports,Path(__file__).parents[1]/'app/reports/templates')
     monkeypatch.setattr(pages,'settings',replace(pages.settings,report=replace(pages.settings.report,output_dir=str(reports))))
@@ -31,8 +33,9 @@ def panel(tmp_path,monkeypatch):
 
 def test_open_report_redirect_and_generation_error(panel,monkeypatch):
     response=panel.post('/videos/BV1xx411c7mD/report',data={'open_report':'true'},follow_redirects=False)
-    assert response.status_code==303 and response.headers['location'].startswith('/reports/BV1xx411c7mD_')
-    report=panel.get(response.headers['location'])
+    assert response.status_code==303 and response.headers['location'].startswith('/videos/BV1xx411c7mD?')
+    assert panel.app.state.browser_opens[-1].startswith('http://127.0.0.1:')
+    report=panel.get('/reports/'+panel.app.state.browser_opens[-1].rsplit('/',1)[-1])
     assert report.status_code==200 and 'text/html' in report.headers['content-type']
     assert '布局验收视频' in report.text
     response=panel.post('/videos/BV1xx411c7mD/report',follow_redirects=False)
@@ -67,6 +70,7 @@ def test_layout_bounds_persistent_directory_and_report_button(panel,tmp_path):
             page.wait_for_function('document.querySelector("main").getAnimations().length===0')
             runtime=page.locator('#runtime-settings').bounding_box();account=page.locator('#bili-account').bounding_box()
             assert account['x']>runtime['x']+runtime['width'] and abs(account['y']-runtime['y'])<2
+            assert abs(account['height']-runtime['height'])<1
             assert page.locator('.runtime-table code').nth(1).evaluate('e=>e.scrollWidth>e.clientWidth')
             page.locator('.settings-overview').screenshot(path=str(tmp_path/'settings-columns.png'))
             page.locator('[data-theme-toggle]').click()
@@ -85,7 +89,9 @@ def test_layout_bounds_persistent_directory_and_report_button(panel,tmp_path):
                 assert '报告保存目录' not in page.locator('.video-overview').inner_text()
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
             page.get_by_role('button',name='打开 HTML 报告',exact=True).click()
-            page.wait_for_url('**/reports/*.html');expect(page.locator('body')).to_contain_text('布局验收视频')
+            page.wait_for_url('**/videos/BV1xx411c7mD?*')
+            assert panel.app.state.browser_opens
+            expect(page.locator('.video-heading-content')).to_contain_text('布局验收视频')
             assert not errors
         finally:
             browser.close();server.should_exit=True;thread.join(timeout=5);sock.close()

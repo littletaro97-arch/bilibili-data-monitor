@@ -9,6 +9,7 @@ from app.services.crawl_service import CrawlService
 class TaskScheduler:
     def __init__(self, crawl_service: CrawlService):
         self.crawl_service = crawl_service
+        self.up_monitor = None
         self.scheduler = AsyncIOScheduler(timezone=get_localzone())
 
     def start(self) -> None:
@@ -22,6 +23,8 @@ class TaskScheduler:
             max_instances=1,
             coalesce=True,
         )
+        if self.up_monitor:
+            self.scheduler.add_job(self.up_monitor.run_due, "interval", seconds=10, id="run_due_up_monitors", max_instances=1, coalesce=True)
         self.scheduler.start()
 
     def shutdown(self) -> None:

@@ -1,0 +1,30 @@
+<section id="up-monitors" data-up-revision="{{ up_revision }}" data-monitor-count="{{ up_groups|length }}">
+  <h2>UP主更新检测</h2>
+  <p class="muted">复用设置中的 Bilibili 登录态。首次只建基线；随后新稿自动采集，满载时保留待加入项。暂停 UP 检测不停止已加入的视频任务。</p>
+  <form method="post" action="/up-monitors" class="row up-add-form">
+    <div><label for="up-input">UP UID、空间链接或视频链接</label><input id="up-input" name="up_input" required placeholder="UID 或 UP 主空间链接"></div>
+    <div><label for="up-detect">UP 检测间隔（秒，最低 120）</label><input id="up-detect" name="detect_interval" type="number" min="120" max="31536000" required value="{{ up_detect_interval }}"></div>
+    <div><label for="up-video-interval">新视频采集间隔（秒）</label><input id="up-video-interval" name="video_interval" type="number" min="{{ min_interval }}" max="31536000" required value="{{ up_video_interval }}"></div>
+    <button type="submit">添加 UP</button>
+  </form>
+  <p class="muted">添加成功后，这两个间隔会作为后续新增 UP 的默认值。<a href="/settings#bili-account">登录设置</a></p>
+  {% for group in up_groups %}{% set monitor=group.monitor %}
+  <details open class="chart-panel up-monitor" data-up-monitor-id="{{ monitor.id }}" data-chart-panel="up-{{ monitor.id }}">
+    <summary>{{ monitor.up_name }} · UID {{ monitor.mid }} <span class="badge {{ 'running' if group.display=='正常' else ('stopped' if group.display=='停止' else 'interrupted') }}">{{ group.display }}</span></summary>
+    <p class="muted">上次检测：<span data-up-checked="{{ monitor.id }}">{{ monitor.last_checked_at|local_time }}</span> · 每 {{ monitor.interval_seconds }} 秒检测 · 新视频每 {{ monitor.video_interval_seconds }} 秒采集</p>
+    {% if monitor.last_error %}<p class="muted" role="status">{{ monitor.last_error }}</p>{% endif %}
+    <div class="actions">
+      {% if monitor.status=='running' %}<form method="post" action="/up-monitors/{{ monitor.id }}/check"><button type="submit">立即检测</button></form><form method="post" action="/up-monitors/{{ monitor.id }}/pause"><button class="secondary" type="submit">暂停检测</button></form>
+      {% else %}<form method="post" action="/up-monitors/{{ monitor.id }}/resume"><button type="submit">恢复检测</button></form>{% endif %}
+      <form method="post" action="/up-monitors/{{ monitor.id }}/remove" data-confirm="移除这个 UP 的更新检测？已加入的视频保留在任务列表。"><button class="danger" type="submit">移除 UP</button></form>
+    </div>
+    <details class="nested-panel"><summary>调整检测间隔</summary><form method="post" action="/up-monitors/{{ monitor.id }}/interval" class="row">
+      <div><label>UP 检测间隔（秒）<input name="detect_interval" type="number" min="120" max="31536000" required value="{{ monitor.interval_seconds }}"></label></div>
+      <div><label>今后新视频的采集间隔（秒）<input name="video_interval" type="number" min="{{ min_interval }}" max="31536000" required value="{{ monitor.video_interval_seconds }}"></label></div><button type="submit">应用</button>
+    </form></details>
+    {% for task in group.tasks %}{{ task_card(task, monitor.id) }}{% endfor %}
+    {% for item in group.pending %}<p class="muted">待加入：{{ item.title }} · {{ item.bvid }}</p>{% endfor %}
+    {% if not group.tasks and not group.pending %}<p class="empty">基线已建立，等待新稿。</p>{% endif %}
+  </details>
+  {% else %}<p class="empty">暂无 UP 检测。</p>{% endfor %}
+</section>

@@ -180,6 +180,9 @@ class Database:
                 _ensure_column(conn, table, "visibility", "TEXT NOT NULL DEFAULT 'unknown'")
                 _ensure_column(conn, table, "visibility_checked_at", "TEXT")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_danmaku_identity ON danmaku(bvid,cid,progress_sec,send_time)")
+            from app.up_monitor_store import SCHEMA
+            conn.executescript(SCHEMA)
+            _ensure_column(conn, "html_reports", "deleted", "INTEGER NOT NULL DEFAULT 0")
             conn.execute("PRAGMA user_version = 1")
 
 

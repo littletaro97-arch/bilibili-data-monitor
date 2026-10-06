@@ -2,6 +2,27 @@
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const main = document.querySelector('main');
   delete document.documentElement.dataset.pageEntering;
+  const animated = () => !reduced.matches && !!Element.prototype.animate;
+  const dialogs = new WeakMap();
+  window.bllaMotion = {
+    enter(element){if(animated() && element)element.animate([{opacity:0,transform:"translateY(4px)"},{opacity:1,transform:"none"}],{duration:160,easing:"ease-out"});},
+    showDialog(dialog) {
+      if (!dialogs.has(dialog)) {
+        dialog.addEventListener('cancel', event => {event.preventDefault(); window.bllaMotion.closeDialog(dialog);});
+        dialogs.set(dialog, null);
+      }
+      dialogs.get(dialog)?.cancel(); dialogs.set(dialog,null);
+      if (!dialog.open) dialog.showModal();
+      if (animated()) dialog.animate([{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{duration:160,easing:'ease-out'});
+    },
+    closeDialog(dialog) {
+      if (!dialog.open || dialogs.get(dialog)) return Promise.resolve();
+      if (!animated()) {dialog.close();return Promise.resolve();}
+      const animation=dialog.animate([{opacity:1,transform:'none'},{opacity:0,transform:'translateY(4px)'}],{duration:120,easing:'ease-in',fill:'forwards'});
+      dialogs.set(dialog,animation);
+      return animation.finished.catch(()=>{}).then(()=>{if(dialogs.get(dialog)===animation){dialog.close();animation.cancel();dialogs.set(dialog,null);}});
+    }
+  };
   if (!Element.prototype.animate) return;
   if (!reduced.matches && main) main.animate([{opacity:0, transform:'translateY(4px)'}, {opacity:1, transform:'none'}], {duration:160, easing:'ease-out'});
   document.addEventListener('click', event => {
@@ -43,6 +64,14 @@
     });
     detail.addEventListener('toggle', () => { if (!animation) expanded = detail.open; });
   }
+  document.addEventListener('submit', event => {
+    const form=event.target;
+    if (event.defaultPrevented || form.target || form.method==='dialog' || !animated() || !main) return;
+    if(form.dataset.motionSubmitted==='ready'){delete form.dataset.motionSubmitted;return;}
+    if(form.dataset.motionSubmitted==='pending'){event.preventDefault();return;}
+    event.preventDefault();form.dataset.motionSubmitted='pending';
+    main.animate([{opacity:1},{opacity:0}],{duration:120,easing:'ease-in',fill:'forwards'}).finished.then(()=>{form.dataset.motionSubmitted='ready';form.requestSubmit(event.submitter || undefined);}).catch(()=>{delete form.dataset.motionSubmitted;});
+  });
   // A page restored from the history cache must not retain the exit fade.
   window.addEventListener('pageshow', event => {
     if (event.persisted && main) { main.getAnimations().forEach(a => a.cancel()); delete main.dataset.leaving; }

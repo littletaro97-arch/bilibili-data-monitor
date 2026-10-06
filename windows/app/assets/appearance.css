@@ -47,3 +47,5 @@ th, .metric, .word-chip, code, .video-cover { background:var(--soft); }
 .update-heading p { margin:0; color:var(--muted); }
 .video-cover img:not(.is-ready) { visibility:hidden; }
 @media(max-width:760px) { header { flex-direction:row; flex-wrap:wrap; align-items:center; } header h1 { font-size:15px; } header nav { margin-left:auto; gap:12px; } .task-stats { grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; } .task-card { padding:14px; } .task-foot .actions { display:flex; flex-wrap:wrap; } .task-foot button { width:auto; } .task-foot .actions form { display:inline-flex; } }
+
+.report-missing{background:var(--warning-soft);color:var(--warning);border:1px solid var(--warning)}

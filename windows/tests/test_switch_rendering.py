@@ -45,7 +45,7 @@ def test_switch_dimensions_and_interaction_survive_stale_shared_css(tmp_path, sh
             for i in range(cards.count()):
                 card = cards.nth(i)
                 box = card.bounding_box()
-                assert 74 <= box["height"] <= 100
+                assert 73.99 <= box["height"] <= 100.01  # Chromium subpixel geometry tolerance.
                 icon = card.locator("svg")
                 assert icon.bounding_box()["width"] == 24
                 assert icon.bounding_box()["height"] == 24

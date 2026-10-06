@@ -57,7 +57,9 @@ def test_task_clicks_floating_directory_and_settings(tmp_path):
             assert page.url=='http://127.0.0.1/'
             popup.value.close()
             for action in ['collect','pause','stop']:
-                page.goto('http://127.0.0.1/');page.locator(f'form[action="/tasks/{task_id}/{action}"] button').click()
+                page.goto('http://127.0.0.1/')
+                with page.expect_response(f'**/tasks/{task_id}/{action}'):
+                    page.locator(f'form[action="/tasks/{task_id}/{action}"] button').click()
                 assert posts[-1]==f'/tasks/{task_id}/{action}' and '/videos/' not in page.url
             page.goto('http://127.0.0.1/');page.locator('.task-stats').click()
             expect(page).to_have_url(f'http://127.0.0.1/videos/{BV}')

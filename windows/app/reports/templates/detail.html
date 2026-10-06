@@ -40,7 +40,11 @@
         <thead><tr><th>文件</th><th>操作</th></tr></thead>
         <tbody>
           {% for report in reports %}
-            <tr><td>{{ report.name }}</td><td><a class="button secondary" href="{{ report.url }}" target="_blank" rel="noreferrer">打开报告</a></td></tr>
+            <tr><td>{{ report.name }}</td><td><div class="actions">
+              {% if report.available %}<form method="post" action="{{ report.url }}"><button class="secondary" type="submit">打开报告</button></form>
+              {% else %}<span class="button report-missing" role="status">路径已改变</span>{% endif %}
+              <form method="post" action="/reports/{{ report.name }}/delete" data-confirm="删除这份 HTML 报告？视频和采集历史会保留。"><button class="danger" type="submit">删除报告</button></form>
+            </div></td></tr>
           {% endfor %}
         </tbody>
       </table>

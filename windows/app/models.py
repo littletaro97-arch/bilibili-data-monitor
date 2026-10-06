@@ -27,6 +27,10 @@ class RiskControlError(ProviderError):
     pass
 
 
+class LoginRequiredError(RiskControlError):
+    pass
+
+
 @dataclass(frozen=True)
 class VideoInfo:
     bvid: str
