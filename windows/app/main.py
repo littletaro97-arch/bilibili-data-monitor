@@ -25,6 +25,7 @@ from app.services.report_service import ReportService
 from app.services.phase2_service import Phase2Service
 from app.services.task_service import TaskScheduler
 from app.services.up_monitor_service import UpMonitorService
+from app.services.recovery_service import RecoveryService
 from app.collectors.up_provider import UpVideoProvider
 from app.services.video_service import VideoService
 from app.services.update_service import UpdateService
@@ -119,6 +120,7 @@ def create_app() -> FastAPI:
             logger.info("application shutdown")
 
     app = FastAPI(title="Bilibili Local Analytics", lifespan=lifespan)
+    app.state.recovery = RecoveryService(repository,crawl_service,up_monitor,bili_auth)
     app.state.up_monitor = up_monitor
     app.state.repository = repository
     app.state.bili_auth = bili_auth

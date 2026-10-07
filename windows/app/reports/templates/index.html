@@ -20,7 +20,9 @@
 </section>
 
 <section>
-  <h2>任务列表</h2>
+  <div class="compact-lan"><h2>任务列表</h2>
+    <form method="post" action="/recovery/restart-detection" data-confirm="重新检测全部可运行的视频和 UP？保留手动暂停、回收站和未结束的平台风控冷却。不会重启程序或自动续采评论。"><button type="submit" class="secondary">一键重启检测</button></form>
+  </div>
   {% if tasks %}
     <div class="task-cards">
       {% for task in tasks %}

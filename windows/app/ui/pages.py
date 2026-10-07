@@ -689,7 +689,10 @@ async def update_up_monitor(request: Request, identity: int, action: str, detect
             await service.provider.page(service.store.get(identity)['mid'])
             service.store.state(identity,'running')
         elif action=='remove':service.store.remove(identity)
-        elif action=='check':await service.poll(identity)
+        elif action=='check':
+            result=await service.poll(identity)
+            if result and (result.get('skipped') or result.get('error')):
+                return _flash_redirect('/#up-monitors',result.get('skipped') or result['error'],'error')
         elif action=='promote':service.store.promote(identity,bvid)
         elif action=='interval':
             service.validate_intervals(detect_interval,video_interval);service.store.intervals(identity,detect_interval,video_interval)
@@ -722,3 +725,12 @@ async def up_monitor_status(request: Request):
     state=request.app.state.up_monitor.state_snapshot()
     state['checked']={k:local_time(v) for k,v in state['checked'].items()}
     return JSONResponse(state,headers={'Cache-Control':'no-store'})
+
+
+@router.post('/recovery/restart-detection')
+async def restart_detection(request: Request):
+    from app.ui.full_text_api import local
+    local(request)
+    result=await request.app.state.recovery.run()
+    if 'skipped' in result and isinstance(result['skipped'],str):return _flash_redirect('/',result['skipped'])
+    return _flash_redirect('/',f"已安排视频 {result['videos']}、UP {result['ups']} 重新检测，跳过 {result['skipped']}；调度器将执行。手动暂停、回收站、登录待验证及风控/未知类型冷却保持不变。")

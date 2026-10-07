@@ -8,6 +8,7 @@
           <span class="badge {{ task|task_style }}" title="{{ task.last_error or task.status|task_label }}">{{ task|task_display }}</span>
         </div>
         {% if task.last_error %}<p class="muted">{{ task.last_error }}</p>{% endif %}
+        {% if task.cooldown_until %}<p class="muted" data-cooldown-until="{{ task.cooldown_until }}">冷却至 {{ task.cooldown_until|local_time }}，届时按任务状态重试</p>{% endif %}
         <div class="task-stats">
           <div class="task-stat"><span>播放</span><strong>{{ task.view_count|count_display }}</strong></div>
           <div class="task-stat"><span>点赞</span><strong>{{ task.like_count|count_display }}</strong></div>

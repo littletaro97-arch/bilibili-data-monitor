@@ -23,6 +23,12 @@ class ProviderError(AppError):
     pass
 
 
+class RequestFailure(ProviderError):
+    def __init__(self, kind: str, message: str):
+        self.kind = kind
+        super().__init__(message)
+
+
 class RiskControlError(ProviderError):
     pass
 

@@ -1,8 +1,5 @@
 <section id="text-inspection" aria-label="评论与弹幕检视台" data-nav-title="评论与弹幕" data-bvid="{{ video.bvid }}">
-  <div class="inspection-heading"><div><h2>评论与弹幕检视台</h2><p class="muted">先定位样本热点，再查看原文证据。</p></div><div class="actions">
-    <form class="inline" method="post" action="/videos/{{ video.bvid }}/comments/collect"><button class="secondary" type="submit" title="仅读取一页及附带回复；更多评论使用下方登录遍历">单页采样评论</button></form>
-    <form class="inline inspection-collect" id="text-collect-form" method="post" action="/videos/{{ video.bvid }}/danmaku/collect"><input type="hidden" name="cid" id="text-collect-cid" value="{{ video.cid }}"><select name="scope" aria-label="弹幕采样范围"><option value="selected">仅所选 P</option><option value="all">全部 P（最多 10 个）</option></select><button type="submit">采样弹幕</button></form>
-  </div></div>
+  <div class="inspection-heading"><div><h2>评论与弹幕检视台</h2><p class="muted">先定位样本热点，再查看原文证据。</p></div></div>
   {% include "full_text_controls.html" %}
   <div class="inspection-tabs" role="tablist" aria-label="文本通道">
     <button type="button" role="tab" id="tab-danmaku" aria-controls="text-channel" aria-selected="true" data-channel="danmaku">弹幕通道 <span data-count="danmaku">0</span></button>
@@ -48,10 +45,7 @@
     </div>
   </div>
   <details class="chart-panel" data-chart-panel="text-scope"><summary>数据口径与限制</summary><p class="muted">BV 号对应整个稿件，CID 对应单个分 P。弹幕按分 P 分析；评论区由整个稿件共用，不按 P 累加。新弹幕记录包含平台 ID，合并重复读取；旧记录缺少平台 ID，只能按 CID、视频位置、发送时间和文本合并，可能合并参数相同的不同弹幕。词语排行使用中文分词和专名保护，仍可能存在歧义，不是情绪分析；没有连续、完整采样时不展示真实新增量或回落告警。</p></details>
-  <details class="chart-panel" data-chart-panel="text-import"><summary>本地导入与演示</summary><p class="muted">导入与演示单独标记，默认公开采样结论不使用这些内容。</p><div class="grid">
-    <form method="post" action="/videos/{{ video.bvid }}/comments/import"><label for="comments_text">评论文本，每行一条</label><textarea id="comments_text" name="comments_text" rows="4" required></textarea><button class="secondary" type="submit">导入评论</button></form>
-    <form method="post" action="/videos/{{ video.bvid }}/danmaku/import"><label for="danmaku_text">弹幕文本：秒数,内容（每行一条）</label><textarea id="danmaku_text" name="danmaku_text" rows="4" required></textarea><button class="secondary" type="submit">导入弹幕</button></form>
-  </div><form method="post" action="/videos/{{ video.bvid }}/phase2/demo" data-confirm="生成的演示内容仅用于测试。继续？"><button class="secondary" type="submit">生成演示数据</button></form></details>
+
 </section>
 <script type="application/json" id="text-panel-data">{{ text_panel|default({})|tojson }}</script>
 <script>{% include "word_tokenizer.js" %}</script>

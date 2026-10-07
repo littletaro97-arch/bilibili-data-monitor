@@ -112,8 +112,9 @@ def test_dashboard_keywords_parts_peaks_pagination_and_safe_text(tmp_path):
             expect(page.locator('#text-clear-range')).to_be_visible()
             assert root.locator('.inspection-item').count()<=50
             page.locator('#text-clear-range').click();page.locator('#text-part').select_option('11')
-            assert page.locator('#text-collect-cid').input_value()=='11'
-            assert page.locator('#text-collect-form select[name=scope]').input_value()=='selected'
+            assert page.locator('#text-collect-cid').count()==0  # Removed duplicate quick-sampling toolbar.
+            assert page.locator('#text-collect-form').count()==0
+            assert page.locator('#full-text-scope').input_value()=='selected'
             expect(page.locator('#text-list')).to_contain_text('另外一个分P')
             page.locator('#text-part').select_option('10');root.screenshot(path=str(tmp_path/'inspection-light.png'))
             expect(page.locator('#text-words')).to_contain_text('风神')

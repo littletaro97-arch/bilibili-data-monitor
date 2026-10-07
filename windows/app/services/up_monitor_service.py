@@ -49,9 +49,11 @@ class UpMonitorService:
 
     async def poll(self,identity):
         monitor=self.store.get(identity)
-        if not monitor or monitor['status']!='running' or identity in self.inflight:return
+        if not monitor:return {'skipped':'UP 检测不存在'}
+        if monitor['status']!='running':return {'skipped':'UP 检测已暂停或需要重新登录'}
+        if identity in self.inflight:return {'skipped':'UP 正在检测，请等待本轮完成'}
         cooldown=parse_iso(monitor['cooldown_until'])
-        if cooldown and cooldown>local_now():return
+        if cooldown and cooldown>local_now():return {"skipped":f"UP 处于冷却中，将于 {cooldown.strftime('%H:%M:%S')} 自动重试"}
         self.inflight.add(identity)
         try:
             rows=[]
@@ -67,16 +69,18 @@ class UpMonitorService:
             self.store.require_login();self.repo.add_log('WARNING','UP 检测因登录失效暂停，请重新扫码并恢复')
         except RiskControlError as exc:
             if hasattr(self.provider,"keys"): self.provider.keys=None
-            self.store.fail(identity,str(exc),self.risk_seconds)
+            self.store.fail(identity,str(exc),self.risk_seconds,"risk")
             self.store.cooldown_all("平台限制，共享 UP 请求通道冷却",self.risk_seconds)
             self.repo.add_log('WARNING','UP 检测触发平台限制，停止本轮并冷却',detail=f'UID {monitor["mid"]}')
         except AppError as exc:
-            self.store.fail(identity,str(exc),self.failure_seconds)
+            self.store.fail(identity,str(exc),self.failure_seconds,getattr(exc,"kind","provider"))
             self.repo.add_log('WARNING','UP 检测未完成，待加入项和基线保留',detail=str(exc))
         except Exception:
             self.store.fail(identity,"UP 检测出现异常，已延后重试",self.failure_seconds)
             self.repo.add_log("ERROR","UP 检测出现异常，断点保留")
         finally:self.inflight.discard(identity)
+        current=self.store.get(identity)
+        return {"error":current["last_error"]} if current and current["last_error"] else {"success":True}
 
     async def enqueue_pending(self,identity):
         for row in self.store.pending(identity):

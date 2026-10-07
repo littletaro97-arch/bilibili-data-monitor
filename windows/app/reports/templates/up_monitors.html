@@ -13,6 +13,7 @@
     <summary>{{ monitor.up_name }} · UID {{ monitor.mid }} <span class="badge {{ 'running' if group.display=='正常' else ('stopped' if group.display=='停止' else 'interrupted') }}">{{ group.display }}</span></summary>
     <p class="muted">上次检测：<span data-up-checked="{{ monitor.id }}">{{ monitor.last_checked_at|local_time }}</span> · 每 {{ monitor.interval_seconds }} 秒检测 · 新视频每 {{ monitor.video_interval_seconds }} 秒采集</p>
     {% if monitor.last_error %}<p class="muted" role="status">{{ monitor.last_error }}</p>{% endif %}
+        {% if monitor.cooldown_until %}<p class="muted" data-cooldown-until="{{ monitor.cooldown_until }}">冷却至 {{ monitor.cooldown_until|local_time }}，届时按任务状态重试</p>{% endif %}
     <div class="actions">
       {% if monitor.status=='running' %}<form method="post" action="/up-monitors/{{ monitor.id }}/check"><button type="submit">立即检测</button></form><form method="post" action="/up-monitors/{{ monitor.id }}/pause"><button class="secondary" type="submit">暂停检测</button></form>
       {% else %}<form method="post" action="/up-monitors/{{ monitor.id }}/resume"><button type="submit">恢复检测</button></form>{% endif %}

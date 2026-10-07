@@ -3,7 +3,7 @@
   <h2>Bilibili 登录采集</h2>
   <p class="muted">扫码后可按时间分段读取弹幕、翻页读取评论及楼中楼。登录态仅在本机由 Windows 当前用户加密保存，退出登录会删除。</p>
   <p id="bili-auth-status" aria-live="polite">正在读取登录状态…</p>
-  <div class="actions"><button type="button" id="bili-qr">扫码登录</button><button type="button" class="secondary" id="bili-logout">退出登录</button></div>
+  <div class="actions"><button type="button" id="bili-qr">扫码登录</button><button type="button" class="secondary" id="bili-logout">退出登录</button><button type="button" class="secondary" id="bili-verify">验证登录态</button></div>
   <img id="bili-qr-image" alt="请用 Bilibili 手机客户端扫码" width="200" height="200" hidden style="margin-top:12px;max-width:200px">
   <details open class="manual-session"><summary>手动填写 SESSDATA</summary><p class="muted">仅作为扫码不可用时的替代。该值具有账户访问权限，请勿分享。</p><form id="bili-session-form"><label for="bili-session">SESSDATA</label><input id="bili-session" type="password" autocomplete="off" maxlength="4096" required><button type="submit" class="secondary">验证并保存</button></form></details>
 </section>
@@ -17,7 +17,7 @@
     const response=await fetch('/api/text/auth'+(action?'/'+action:''),{method:action?'POST':'GET',headers:{'Content-Type':'application/json'},body:action?JSON.stringify(body||{}):undefined});
     const data=await response.json();if(!response.ok) throw Error(data.error||data.detail||'登录操作失败');return data;
   }
-  function show(data){status.textContent=(data.saved?`${data.name} · `:'')+data.message;}
+  function show(data){status.textContent=(data.saved?`${data.name} · `:'')+data.message+(data.last_verified_at?` · 上次有效验证：${new Date(data.last_verified_at).toLocaleString()}`:'');}
   async function poll(){
     if(!pending)return;
     try{
@@ -33,6 +33,7 @@
   document.getElementById('bili-qr').onclick=async()=>{
     stop();try{const data=await request('qr');image.src=data.image;image.hidden=false;window.bllaMotion?.enter(image);pending=true;poll();}catch(e){status.textContent=e.message;}
   };
+  document.getElementById('bili-verify').onclick=async e=>{const button=e.currentTarget;button.disabled=true;try{show(await request('verify'));}catch(error){status.textContent=error.message;}finally{button.disabled=false;}};
   document.getElementById('bili-logout').onclick=async()=>{stop();try{show(await request('logout'));}catch(e){status.textContent=e.message;}};
   document.getElementById('bili-session-form').onsubmit=async e=>{
     e.preventDefault();stop();const input=document.getElementById('bili-session');const value=input.value;input.value='';

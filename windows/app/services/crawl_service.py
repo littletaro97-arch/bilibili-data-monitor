@@ -78,6 +78,7 @@ class CrawlService:
                     bvid,
                     message,
                     cooldown_seconds=self.failure_cooldown_seconds,
+                    failure_kind=getattr(exc,"kind","provider"),
                 )
                 self.repository.add_log("ERROR", "采集失败", bvid=bvid, detail=message)
                 logger.error("collection failed for %s: %s", bvid, message)

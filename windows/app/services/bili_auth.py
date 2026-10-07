@@ -9,11 +9,12 @@ import os
 from pathlib import Path
 import re
 import time
+from app.database import iso_now
 from urllib.parse import urlsplit
 
 import httpx
 
-from app.models import ProviderError, LoginRequiredError
+from app.models import ProviderError, LoginRequiredError, RequestFailure
 
 NAV = "https://api.bilibili.com/x/web-interface/nav"
 PASSPORT = "https://passport.bilibili.com/x/passport-login/web/qrcode/"
@@ -41,6 +42,7 @@ class BiliAuth:
     def __init__(self,path:Path,client):
         self.path=path;self.client=client;self.cookies={};self.name='';self.account='';self.error='';self.pending=None
         self._passport=None;self._lock=asyncio.Lock()
+        self.verification="unverified";self.last_verified_at=None;self.verification_error=None
         if path.exists():
             try:
                 if path.stat().st_size>65536: raise ValueError('invalid saved state')
@@ -49,13 +51,31 @@ class BiliAuth:
                 self.error='保存的登录态不可读取，请重新登录'
 
     def status(self):
-        return {'saved':bool(self.cookies.get('SESSDATA')),'name':self.name,'message':self.error or ('已保存登录态，开始采集时会验证有效性' if self.cookies else '尚未登录')}
+        saved=bool(self.cookies.get('SESSDATA'))
+        messages={'unverified':'登录态已保存，尚未向平台验证', 'valid':'登录态已保存；上次平台验证有效',
+                  'expired':'登录态仍保存，但平台已确认失效，请重新扫码',
+                  'unavailable':'登录态仍保存；本次平台验证失败，不能据此判定过期'}
+        message=self.error or (messages[self.verification] if saved else '尚未登录')
+        if self.verification_error and saved:message+=' · '+self.verification_error
+        return {'saved':saved,'name':self.name,'message':message,'verification':self.verification,
+                'last_verified_at':self.last_verified_at}
 
     async def validate(self,cookies=None):
-        payload=await self.client.authenticated_response(NAV,self.cookies if cookies is None else cookies)
-        data=payload.get('data') or {}
-        if not data.get('isLogin') or not data.get('mid'):
-            raise LoginRequiredError('登录已失效，请重新扫码登录')
+        checking=dict(self.cookies if cookies is None else cookies)
+        try:
+            payload=await self.client.authenticated_response(NAV,checking)
+            data=payload.get('data') or {}
+            if isinstance(data,dict) and data.get('isLogin') is False:
+                raise LoginRequiredError('登录已失效，请重新扫码登录')
+            if not isinstance(data,dict) or data.get('isLogin') is not True or not data.get('mid'):
+                raise RequestFailure('parse','平台登录验证响应结构异常，登录态仍保留')
+        except ProviderError as exc:
+            if cookies is None and checking==self.cookies:
+                self.verification='expired' if isinstance(exc,LoginRequiredError) else 'unavailable'
+                self.verification_error=str(exc)
+            raise
+        if cookies is None and checking==self.cookies:
+            self.verification='valid';self.last_verified_at=iso_now();self.verification_error=None
         return data
 
     async def save(self,cookies):
@@ -66,6 +86,7 @@ class BiliAuth:
         self.path.parent.mkdir(parents=True,exist_ok=True)
         temp=self.path.with_suffix('.pending');temp.write_bytes(encoded);temp.replace(self.path)
         self.cookies=cookies;self.name=saved['name'];self.account=saved['account'];self.error=''
+        self.verification='valid';self.last_verified_at=iso_now();self.verification_error=None
         return self.status()
 
     async def save_sessdata(self,value):
@@ -119,6 +140,7 @@ class BiliAuth:
 
     async def logout(self):
         self.cookies={};self.name='';self.account='';self.error='';self.pending=None
+        self.verification='unverified';self.last_verified_at=None;self.verification_error=None
         self.path.unlink(missing_ok=True)
         await self.close()
 

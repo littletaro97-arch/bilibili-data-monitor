@@ -112,7 +112,7 @@
     $('text-list').scrollTop=0;
   }
   function render() {
-    $('text-collect-cid').value=/^\d+$/.test($('text-part').value) ? $('text-part').value : '';
+    if($('text-collect-cid')) $('text-collect-cid').value=/^\d+$/.test($('text-part').value) ? $('text-part').value : '';
     const rows=sourceRows(), hits=rows.filter(matches), dm=channel==='danmaku';
     $('text-density').hidden=!dm;$('text-part-filter').hidden=!dm;
     const info=dm ? showDensity(rows) : null;

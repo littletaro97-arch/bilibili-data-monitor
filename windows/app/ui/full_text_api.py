@@ -39,6 +39,10 @@ async def status(request:Request):
 async def account(action:str,request:Request):
     local(request); auth=request.app.state.bili_auth; service=request.app.state.full_text
     try:
+        if action=='verify':
+            try: await auth.validate()
+            except ProviderError: pass
+            return auth.status()
         if action=='logout':
             await service.cancel()
         async with service.lock:

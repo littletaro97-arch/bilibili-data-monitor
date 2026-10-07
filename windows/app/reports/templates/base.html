@@ -400,6 +400,17 @@
         if (target) target.type = toggle.checked ? "text" : "password";
       });
     }
+    const cooldownLabels=[...document.querySelectorAll('[data-cooldown-until]')];
+    if(cooldownLabels.length){let cooldownTimer;
+      async function updateCooldown(){
+        if(!document.hidden && !(typeof panelHidden==='function' && await panelHidden()))for(const label of cooldownLabels){
+          const seconds=Math.max(0,Math.ceil((Date.parse(label.dataset.cooldownUntil)-Date.now())/1000));
+          label.textContent=seconds?`冷却剩余约 ${Math.floor(seconds/60)} 分 ${seconds%60} 秒；自动检测等待冷却结束`:'冷却已结束，等待下一轮检测；暂停任务需手动恢复';
+        }
+        cooldownTimer=setTimeout(updateCooldown,5000);
+      }
+      updateCooldown();window.addEventListener('pagehide',()=>clearTimeout(cooldownTimer),{once:true});
+    }
   </script>
 </body>
 </html>

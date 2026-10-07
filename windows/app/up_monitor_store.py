@@ -48,7 +48,7 @@ class UpMonitorStore:
                 if r['pubdate']>=monitor['baseline_pubdate']:
                     c.execute("INSERT OR IGNORE INTO up_monitor_videos(monitor_id,bvid,title,pubdate,state) VALUES (?,?,?,?,'pending')",(identity,r['bvid'],r['title'],r['pubdate']))
             baseline=max([monitor['baseline_pubdate']]+[r['pubdate'] for r in rows])
-            c.execute('UPDATE up_monitors SET baseline_pubdate=?,last_checked_at=?,next_run_at=?,last_error=NULL,cooldown_until=NULL,consecutive_failures=0 WHERE id=?',
+            c.execute('UPDATE up_monitors SET baseline_pubdate=?,last_checked_at=?,next_run_at=?,last_error=NULL,cooldown_until=NULL,failure_kind=NULL,consecutive_failures=0 WHERE id=?',
                 (baseline,iso_now(),(local_now()+timedelta(seconds=monitor['interval_seconds'])).isoformat(),identity))
     def pending(self,identity):
         with self.repo.database.connect() as c:return c.execute("SELECT * FROM up_monitor_videos WHERE monitor_id=? AND state='pending' ORDER BY pubdate,bvid",(identity,)).fetchall()
@@ -58,11 +58,11 @@ class UpMonitorStore:
         with self.repo.database.connect() as c:return c.execute("SELECT * FROM up_monitor_videos WHERE state!='baseline'").fetchall()
     def state(self,identity,status):
         with self.repo.database.connect() as c:c.execute('UPDATE up_monitors SET status=? WHERE id=?',(status,identity))
-    def fail(self,identity,message,seconds):
-        with self.repo.database.connect() as c:c.execute('UPDATE up_monitors SET last_error=?,last_checked_at=?,cooldown_until=?,consecutive_failures=consecutive_failures+1 WHERE id=?',
-            (message,iso_now(),(local_now()+timedelta(seconds=seconds)).isoformat(),identity))
+    def fail(self,identity,message,seconds,kind="provider"):
+        with self.repo.database.connect() as c:c.execute('UPDATE up_monitors SET last_error=?,last_checked_at=?,cooldown_until=?,failure_kind=?,consecutive_failures=consecutive_failures+1 WHERE id=?',
+            (message,iso_now(),(local_now()+timedelta(seconds=seconds)).isoformat(),kind,identity))
     def require_login(self):
-        with self.repo.database.connect() as c:c.execute("UPDATE up_monitors SET status='needs_login',last_error='请在设置中重新扫码，然后恢复 UP 检测' WHERE status='running'")
+        with self.repo.database.connect() as c:c.execute("UPDATE up_monitors SET status='needs_login',failure_kind='login',last_error='请在设置中重新扫码，然后恢复 UP 检测' WHERE status='running'")
     def remove(self,identity):
         with self.repo.database.connect() as c:
             c.execute('DELETE FROM up_monitor_videos WHERE monitor_id=?',(identity,));c.execute('DELETE FROM up_monitors WHERE id=?',(identity,))
@@ -72,4 +72,4 @@ class UpMonitorStore:
         with self.repo.database.connect() as c:c.execute('UPDATE up_monitors SET interval_seconds=?,video_interval_seconds=?,next_run_at=? WHERE id=?',(interval,video_interval,(local_now()+timedelta(seconds=interval)).isoformat(),identity))
 
     def cooldown_all(self,message,seconds):
-        with self.repo.database.connect() as c:c.execute("UPDATE up_monitors SET cooldown_until=?,last_error=? WHERE status='running'",((local_now()+timedelta(seconds=seconds)).isoformat(),message))
+        with self.repo.database.connect() as c:c.execute("UPDATE up_monitors SET cooldown_until=?,last_error=?,failure_kind='risk' WHERE status='running'",((local_now()+timedelta(seconds=seconds)).isoformat(),message))

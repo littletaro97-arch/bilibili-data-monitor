@@ -7,10 +7,10 @@ from typing import Any
 import httpx
 
 from app.database import Repository
-from app.models import ProviderError, RiskControlError, LoginRequiredError
+from app.models import ProviderError, RiskControlError, LoginRequiredError, RequestFailure
 
 
-RISK_STATUS_CODES = {403, 412}
+RISK_STATUS_CODES = {403, 412, 429}
 
 
 class BilibiliClient:
@@ -68,9 +68,9 @@ class BilibiliClient:
                         break
                     await asyncio.sleep(2**attempt)
 
-            message = f"网络请求失败：{last_error}"
-            self._log("ERROR", message)
-            raise ProviderError(message)
+            failure = request_failure(last_error)
+            self._log("ERROR", str(failure), detail=f"错误类型：{failure.kind}")
+            raise failure from None
 
     async def authenticated_response(self, url, cookies, params=None, *, binary=False):
         """Share the statistics request limiter; never forward credentials off-platform."""
@@ -112,8 +112,8 @@ class BilibiliClient:
                         if binary:
                             raise ProviderError("弹幕分段接口返回 JSON 而不是 protobuf，任务未完成")
                         return payload
-            except (httpx.HTTPError, ValueError):
-                raise ProviderError("平台请求或响应解析失败，进度已保留") from None
+            except (httpx.HTTPError, ValueError) as exc:
+                raise request_failure(exc) from None
             finally:
                 self._last_request_at = time.monotonic()
 
@@ -150,9 +150,9 @@ class BilibiliClient:
                         break
                     await asyncio.sleep(2**attempt)
 
-            message = f"网络请求失败：{last_error}"
-            self._log("ERROR", message)
-            raise ProviderError(message)
+            failure = request_failure(last_error)
+            self._log("ERROR", str(failure), detail=f"错误类型：{failure.kind}")
+            raise failure from None
 
     def _detect_risk_payload(self, payload: dict[str, Any]) -> None:
         code = payload.get("code")
@@ -164,3 +164,11 @@ class BilibiliClient:
     def _log(self, level: str, message: str, detail: str | None = None) -> None:
         if self.repository:
             self.repository.add_log(level, message, detail=detail)
+
+
+def request_failure(exc):
+    # Never include exception text, request headers, cookies or response bodies.
+    if isinstance(exc,httpx.TimeoutException):return RequestFailure('timeout','网络请求超时，登录态与采集进度已保留')
+    if isinstance(exc,httpx.HTTPStatusError):return RequestFailure('http',f'平台 HTTP {exc.response.status_code}，采集进度已保留')
+    if isinstance(exc,httpx.HTTPError):return RequestFailure('network','网络连接失败，登录态与采集进度已保留')
+    return RequestFailure('parse','平台响应无法解析为有效 JSON，采集进度已保留')

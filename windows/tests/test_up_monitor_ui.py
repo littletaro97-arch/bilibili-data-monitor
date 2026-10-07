@@ -49,7 +49,7 @@ def test_up_home_group_move_modal_motion_and_report_delete(tmp_path,monkeypatch)
    page.get_by_role('button',name='移至任务列表',exact=True).click();expect(page.locator('#up-monitors .task-card')).to_have_count(0)
    expect(page.locator('.task-card')).to_have_count(1)
    path=app.state.report_service.generate(BV2)
-   page.goto(base+'/videos/'+BV2);assert page.locator('form[action$="/phase2/demo"] button').count()==1
+   page.goto(base+'/videos/'+BV2);assert page.locator('form[action$="/phase2/demo"] button').count()==0
    page.locator('[data-chart-panel="reports"]>summary').click()
    page.get_by_role('button',name='删除报告',exact=True).click();confirm=page.get_by_role('dialog',name='确认操作');expect(confirm).to_be_visible()
    confirm.get_by_role('button',name='确定',exact=True).click()

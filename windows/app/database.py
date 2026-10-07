@@ -182,6 +182,8 @@ class Database:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_danmaku_identity ON danmaku(bvid,cid,progress_sec,send_time)")
             from app.up_monitor_store import SCHEMA
             conn.executescript(SCHEMA)
+            _ensure_column(conn, "crawl_tasks", "failure_kind", "TEXT")
+            _ensure_column(conn, "up_monitors", "failure_kind", "TEXT")
             _ensure_column(conn, "html_reports", "deleted", "INTEGER NOT NULL DEFAULT 0")
             conn.execute("PRAGMA user_version = 1")
 
@@ -356,7 +358,7 @@ class Repository:
                 UPDATE crawl_tasks
                 SET status=CASE WHEN status IN ('paused', 'stopped') THEN status ELSE 'running' END, last_run_at=?, last_success_at=?,
                     next_run_at=?, consecutive_failures=0,
-                    cooldown_until=NULL, last_error=NULL, updated_at=?
+                    cooldown_until=NULL, last_error=NULL, failure_kind=NULL, updated_at=?
                 WHERE bvid=?
                 """,
                 (now, now, next_run.isoformat(), now, bvid),
@@ -368,6 +370,7 @@ class Repository:
         message: str,
         cooldown_seconds: int,
         force_error: bool = False,
+        failure_kind: str | None = None,
     ) -> None:
         now_dt = local_now()
         now = now_dt.isoformat()
@@ -377,16 +380,17 @@ class Repository:
                 (bvid,),
             ).fetchone()
             failures = int(task["consecutive_failures"] if task else 0) + 1
-            status = "error" if force_error or failures >= 3 else "running"
+            failure_kind = "risk" if force_error else (failure_kind or "provider")
+            status = "error" if force_error or (failures >= 3 and failure_kind not in {"network","timeout"}) else "running"
             cooldown_until = (now_dt + timedelta(seconds=cooldown_seconds)).isoformat()
             conn.execute(
                 """
                 UPDATE crawl_tasks
                 SET status=CASE WHEN status IN ('paused', 'stopped') THEN status ELSE ? END, last_run_at=?, consecutive_failures=?,
-                    cooldown_until=?, next_run_at=?, last_error=?, updated_at=?
+                    cooldown_until=?, next_run_at=?, last_error=?, updated_at=?, failure_kind=?
                 WHERE bvid=?
                 """,
-                (status, now, failures, cooldown_until, cooldown_until, message, now, bvid),
+                (status, now, failures, cooldown_until, cooldown_until, message, now, failure_kind, bvid),
             )
 
     def due_running_tasks(self) -> list[sqlite3.Row]:
