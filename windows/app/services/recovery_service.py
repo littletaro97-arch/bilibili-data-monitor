@@ -16,7 +16,7 @@ class RecoveryService:
                 until=parse_iso(task['cooldown_until'])
                 if until and until>local_now() and task['failure_kind'] not in {'network','timeout'}:
                     result['skipped']+=1;continue
-                if task['status']!='running' and self.repo.count_active_tasks()>=self.up.video_service.max_active_tasks:
+                if not task['automatic'] and task['status']!='running' and self.repo.count_active_tasks(manual_only=True)>=self.up.video_service.max_active_tasks:
                     result['skipped']+=1;continue
                 with self.repo.database.connect() as c:
                     c.execute("UPDATE crawl_tasks SET status='running',cooldown_until=NULL,last_error=NULL,failure_kind=NULL,consecutive_failures=0,next_run_at=? WHERE id=? AND status NOT IN ('paused','stopped')",(iso_now(),task['id']))

@@ -1,4 +1,3 @@
-from pathlib import Path
 from plotly import __version__ as PLOTLY_VERSION
 from datetime import datetime
 from app.services.analysis_service import METRICS

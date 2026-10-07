@@ -2,6 +2,7 @@
 {% from "task_card.html" import task_card %}
 {% block title %}任务 - B站本地分析{% endblock %}
 {% block content %}
+{% if video_count>=video_threshold %}<div class="message warning" role="status">当前监控 {{ video_count }} 个视频，已达数量提醒阈值 {{ video_threshold }}。可移入回收站并永久删除不需要的视频；UP 新稿仍会加入，任务较多时检测可能延后。</div>{% endif %}
 
 
 <section>
@@ -76,7 +77,7 @@ if(Number(upRoot.dataset.monitorCount)>0){
         if(response.ok){const state=await response.json();
           for(const [id,text] of Object.entries(state.checked)){const label=document.querySelector(`[data-up-checked="${id}"]`);if(label)label.textContent=text;}
           const editing=document.activeElement?.matches('input,textarea,select')||document.querySelector('dialog[open]')||dirty()||window.getSelection().toString();
-          if(state.revision!==upRoot.dataset.upRevision && !editing){location.reload();return;}
+          if(state.revision!==upRoot.dataset.upRevision && !editing){window.bllaNavigate.reload();return;}
         }
       }
     }catch{}
@@ -88,10 +89,10 @@ for(const card of document.querySelectorAll('[data-detail-url]')){
   const interactive=target=>target.closest('a,button,form,input,select,textarea,label,[role="button"],.task-foot');
   card.addEventListener('click',e=>{
     if(interactive(e.target)||window.getSelection().toString()||e.button!==0)return;
-    window.location.assign(window.bllaDetailUrl(new URL(card.dataset.detailUrl,location.href).href));
+    window.bllaNavigate.go(window.bllaDetailUrl(new URL(card.dataset.detailUrl,location.href).href),card.querySelector('.task-title'));
   });
   card.addEventListener('keydown',e=>{
-    if(e.target===card && e.key==='Enter'){e.preventDefault();window.location.assign(window.bllaDetailUrl(new URL(card.dataset.detailUrl,location.href).href));}
+    if(e.target===card && e.key==='Enter'){e.preventDefault();window.bllaNavigate.go(window.bllaDetailUrl(new URL(card.dataset.detailUrl,location.href).href),card.querySelector('.task-title'));}
   });
 }
 </script>

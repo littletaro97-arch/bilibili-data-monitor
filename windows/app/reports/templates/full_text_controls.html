@@ -2,7 +2,7 @@
   <p class="muted">先到<a href="/settings#bili-account">设置扫码登录</a>。弹幕读取所选 P 的全部 6 分钟分段；评论读取稿件共用评论区及楼中楼。平台可能隐藏或截断内容，接口遍历结束不等于完整历史。</p>
   <form id="full-text-form" class="actions"><label>内容<select id="full-text-kind"><option value="danmaku">分段弹幕</option><option value="comments">评论及楼中楼</option></select></label><label>弹幕范围<select id="full-text-scope"><option value="selected">仅下方所选 P</option><option value="all">全部 P</option></select></label><label><input id="full-text-continuous" type="checkbox">连续遍历到接口结束</label><button type="submit">开始遍历</button></form>
   <p id="full-text-progress" role="status">尚未开始</p>
-  <div class="actions"><button type="button" class="secondary" id="full-text-pause" hidden>暂停</button><button type="button" id="full-text-resume" hidden>从断点继续</button><a class="button secondary" href="/videos/{{ video.bvid }}#text-inspection">刷新本地结果</a></div>
+  <div class="actions"><button type="button" class="secondary" id="full-text-pause" hidden>暂停</button><button type="button" id="full-text-resume" hidden>从断点继续</button><a class="button secondary" data-refresh-page href="/videos/{{ video.bvid }}#text-inspection">刷新本地结果</a></div>
   <p class="muted">仅手动运行，和常规检测共用请求间隔；默认每轮最多处理 150 个批次后暂停；连续遍历最多 6,000 批次，遇平台限制或错误立即停止。结果逐批保存，面板仅载入最近 10,000 条唯一文本，截断时会提示。</p>
 </details>
 <script>
@@ -11,8 +11,11 @@
   const pause=document.getElementById('full-text-pause'), resume=document.getElementById('full-text-resume');
   let job=null,timer=null;
   async function request(action,body){
+    const finish=action?window.bllaLoading?.start(document.activeElement):null;
+    try{
     const r=await fetch(base+(action?'/'+action:''),{method:action?'POST':'GET',headers:{'Content-Type':'application/json'},body:action?JSON.stringify(body):undefined});
     const d=await r.json();if(!r.ok)throw Error(d.error||d.detail||'采集操作失败');return d.job;
+    }finally{finish?.();}
   }
   function show(value){
     job=value;if(!job)return;

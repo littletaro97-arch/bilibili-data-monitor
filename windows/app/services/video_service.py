@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import time
 
 from app.collectors.provider import VideoDataProvider
 from app.collectors.video_info import resolve_bvid
@@ -23,8 +24,9 @@ class VideoService:
         self.min_interval = min_interval
         self.default_interval = default_interval
         self.max_active_tasks = max_active_tasks
+        self._last_parts_attempt = None
 
-    async def add_video_task(self, text: str, interval_seconds: int | None = None, *, should_add=None) -> str:
+    async def add_video_task(self, text: str, interval_seconds: int | None = None, *, should_add=None, automatic=False) -> str:
         bvid = await resolve_bvid(text)
         interval = interval_seconds or self.default_interval
         if interval < self.min_interval:
@@ -39,7 +41,8 @@ class VideoService:
                 bvid,
                 interval,
                 min_interval=self.min_interval,
-                max_active=self.max_active_tasks,
+                max_active=None if automatic else self.max_active_tasks,
+                automatic=automatic,
             )
         except sqlite3.IntegrityError as exc:
             raise DuplicateTaskError("该视频任务已存在，不会重复创建") from exc
@@ -59,7 +62,7 @@ class VideoService:
         task = self.repository.get_task(task_id)
         if not task or task["status"] == "stopped":
             return
-        if self.repository.count_active_tasks() >= self.max_active_tasks and task["status"] != "running":
+        if not task["automatic"] and self.repository.count_active_tasks(manual_only=True) >= self.max_active_tasks and task["status"] != "running":
             raise RateLimitError(f"第一版最多允许 {self.max_active_tasks} 个 running 任务")
         self.repository.set_task_status(task_id, "running")
         self._log_task_action(task_id, "恢复任务")
@@ -72,7 +75,7 @@ class VideoService:
         task = self.repository.get_task(task_id)
         if not task or task["status"] != "stopped":
             return
-        self.repository.create_task(task["bvid"], task["interval_seconds"], self.min_interval, self.max_active_tasks)
+        self.repository.create_task(task["bvid"], task["interval_seconds"], self.min_interval, None if task["automatic"] else self.max_active_tasks)
         self._log_task_action(task_id, "从回收站取回，恢复检测")
 
     def _log_task_action(self, task_id: int, message: str) -> None:
@@ -80,3 +83,14 @@ class VideoService:
         bvid = task["bvid"] if task else None
         self.repository.add_log("INFO", message, bvid=bvid)
         logger.info("%s: %s", message, bvid)
+
+
+    async def discover_parts(self,bvid):
+        if not self.repository.get_video(bvid):raise ProviderError('视频不存在')
+        now=time.monotonic()
+        if self._last_parts_attempt is not None and now-self._last_parts_attempt<60:
+            raise ProviderError(f'分 P 列表读取请稍后重试，剩余 {int(60-(now-self._last_parts_attempt))+1} 秒')
+        self._last_parts_attempt=now
+        parts=await self.provider.fetch_danmaku_parts(bvid)
+        self.repository.record_text_collection(bvid,'parts',{'parts':parts,'total_parts':len(parts),'metadata_only':True})
+        return parts

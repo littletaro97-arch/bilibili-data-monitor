@@ -1,6 +1,4 @@
 """New-video discovery is separate from the existing statistics task scheduler."""
-import asyncio
-import re
 import sqlite3
 from urllib.parse import urlsplit
 from app.collectors.video_info import resolve_bvid
@@ -57,12 +55,14 @@ class UpMonitorService:
         self.inflight.add(identity)
         try:
             rows=[]
-            for page in range(1,11):
+            complete=False
+            start=monitor["scan_page"]
+            for page in range(start,start+10):
                 current,total=await self.provider.page(monitor['mid'],page)
                 rows.extend(current)
-                if page*30>=total or (current and max(r['pubdate'] for r in current)<monitor['baseline_pubdate']):break
-            else:raise ProviderError('新稿列表超过本轮 300 条安全范围，基线未推进')
-            self.store.discover(identity,rows)
+                if page*30>=total or (current and max(r['pubdate'] for r in current)<monitor['baseline_pubdate']):
+                    complete=True;break
+            self.store.discover(identity,rows,complete=complete,next_page=1 if complete else max(start+1,page))
             if self.store.get(identity) is None:return
             await self.enqueue_pending(identity)
         except LoginRequiredError:
@@ -83,17 +83,15 @@ class UpMonitorService:
         return {"error":current["last_error"]} if current and current["last_error"] else {"success":True}
 
     async def enqueue_pending(self,identity):
-        for row in self.store.pending(identity):
+        for row in self.store.pending(identity)[:10]:
             monitor=self.store.get(identity)
             if not monitor or monitor['status']!='running':return
             existing=self.repo.get_task_by_bvid(row['bvid'])
             if existing:
                 # Never revive a user's recycled task or alter manual settings.
                 self.store.queued(identity,row['bvid'],existing=True);continue
-            if self.repo.count_active_tasks()>=self.video_service.max_active_tasks:
-                self.store.fail(identity,'视频队列已满，新稿保留待加入',monitor['interval_seconds']);return
             await self.video_service.add_video_task(row['bvid'],monitor['video_interval_seconds'],
-                should_add=lambda: bool((m:=self.store.get(identity)) and m["status"]=="running"))
+                should_add=lambda: bool((m:=self.store.get(identity)) and m["status"]=="running"),automatic=True)
             if not self.store.get(identity):return
             self.store.queued(identity,row['bvid'])
             await self.crawl_service.collect_once(row['bvid'],collection_source='UP_MONITOR')
@@ -119,7 +117,7 @@ class UpMonitorService:
     def state_snapshot(self):
         import hashlib,json
         monitors=self.store.list();items=self.store.items()
-        state=[[(m['id'],m['status'],m['last_error'],m['interval_seconds'],m['video_interval_seconds'],
+        state=[[(m['id'],m['status'],m['last_error'],m['interval_seconds'],m['video_interval_seconds'],m['scan_page'],
                  bool(parse_iso(m['cooldown_until']) and parse_iso(m['cooldown_until'])>local_now())) for m in monitors],
                [(r['monitor_id'],r['bvid'],r['state'],r['promoted']) for r in items]]
         return {'revision':hashlib.sha256(json.dumps(state,sort_keys=True).encode()).hexdigest(),

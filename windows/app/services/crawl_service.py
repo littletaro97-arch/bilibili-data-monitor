@@ -26,6 +26,7 @@ class CrawlService:
         self.risk_cooldown_seconds = risk_cooldown_seconds
         self.schedule_jitter_seconds = schedule_jitter_seconds
         self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._batch_size = max(4,max_concurrency*4)
         self._inflight: set[str] = set()
 
     async def collect_once(self, bvid: str, collection_source: str = "MANUAL", *, running_only: bool = False) -> bool:
@@ -46,6 +47,8 @@ class CrawlService:
             current_task = self.repository.get_task_by_bvid(bvid)
             if not current_task or current_task["status"] == "stopped" or (running_only and current_task["status"] != "running"):
                 return False
+            cooldown=parse_iso(current_task["cooldown_until"])
+            if cooldown and cooldown>local_now():return False
             try:
                 stats = await self.provider.fetch_video_stats(bvid)
                 # An in-flight HTTP request may finish after recycling; discard its result.
@@ -105,16 +108,17 @@ class CrawlService:
                 cooldown = cooldown.astimezone()
             if task["status"] == "running" and (cooldown is None or cooldown <= now) and task["bvid"] not in self._inflight:
                 eligible.append(task)
-        results = await asyncio.gather(
-            *(self.collect_once(task["bvid"], collection_source="MANUAL", running_only=True) for task in eligible),
-            return_exceptions=True,
-        )
+        results=[]
+        for offset in range(0,len(eligible),self._batch_size):
+            results.extend(await asyncio.gather(
+                *(self.collect_once(task['bvid'],collection_source='MANUAL',running_only=True) for task in eligible[offset:offset+self._batch_size]),
+                return_exceptions=True))
         failed = sum(isinstance(result, Exception) for result in results)
         success = sum(result is True for result in results)
         return {"total": success + failed, "success": success, "failed": failed, "skipped": len(tasks) - success - failed}
 
     async def run_due_tasks(self) -> None:
-        tasks = self.repository.due_running_tasks()
+        tasks = self.repository.due_running_tasks(limit=self._batch_size)
         if not tasks:
             return
         results = await asyncio.gather(

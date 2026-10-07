@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from app.config import RUNTIME_DIR, load_settings
 from app.security import hash_password
 

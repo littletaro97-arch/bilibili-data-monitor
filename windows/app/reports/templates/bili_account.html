@@ -14,8 +14,11 @@
   const visible=async()=>!document.hidden && !(typeof panelHidden==='function' && await panelHidden());
   const stop=()=>{pending=false;clearTimeout(timer);image.hidden=true;image.removeAttribute('src');};
   async function request(action,body) {
+    const finish=action && action!=='poll'?window.bllaLoading?.start(document.activeElement):null;
+    try{
     const response=await fetch('/api/text/auth'+(action?'/'+action:''),{method:action?'POST':'GET',headers:{'Content-Type':'application/json'},body:action?JSON.stringify(body||{}):undefined});
     const data=await response.json();if(!response.ok) throw Error(data.error||data.detail||'登录操作失败');return data;
+    }finally{finish?.();}
   }
   function show(data){status.textContent=(data.saved?`${data.name} · `:'')+data.message+(data.last_verified_at?` · 上次有效验证：${new Date(data.last_verified_at).toLocaleString()}`:'');}
   async function poll(){

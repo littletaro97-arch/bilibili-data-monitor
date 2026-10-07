@@ -1,14 +1,16 @@
 
-<nav id="floating-nav" class="floating-nav" hidden aria-label="详情页目录"><div id="floating-nav-menu" class="floating-nav-menu"><div class="nav-highlight" aria-hidden="true" hidden></div></div></nav>
+<nav id="floating-nav" class="floating-nav" hidden aria-label="详情页目录"><div id="floating-nav-menu" class="floating-nav-menu"><button type="button" class="floating-nav-close" aria-label="暂时隐藏目录" title="暂时隐藏目录">×</button><div class="nav-highlight" aria-hidden="true" hidden></div></div></nav>
 <script>
 (() => {
   const key='bilibili-detail-navigation',nav=document.getElementById('floating-nav'),menu=document.getElementById('floating-nav-menu');
   const targets=[...document.querySelectorAll('[data-nav-title]')];
   let preferences=window.bllaNavigationPreferences||{enabled:true,side:'right'};
   try{const saved=JSON.parse(localStorage.getItem(key)||'{}');preferences={enabled:saved.enabled!==false,side:saved.side==='left'?'left':'right'};}catch{}
+  let dismissed=false;try{dismissed=sessionStorage.getItem('blla:nav-temp')===location.pathname;}catch{}
+  menu.querySelector('.floating-nav-close').onclick=()=>{dismissed=true;try{sessionStorage.setItem('blla:nav-temp',location.pathname);}catch{}apply();};
   const apply=()=>{
-    nav.hidden=!preferences.enabled||targets.length<2;nav.dataset.side=preferences.side;
-    document.documentElement.dataset.detailNav=String(preferences.enabled);
+    nav.hidden=dismissed||!preferences.enabled||targets.length<2;nav.dataset.side=preferences.side;
+    document.documentElement.dataset.detailNav=String(preferences.enabled && !dismissed);
     document.documentElement.dataset.navSide=preferences.side;
   };
   const links=new Map(),indicator=menu.querySelector('.nav-highlight');

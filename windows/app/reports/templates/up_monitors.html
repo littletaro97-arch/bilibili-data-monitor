@@ -1,6 +1,6 @@
 <section id="up-monitors" data-up-revision="{{ up_revision }}" data-monitor-count="{{ up_groups|length }}">
   <h2>UP主更新检测</h2>
-  <p class="muted">复用设置中的 Bilibili 登录态。首次只建基线；随后新稿自动采集，满载时保留待加入项。暂停 UP 检测不停止已加入的视频任务。</p>
+  <p class="muted">复用设置中的 Bilibili 登录态。首次只建基线；随后新稿分批自动采集，数量不设硬上限。暂停 UP 检测不停止已加入的视频任务。</p>
   <form method="post" action="/up-monitors" class="row up-add-form">
     <div><label for="up-input">UP UID、空间链接或视频链接</label><input id="up-input" name="up_input" required placeholder="UID 或 UP 主空间链接"></div>
     <div><label for="up-detect">UP 检测间隔（秒，最低 120）</label><input id="up-detect" name="detect_interval" type="number" min="120" max="31536000" required value="{{ up_detect_interval }}"></div>
@@ -11,7 +11,7 @@
   {% for group in up_groups %}{% set monitor=group.monitor %}
   <details open class="chart-panel up-monitor" data-up-monitor-id="{{ monitor.id }}" data-chart-panel="up-{{ monitor.id }}">
     <summary>{{ monitor.up_name }} · UID {{ monitor.mid }} <span class="badge {{ 'running' if group.display=='正常' else ('stopped' if group.display=='停止' else 'interrupted') }}">{{ group.display }}</span></summary>
-    <p class="muted">上次检测：<span data-up-checked="{{ monitor.id }}">{{ monitor.last_checked_at|local_time }}</span> · 每 {{ monitor.interval_seconds }} 秒检测 · 新视频每 {{ monitor.video_interval_seconds }} 秒采集</p>
+    <p class="muted">上次检测：<span data-up-checked="{{ monitor.id }}">{{ monitor.last_checked_at|local_time }}</span> · 每 {{ monitor.interval_seconds }} 秒检测 · 新视频每 {{ monitor.video_interval_seconds }} 秒采集{% if monitor.scan_page>1 %} · 继续遍历第 {{ monitor.scan_page }} 页{% endif %}</p>
     {% if monitor.last_error %}<p class="muted" role="status">{{ monitor.last_error }}</p>{% endif %}
         {% if monitor.cooldown_until %}<p class="muted" data-cooldown-until="{{ monitor.cooldown_until }}">冷却至 {{ monitor.cooldown_until|local_time }}，届时按任务状态重试</p>{% endif %}
     <div class="actions">

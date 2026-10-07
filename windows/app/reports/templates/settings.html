@@ -28,7 +28,7 @@
       <tr><th>默认采集间隔</th><td>{{ settings.crawl.default_interval }} 秒</td></tr>
       <tr><th>最低采集间隔</th><td>{{ settings.crawl.min_interval }} 秒</td></tr>
       <tr><th>全局最小请求间隔</th><td>{{ settings.crawl.global_min_request_interval }} 秒</td></tr>
-      <tr><th>最大运行任务数</th><td>{{ settings.crawl.max_active_tasks }}</td></tr>
+      <tr><th>手动任务上限 / 数量提醒阈值</th><td>{{ settings.crawl.max_active_tasks }}</td></tr>
       <tr><th>数据库</th><td><code tabindex="0" title="{{ settings.database.path }}">{{ settings.database.path }}</code></td></tr>
       <tr><th>报告目录</th><td><code tabindex="0" title="{{ settings.report.output_dir }}">{{ settings.report.output_dir }}</code></td></tr>
       <tr><th>原始数据备份</th><td>{{ "开启" if settings.crawl.save_raw_json else "关闭" }}</td></tr>

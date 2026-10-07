@@ -22,7 +22,6 @@ from app.services.crawl_service import CrawlService
 from app.services.export_service import ExportService
 from app.services.history_exchange_service import HistoryExchangeService
 from app.services.report_service import ReportService
-from app.services.phase2_service import Phase2Service
 from app.services.task_service import TaskScheduler
 from app.services.up_monitor_service import UpMonitorService
 from app.services.recovery_service import RecoveryService
@@ -78,14 +77,6 @@ def create_app() -> FastAPI:
         BASE_DIR / "app" / "reports" / "templates",
     )
     scheduler = TaskScheduler(crawl_service)
-    phase2_service = Phase2Service(
-        repository,
-        provider,
-        max_root_comments=settings.phase2.max_root_comments,
-        max_child_comments=settings.phase2.max_child_comments,
-        comment_min_interval_seconds=settings.phase2.comment_min_interval_seconds,
-        danmaku_min_interval_seconds=settings.phase2.danmaku_min_interval_seconds,
-    )
     export_service = ExportService(repository, RUNTIME_DIR / "exports")
     history_exchange_service = HistoryExchangeService(repository)
     bili_auth = BiliAuth(RUNTIME_DIR / 'auth' / 'bilibili-auth.dat', client)
@@ -129,7 +120,6 @@ def create_app() -> FastAPI:
     app.state.video_service = video_service
     app.state.crawl_service = crawl_service
     app.state.report_service = report_service
-    app.state.phase2_service = phase2_service
     app.state.export_service = export_service
     app.state.history_exchange_service = history_exchange_service
     app.state.history_exchange_previews = {}

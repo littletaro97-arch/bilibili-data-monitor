@@ -40,22 +40,23 @@ class UpMonitorStore:
             c.executemany("INSERT INTO up_monitor_videos(monitor_id,bvid,title,pubdate,state) VALUES (?,?,?,?,'baseline')",[(identity,r['bvid'],r['title'],r['pubdate']) for r in rows])
             c.execute('INSERT OR REPLACE INTO up_monitor_preferences VALUES (1,?,?)',(interval,video_interval))
             return identity
-    def discover(self,identity,rows):
+    def discover(self,identity,rows,*,complete=True,next_page=1):
         with self.repo.database.connect() as c:
             monitor=c.execute('SELECT * FROM up_monitors WHERE id=?',(identity,)).fetchone()
             if not monitor or monitor['status']!='running':return
             for r in rows:
                 if r['pubdate']>=monitor['baseline_pubdate']:
                     c.execute("INSERT OR IGNORE INTO up_monitor_videos(monitor_id,bvid,title,pubdate,state) VALUES (?,?,?,?,'pending')",(identity,r['bvid'],r['title'],r['pubdate']))
-            baseline=max([monitor['baseline_pubdate']]+[r['pubdate'] for r in rows])
-            c.execute('UPDATE up_monitors SET baseline_pubdate=?,last_checked_at=?,next_run_at=?,last_error=NULL,cooldown_until=NULL,failure_kind=NULL,consecutive_failures=0 WHERE id=?',
-                (baseline,iso_now(),(local_now()+timedelta(seconds=monitor['interval_seconds'])).isoformat(),identity))
+            scan_max=max([monitor['scan_max_pubdate'] or monitor['baseline_pubdate']]+[r['pubdate'] for r in rows])
+            baseline=scan_max if complete else monitor['baseline_pubdate']
+            c.execute('UPDATE up_monitors SET baseline_pubdate=?,scan_page=?,scan_max_pubdate=?,last_checked_at=?,next_run_at=?,last_error=NULL,cooldown_until=NULL,failure_kind=NULL,consecutive_failures=0 WHERE id=?',
+                (baseline,next_page,None if complete else scan_max,iso_now(),(local_now()+timedelta(seconds=monitor['interval_seconds'])).isoformat(),identity))
     def pending(self,identity):
         with self.repo.database.connect() as c:return c.execute("SELECT * FROM up_monitor_videos WHERE monitor_id=? AND state='pending' ORDER BY pubdate,bvid",(identity,)).fetchall()
     def queued(self,identity,bvid,existing=False):
         with self.repo.database.connect() as c:c.execute("UPDATE up_monitor_videos SET state='queued',promoted=? WHERE monitor_id=? AND bvid=?",(int(existing),identity,bvid))
     def items(self):
-        with self.repo.database.connect() as c:return c.execute("SELECT * FROM up_monitor_videos WHERE state!='baseline'").fetchall()
+        with self.repo.database.connect() as c:return c.execute("SELECT * FROM up_monitor_videos WHERE state IN ('pending','queued')").fetchall()
     def state(self,identity,status):
         with self.repo.database.connect() as c:c.execute('UPDATE up_monitors SET status=? WHERE id=?',(status,identity))
     def fail(self,identity,message,seconds,kind="provider"):

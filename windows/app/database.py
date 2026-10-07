@@ -6,7 +6,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any, Iterator
 
-from app.models import DanmakuItem, RateLimitError, VideoComment, VideoInfo, VideoStats
+from app.models import AppError, DanmakuItem, RateLimitError, VideoComment, VideoInfo, VideoStats
 
 
 def local_now() -> datetime:
@@ -183,6 +183,12 @@ class Database:
             from app.up_monitor_store import SCHEMA
             conn.executescript(SCHEMA)
             _ensure_column(conn, "crawl_tasks", "failure_kind", "TEXT")
+            _ensure_column(conn, "crawl_tasks", "automatic", "INTEGER NOT NULL DEFAULT 0")
+            _ensure_column(conn, "up_monitors", "scan_page", "INTEGER NOT NULL DEFAULT 1")
+            _ensure_column(conn, "up_monitors", "scan_max_pubdate", "INTEGER")
+            conn.execute("""UPDATE crawl_tasks SET automatic=1 WHERE automatic=0 AND (
+                EXISTS (SELECT 1 FROM up_monitor_videos u WHERE u.bvid=crawl_tasks.bvid AND u.state='queued' AND u.promoted=0)
+                OR EXISTS (SELECT 1 FROM video_stats_snapshot s WHERE s.bvid=crawl_tasks.bvid AND s.source_type='collected' AND s.collection_source='UP_MONITOR'))""")
             _ensure_column(conn, "up_monitors", "failure_kind", "TEXT")
             _ensure_column(conn, "html_reports", "deleted", "INTEGER NOT NULL DEFAULT 0")
             conn.execute("PRAGMA user_version = 1")
@@ -229,10 +235,10 @@ class Repository:
                 ),
             )
 
-    def create_task(self, bvid: str, interval_seconds: int, min_interval: int, max_active: int) -> int:
+    def create_task(self, bvid: str, interval_seconds: int, min_interval: int, max_active: int | None, *, automatic: bool = False) -> int:
         if interval_seconds < min_interval:
             raise RateLimitError(f"采集间隔不得低于 {min_interval} 秒")
-        if self.count_active_tasks() >= max_active:
+        if max_active is not None and self.count_active_tasks(manual_only=True) >= max_active:
             raise RateLimitError(f"第一版最多允许 {max_active} 个 running 任务")
         now = iso_now()
         with self.database.connect() as conn:
@@ -258,10 +264,10 @@ class Repository:
                 """
                 INSERT INTO crawl_tasks (
                     bvid, status, interval_seconds, next_run_at,
-                    created_at, updated_at
-                ) VALUES (?, 'running', ?, ?, ?, ?)
+                    created_at, updated_at, automatic
+                ) VALUES (?, 'running', ?, ?, ?, ?, ?)
                 """,
-                (bvid, interval_seconds, now, now, now),
+                (bvid, interval_seconds, now, now, now, int(automatic)),
             )
             return int(cursor.lastrowid)
 
@@ -303,10 +309,10 @@ class Repository:
                 """
             ).fetchall()
 
-    def count_active_tasks(self) -> int:
+    def count_active_tasks(self, manual_only: bool = False) -> int:
         with self.database.connect() as conn:
             row = conn.execute(
-                "SELECT COUNT(*) AS n FROM crawl_tasks WHERE status = 'running'"
+                "SELECT COUNT(*) AS n FROM crawl_tasks WHERE status = 'running'" + (" AND automatic=0" if manual_only else "")
             ).fetchone()
             return int(row["n"])
 
@@ -393,7 +399,7 @@ class Repository:
                 (status, now, failures, cooldown_until, cooldown_until, message, now, failure_kind, bvid),
             )
 
-    def due_running_tasks(self) -> list[sqlite3.Row]:
+    def due_running_tasks(self, limit: int | None = None) -> list[sqlite3.Row]:
         now = iso_now()
         with self.database.connect() as conn:
             return conn.execute(
@@ -403,8 +409,9 @@ class Repository:
                   AND (cooldown_until IS NULL OR cooldown_until <= ?)
                   AND (next_run_at IS NULL OR next_run_at <= ?)
                 ORDER BY next_run_at ASC
+                LIMIT ?
                 """,
-                (now, now),
+                (now, now, limit if limit is not None else -1),
             ).fetchall()
 
     def insert_snapshot(
@@ -686,6 +693,24 @@ class Repository:
                 """,
                 (bvid, limit),
             ).fetchall()
+
+    def count_monitored_videos(self):
+        with self.database.connect() as c:return c.execute("SELECT COUNT(*) FROM crawl_tasks WHERE status!='stopped'").fetchone()[0]
+
+    def permanently_delete_task(self,task_id):
+        with self.database.connect() as c:
+            task=c.execute('SELECT * FROM crawl_tasks WHERE id=?',(task_id,)).fetchone()
+            if not task or task['status']!='stopped':raise AppError('只有回收站中的任务可以永久删除')
+            bvid=task['bvid']
+            if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='text_jobs'").fetchone():
+                for table in ('text_job_roots','text_job_cursors'):
+                    c.execute(f'DELETE FROM {table} WHERE job IN (SELECT id FROM text_jobs WHERE bvid=?)',(bvid,))
+                c.execute('DELETE FROM text_jobs WHERE bvid=?',(bvid,))
+            for table in ('video_stats_snapshot','comments','danmaku','comment_text_history','text_collection_runs','crawl_logs','crawl_tasks'):
+                c.execute(f'DELETE FROM {table} WHERE bvid=?',(bvid,))
+            c.execute("UPDATE up_monitor_videos SET state='deleted',title='',promoted=1 WHERE bvid=?",(bvid,))
+            c.execute('DELETE FROM videos WHERE bvid=?',(bvid,))
+            return bvid
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:

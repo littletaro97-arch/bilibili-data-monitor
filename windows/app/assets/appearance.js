@@ -10,8 +10,11 @@
   }
   let navigation={enabled:true,side:'right'};
   try{const saved=JSON.parse(read('bilibili-detail-navigation')||'{}');navigation={enabled:saved.enabled!==false,side:saved.side==='left'?'left':'right'};}catch{}
-  window.bllaNavigationPreferences=navigation;root.dataset.detailNav=String(navigation.enabled);root.dataset.navSide=navigation.side;
-  if(!matchMedia('(prefers-reduced-motion: reduce)').matches && Element.prototype.animate)root.dataset.pageEntering='true';
+  let dismissed=false;try{dismissed=sessionStorage.getItem('blla:nav-temp')===location.pathname;if(!dismissed)sessionStorage.removeItem('blla:nav-temp');}catch{}
+  window.bllaNavigationPreferences=navigation;root.dataset.detailNav=String(navigation.enabled&&!dismissed);root.dataset.navSide=navigation.side;
+  try{const state=JSON.parse(sessionStorage.getItem('blla:nav-load')||'null');if(state && Date.now()-state.time<300000 && state.path===location.pathname)window.bllaNavigationIntent=state;}catch{}
+  const reload=performance.getEntriesByType('navigation')[0]?.type==='reload';
+  if(!reload && !window.bllaNavigationIntent?.preserve && !matchMedia('(prefers-reduced-motion: reduce)').matches && Element.prototype.animate)root.dataset.pageEntering='true';
   document.addEventListener('DOMContentLoaded',()=>{delete root.dataset.pageEntering;},{once:true});
   apply(read('blla:theme') || (system.matches ? 'dark' : 'light'));
   system.addEventListener('change', () => { if (!read('blla:theme')) apply(system.matches ? 'dark' : 'light'); });

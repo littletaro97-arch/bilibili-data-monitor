@@ -36,13 +36,15 @@ async def test_first_baseline_pinned_old_multiple_new_and_restart(tmp_path):
  assert [t['bvid'] for t in service.layout(repo.list_tasks())[0]]==[BV2]
 
 @pytest.mark.asyncio
-async def test_overflow_pending_survives_pause_restart_and_deleted_list(tmp_path):
+async def test_auto_up_tasks_exceed_threshold_without_displacing_manual_tasks(tmp_path):
  service,repo,space,crawl=setup(tmp_path,limit=1)
  identity=await service.add('123',300,60)
  repo.upsert_video(VideoInfo(BV3));manual=repo.create_task(BV3,300,60,1)
  space.page.return_value=([row(BV2,120)],1)
  await service.poll(identity)
- assert len(service.store.pending(identity))==1 and repo.count_active_tasks()==1
+ assert not service.store.pending(identity) and repo.count_active_tasks()==2
+ assert repo.get_task_by_bvid(BV2)['automatic']==1
+ assert repo.count_active_tasks(manual_only=True)==1
  assert repo.get_task(manual)['status']=='running'
  service.store.state(identity,'paused');await service.poll(identity)
  repo.set_task_status(manual,'paused')

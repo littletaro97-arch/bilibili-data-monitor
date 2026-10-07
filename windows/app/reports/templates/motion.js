@@ -24,17 +24,7 @@
     }
   };
   if (!Element.prototype.animate) return;
-  if (!reduced.matches && main) main.animate([{opacity:0, transform:'translateY(4px)'}, {opacity:1, transform:'none'}], {duration:160, easing:'ease-out'});
-  document.addEventListener('click', event => {
-    const link = event.target.closest('a[href]');
-    if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || !link || link.target || link.hasAttribute('download') || reduced.matches || !main) return;
-    const url = new URL(link.href);
-    if (url.origin !== location.origin || (url.pathname === location.pathname && url.search === location.search)) return;
-    event.preventDefault();
-    if (main.dataset.leaving) return;
-    main.dataset.leaving = '1';
-    main.animate([{opacity:1}, {opacity:0}], {duration:120, fill:'forwards'}).finished.then(() => location.assign(url.href)).catch(() => { delete main.dataset.leaving; });
-  });
+  if (!reduced.matches && main && !window.bllaNavigationIntent?.preserve && performance.getEntriesByType('navigation')[0]?.type!=='reload') main.animate([{opacity:.96, transform:'translateY(4px)'}, {opacity:1, transform:'none'}], {duration:160, easing:'ease-out'});
   for (const detail of document.querySelectorAll('details')) {
     const summary = detail.querySelector(':scope > summary');
     if (!summary) continue;
@@ -64,16 +54,8 @@
     });
     detail.addEventListener('toggle', () => { if (!animation) expanded = detail.open; });
   }
-  document.addEventListener('submit', event => {
-    const form=event.target;
-    if (event.defaultPrevented || form.target || form.method==='dialog' || !animated() || !main) return;
-    if(form.dataset.motionSubmitted==='ready'){delete form.dataset.motionSubmitted;return;}
-    if(form.dataset.motionSubmitted==='pending'){event.preventDefault();return;}
-    event.preventDefault();form.dataset.motionSubmitted='pending';
-    main.animate([{opacity:1},{opacity:0}],{duration:120,easing:'ease-in',fill:'forwards'}).finished.then(()=>{form.dataset.motionSubmitted='ready';form.requestSubmit(event.submitter || undefined);}).catch(()=>{delete form.dataset.motionSubmitted;});
-  });
-  // A page restored from the history cache must not retain the exit fade.
+  // Cancel unfinished entrance motion on a history-cache restore.
   window.addEventListener('pageshow', event => {
-    if (event.persisted && main) { main.getAnimations().forEach(a => a.cancel()); delete main.dataset.leaving; }
+    if (event.persisted && main) { main.getAnimations().forEach(a => a.cancel()); }
   });
 })();

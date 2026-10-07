@@ -79,20 +79,6 @@ def _latest_payload(row, task) -> dict[str, object | None]:
     }
 
 
-def _recent_reports(bvid: str, limit: int = 5) -> list[dict[str, str]]:
-    if not settings.report_output_dir.exists():
-        return []
-    files = sorted(settings.report_output_dir.glob(f"{bvid}_*.html"), key=lambda path: path.stat().st_mtime, reverse=True)
-    return [
-        {
-            "name": path.name,
-            "url": f"/reports/{path.name}",
-            "folder": settings.report_output_dir.as_posix(),
-        }
-        for path in files[:limit]
-    ]
-
-
 def _local_ip() -> str:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -140,6 +126,7 @@ async def index(request: Request, message: str | None = None, level: str = "info
         "index.html",
         {
             "tasks": tasks,
+            "video_count": repo.count_monitored_videos(), "video_threshold": settings.crawl.max_active_tasks,
             "up_groups": up_groups, "up_detect_interval": up_detect_interval, "up_video_interval": up_video_interval,
             "up_revision": request.app.state.up_monitor.state_snapshot()["revision"],
             "message": message,
@@ -173,7 +160,7 @@ async def api_video_latest(request: Request, bvid: str):
 
 @router.get("/assets/{name}")
 async def branding_asset(name: str):
-    allowed = {"app-icon.png", "app-icon.ico", "appearance.js", "appearance.css", "charts.js", "settings.js"}
+    allowed = {"app-icon.png", "app-icon.ico", "appearance.js", "appearance.css", "charts.js", "settings.js", "navigation.js"}
     if name == "plotly.min.js":
         # Stream the installed asset instead of materializing several MB per request.
         return FileResponse(Path(plotly.__file__).parent / "package_data" / "plotly.min.js",
@@ -343,7 +330,7 @@ async def collect_now(request: Request, task_id: int):
     try:
         collected = await request.app.state.crawl_service.collect_once(task["bvid"])
         if not collected:
-            return _flash_redirect("/", "本次未采集：任务已停止或正在检测")
+            return _flash_redirect("/", "本次未采集：任务已停止、仍在冷却或正在检测")
         return _flash_redirect("/", "立即采集完成")
     except AppError as exc:
         return _flash_redirect("/", str(exc), "error")
@@ -404,53 +391,13 @@ async def video_detail(
     )
 
 
-@router.post("/videos/{bvid}/comments/collect")
-async def collect_comments(request: Request, bvid: str):
-    try:
-        count = await request.app.state.phase2_service.collect_comments_once(bvid)
-        return _flash_redirect(f"/videos/{bvid}", f"评论单页采样完成：本次保存或更新 {count} 条，并非全量。更多评论请展开“登录后遍历评论与分段弹幕”，选择“评论及楼中楼”。")
-    except AppError as exc:
-        request.app.state.repository.add_log("WARNING", "评论采集未完成", bvid=bvid, detail=str(exc))
-        return _flash_redirect(f"/videos/{bvid}", str(exc), "error")
-
-
-@router.post("/videos/{bvid}/danmaku/collect")
-async def collect_danmaku(request: Request, bvid: str, cid: int | None = Form(None), scope: str = Form("selected")):
-    try:
-        if scope not in {"selected", "all"}:
-            raise AppError("无效的采样范围")
-        count = await request.app.state.phase2_service.collect_danmaku_once(bvid, cid, all_parts=scope == "all")
-        return _flash_redirect(f"/videos/{bvid}", f"弹幕采样完成：{count} 条（{'全部分 P' if scope == 'all' else '仅所选分 P'}），非完整历史")
-    except AppError as exc:
-        request.app.state.repository.add_log("WARNING", "弹幕采集未完成", bvid=bvid, detail=str(exc))
-        return _flash_redirect(f"/videos/{bvid}", str(exc), "error")
-
-
 @router.post("/videos/{bvid}/danmaku/parts")
 async def discover_danmaku_parts(request: Request, bvid: str):
     try:
-        parts = await request.app.state.phase2_service.discover_danmaku_parts(bvid)
+        parts = await request.app.state.video_service.discover_parts(bvid)
         return _flash_redirect(f"/videos/{bvid}", f"已读取 {len(parts)} 个分 P，未采样弹幕")
     except AppError as exc:
         return _flash_redirect(f"/videos/{bvid}", str(exc), "error")
-
-
-@router.post("/videos/{bvid}/phase2/demo")
-async def seed_phase2_demo_data(request: Request, bvid: str):
-    comment_count, danmaku_count = request.app.state.phase2_service.seed_demo_data(bvid)
-    return _flash_redirect(f"/videos/{bvid}", f"已生成演示数据：评论 {comment_count} 条，弹幕 {danmaku_count} 条")
-
-
-@router.post("/videos/{bvid}/comments/import")
-async def import_comments(request: Request, bvid: str, comments_text: str = Form(...)):
-    count = request.app.state.phase2_service.import_comments_text(bvid, comments_text)
-    return _flash_redirect(f"/videos/{bvid}", f"已导入评论：{count} 条")
-
-
-@router.post("/videos/{bvid}/danmaku/import")
-async def import_danmaku(request: Request, bvid: str, danmaku_text: str = Form(...)):
-    count = request.app.state.phase2_service.import_danmaku_text(bvid, danmaku_text)
-    return _flash_redirect(f"/videos/{bvid}", f"已导入弹幕：{count} 条")
 
 
 @router.post("/videos/{bvid}/history/import")
@@ -734,3 +681,17 @@ async def restart_detection(request: Request):
     result=await request.app.state.recovery.run()
     if 'skipped' in result and isinstance(result['skipped'],str):return _flash_redirect('/',result['skipped'])
     return _flash_redirect('/',f"已安排视频 {result['videos']}、UP {result['ups']} 重新检测，跳过 {result['skipped']}；调度器将执行。手动暂停、回收站、登录待验证及风控/未知类型冷却保持不变。")
+
+
+@router.post('/recycle-bin/{task_id}/delete')
+async def permanently_delete_recycled(request: Request, task_id: int):
+    from app.ui.full_text_api import local
+    local(request)
+    task=request.app.state.repository.get_task(task_id)
+    if not task or task['status']!='stopped':return _flash_redirect('/recycle-bin','只能永久删除回收站中的任务','error')
+    await request.app.state.full_text.cancel_video(task['bvid'])
+    try:
+        bvid=request.app.state.repository.permanently_delete_task(task_id)
+        request.app.state.repository.add_log('WARNING','永久删除回收站视频及采集数据',detail=bvid)
+        return _flash_redirect('/recycle-bin','已永久删除视频及采集数据；独立导出的文件保留')
+    except AppError as exc:return _flash_redirect('/recycle-bin',str(exc),'error')
