@@ -60,12 +60,10 @@
     <p class="muted">{{ update_service.package.name }} · {{ '%.1f'|format(update_service.package.size / 1048576) }} MB</p>
     <details><summary>更新说明</summary><p style="white-space: pre-wrap; overflow-wrap: anywhere;">{{ update_service.package.notes }}</p></details>
   {% endif %}
-  <p class="muted">更新包会校验大小和 SHA-256。安装前请退出程序；同一 Windows 用户默认沿用安装目录并保留数据，无安装记录时可在向导中选择目录。</p>
 </section>
 
 <section>
   <h2>启动窗口</h2>
-  <p class="muted">关闭窗口会隐藏到托盘。左键打开面板，右键可检测、设置或退出；检测仅处理运行中且未冷却的任务。</p>
   <p><a class="button secondary" href="{{ local_url }}" target="_blank" rel="noreferrer">用浏览器打开面板</a></p>
   <form method="post" action="/settings/launcher" data-auto-settings>
     <div class="switch-stack">{{ switch_card('show-console', '显示 CMD 调试窗口', 'console', name='show_console', checked=launcher_show_console, hint='自动保存，下次启动生效') }}</div>

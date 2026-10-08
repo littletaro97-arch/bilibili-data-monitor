@@ -127,6 +127,7 @@ async def index(request: Request, message: str | None = None, level: str = "info
         {
             "tasks": tasks,
             "video_count": repo.count_monitored_videos(), "video_threshold": settings.crawl.max_active_tasks,
+            "bili_login_saved": request.app.state.bili_auth.status()["saved"],
             "up_groups": up_groups, "up_detect_interval": up_detect_interval, "up_video_interval": up_video_interval,
             "up_revision": request.app.state.up_monitor.state_snapshot()["revision"],
             "message": message,
@@ -210,6 +211,16 @@ async def lan_login(password: str = Form(...)):
         )
         return response
     return _flash_redirect("/lan/login", "访问密码错误", "error")
+
+
+@router.post("/api/task-target")
+async def preview_task_target(video_input: str = Form(...)):
+    from app.collectors.task_target import resolve_target
+    try:
+        kind, _ = await resolve_target(video_input)
+        return {"kind": kind}
+    except AppError:
+        return {"kind": None}
 
 
 @router.post("/tasks")

@@ -1,5 +1,5 @@
 <section id="text-inspection" aria-label="评论与弹幕检视台" data-nav-title="评论与弹幕" data-bvid="{{ video.bvid }}">
-  <div class="inspection-heading"><div><h2>评论与弹幕检视台</h2><p class="muted">先定位样本热点，再查看原文证据。</p></div></div>
+  <div class="inspection-heading"><div><h2>评论与弹幕检视台</h2></div></div>
   {% include "full_text_controls.html" %}
   <div class="inspection-tabs" role="tablist" aria-label="文本通道">
     <button type="button" role="tab" id="tab-danmaku" aria-controls="text-channel" aria-selected="true" data-channel="danmaku">弹幕通道 <span data-count="danmaku">0</span></button>
@@ -17,9 +17,7 @@
         <div class="inspection-filter-actions"><button type="submit">应用筛选</button><button type="button" class="secondary" id="text-reset">重置</button></div>
       </form>
       <form method="post" action="/videos/{{ video.bvid }}/danmaku/parts"><button type="submit" class="secondary">读取分 P 列表</button></form>
-      <p class="inspection-small muted">只读取名称和 CID，不采样弹幕。评论区由整个稿件共用。</p>
       <h3>样本词语排行</h3>
-      <p class="muted inspection-small" id="text-word-method">中文分词＋专名保护；数字为词语出现次数，非情绪判断。</p>
       <div id="text-words" class="inspection-words"></div>
       <p id="text-word-status" class="muted inspection-small" aria-live="polite"></p>
       <details><summary>补充分词专名</summary>

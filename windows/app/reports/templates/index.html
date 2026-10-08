@@ -7,19 +7,17 @@
 
 <section>
   <h2>添加采集任务</h2>
-  <form method="post" action="/tasks" class="row" id="add-monitor-form">
+  <form method="post" action="/tasks" id="add-monitor-form">
     <div>
-      <label for="video_input">UP UID、空间链接、BV 号、视频链接或短链</label>
-      <input id="video_input" name="video_input" required maxlength="2048" placeholder="UID / UP 空间链接 / BV / 视频链接 / 短链">
+      <input id="video_input" name="video_input" aria-label="UP UID 或视频地址" required maxlength="2048" placeholder="UID / UP 空间链接 / BV / 视频链接 / 短链">
     </div>
-    <div>
+    <div id="video-interval-field" hidden>
       <label for="interval_seconds">视频采集间隔，最低 {{ min_interval }} 秒</label>
-      <input id="interval_seconds" name="interval_seconds" type="number" required max="31536000" min="{{ min_interval }}" value="{{ default_interval }}" data-video-default="{{ default_interval }}" data-up-default="{{ up_video_interval }}">
+      <input id="interval_seconds" name="interval_seconds" type="number" required disabled max="31536000" min="{{ min_interval }}" value="{{ default_interval }}" data-video-default="{{ default_interval }}" data-up-default="{{ up_video_interval }}">
     </div>
     <div id="up-detect-field" hidden><label for="up-detect">UP 更新检测间隔（秒，最低 120）</label><input id="up-detect" name="detect_interval" type="number" required min="120" max="31536000" value="{{ up_detect_interval }}" disabled></div>
     <button type="submit">添加</button>
   </form>
-  <p class="muted" id="task-target-hint" aria-live="polite">自动识别并归类；UP 需在设置中登录，首次只建立基线。</p>
 </section>
 
 <section>
@@ -58,17 +56,29 @@
 </section>
 
 <script>
-const targetInput=document.getElementById('video_input'),hint=document.getElementById('task-target-hint');
-const detectField=document.getElementById('up-detect-field'),detectInput=document.getElementById('up-detect'),collectInput=document.getElementById('interval_seconds');
-let intervalEdited=false;collectInput.addEventListener('input',()=>{intervalEdited=true;});
+const targetInput=document.getElementById('video_input');
+const detectField=document.getElementById('up-detect-field'),detectInput=document.getElementById('up-detect'),collectField=document.getElementById('video-interval-field'),collectInput=document.getElementById('interval_seconds');
+let intervalEdited=false,previewTimer,previewRequest;
+collectInput.addEventListener('input',()=>{intervalEdited=true;});
+function setTargetKind(kind){
+  const known=kind==='up'||kind==='video';
+  collectField.hidden=!known;collectInput.disabled=!known;
+  detectField.hidden=kind!=='up';detectInput.disabled=kind!=='up';
+  if(!intervalEdited)collectInput.value=kind==='up'?collectInput.dataset.upDefault:collectInput.dataset.videoDefault;
+}
 function previewTarget(){
-  const value=targetInput.value.trim().replace(/[０-９]/g,d=>String(d.charCodeAt(0)-0xFF10));const up=/^(?:UID\s*[:：]?\s*)?\d+$/i.test(value)||/(?:^|\s)(?:https?:\/\/)?space\.bilibili\.com\/\d+(?:[\/?#]|$)/i.test(value);
-  const short=/(?:https?:\/\/)?b23\.tv\//i.test(value);
-  detectField.hidden=!(up||short);detectInput.disabled=!(up||short);
-  if(!intervalEdited)collectInput.value=up?collectInput.dataset.upDefault:collectInput.dataset.videoDefault;
-  hint.textContent=up?'已识别为 UP：添加后进入 UP 更新检测，首次只建基线。':(short?'短链将在添加时解析，并归类为 UP 或视频。':(value?'按视频识别；添加时会校验链接。':'自动识别并归类；UP 需在设置中登录，首次只建立基线。'));
+  clearTimeout(previewTimer);previewRequest?.abort();setTargetKind(null);
+  const value=targetInput.value.trim();if(!value)return;
+  previewTimer=setTimeout(async()=>{
+    const controller=new AbortController();previewRequest=controller;
+    try{
+      const response=await fetch('/api/task-target',{method:'POST',body:new URLSearchParams({video_input:value}),signal:controller.signal});
+      if(response.ok && targetInput.value.trim()===value)setTargetKind((await response.json()).kind);
+    }catch{}
+  },250);
 }
 targetInput.addEventListener('input',previewTarget);previewTarget();
+window.addEventListener('pagehide',()=>{clearTimeout(previewTimer);previewRequest?.abort();},{once:true});
 const intervalDialog=document.createElement('dialog');
 intervalDialog.className='interval-dialog';intervalDialog.setAttribute('aria-label','修改采集时间');
 intervalDialog.innerHTML='<form method="post"><h2>修改采集时间</h2><label for="task-interval">视频统计采集间隔（秒）</label><input id="task-interval" name="interval_seconds" type="number" step="1" min="{{ min_interval }}" max="31536000" required><p class="muted">保存后按新间隔安排下一次采集，评论和弹幕不受此设置影响。</p><div class="actions"><button type="submit">保存</button><button type="button" class="secondary" data-interval-cancel>取消</button></div></form>';

@@ -37,9 +37,22 @@ def test_up_home_group_move_modal_motion_and_report_delete(tmp_path,monkeypatch)
    page.add_init_script('''window.motionCalls=[];const animate=Element.prototype.animate;Element.prototype.animate=function(frames,options){motionCalls.push({tag:this.tagName,options});return animate.call(this,frames,options);};''')
    page.goto(base+'/')
    assert page.locator('#add-monitor-form').count()==1 and page.locator('#up-monitors form[action="/up-monitors"]').count()==0
-   page.locator('#video_input').fill('BV1xx411c7mD');expect(page.locator('#up-detect-field')).to_be_hidden()
+   expect(page.locator('#video-interval-field')).to_be_hidden()
+   expect(page.locator('#up-detect-field')).to_be_hidden()
+   page.locator('#video_input').fill('BV1xx411c7mD');expect(page.locator('#video-interval-field')).to_be_visible();expect(page.locator('#up-detect-field')).to_be_hidden()
+   page.locator('#video_input').fill('invalid');expect(page.locator('#video-interval-field')).to_be_hidden()
+   page.set_viewport_size({'width':760,'height':1000})
    page.locator('#video_input').fill('123');expect(page.locator('#up-detect-field')).to_be_visible()
+   expect(page.locator('#video-interval-field')).to_be_visible()
+   entry=page.locator('#video_input').bounding_box();video=page.locator('#interval_seconds').bounding_box();up_interval=page.locator('#up-detect').bounding_box()
+   assert video['y']>entry['y']+entry['height'] and up_interval['y']>entry['y']+entry['height']
+   assert video['x']+video['width']<=up_interval['x']
+   page.locator('#add-monitor-form').screenshot(path=str(Path(os.environ['TEMP'])/'bili-compact-entry-760.png'))
+   assert page.locator('#task-target-hint').count()==0
+   page.set_viewport_size({'width':360,'height':900})
+   assert page.locator('#add-monitor-form').evaluate('e=>e.scrollWidth<=e.clientWidth')
    page.locator('#interval_seconds').fill('60')
+   page.set_viewport_size({'width':1500,'height':1000})
    page.get_by_role('button',name='添加',exact=True).click();expect(page.locator('.up-monitor')).to_be_visible()
    assert not repo.list_tasks()
    assert page.locator('#up-monitors').evaluate('e=>e.previousElementSibling.querySelector("h2").textContent')=='任务列表'

@@ -1,7 +1,6 @@
 <section id="up-monitors" data-up-revision="{{ up_revision }}" data-monitor-count="{{ up_groups|length }}">
   <h2>UP主更新检测</h2>
-  <p class="muted">复用设置中的 Bilibili 登录态。首次只建基线；随后新稿分批自动采集，数量不设硬上限。暂停 UP 检测不停止已加入的视频任务。</p>
-  <p class="muted">在首页顶部统一添加 UP 或视频。<a href="/settings#bili-account">登录设置</a></p>
+  {% if not bili_login_saved %}<p class="muted">视频统计可直接采集，建议登录；UP 更新检测需要登录。<a href="/settings#bili-account">登录设置</a></p>{% endif %}
   {% for group in up_groups %}{% set monitor=group.monitor %}
   <details open class="chart-panel up-monitor" data-up-monitor-id="{{ monitor.id }}" data-chart-panel="up-{{ monitor.id }}">
     <summary>{{ monitor.up_name }} · UID {{ monitor.mid }} <span class="badge {{ 'running' if group.display=='正常' else ('stopped' if group.display=='停止' else 'interrupted') }}">{{ group.display }}</span></summary>
