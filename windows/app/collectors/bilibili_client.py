@@ -64,7 +64,7 @@ class BilibiliClient:
                     raise
                 except (httpx.TimeoutException, httpx.HTTPError, ValueError) as exc:
                     last_error = exc
-                    if attempt >= self.max_retries:
+                    if isinstance(exc,httpx.TransportError) or attempt >= self.max_retries:
                         break
                     await asyncio.sleep(2**attempt)
 
@@ -146,7 +146,7 @@ class BilibiliClient:
                     raise
                 except (httpx.TimeoutException, httpx.HTTPError) as exc:
                     last_error = exc
-                    if attempt >= self.max_retries:
+                    if isinstance(exc,httpx.TransportError) or attempt >= self.max_retries:
                         break
                     await asyncio.sleep(2**attempt)
 

@@ -61,7 +61,7 @@ async def account(action:str,request:Request):
 
 @router.get('/jobs/{bvid}')
 async def latest(bvid:str,request:Request):
-    local(request); return {'job':request.app.state.full_text.latest(bvid)}
+    local(request); return {'job':request.app.state.full_text.latest(bvid),'jobs':request.app.state.full_text.jobs(bvid)}
 
 
 @router.post('/jobs/{bvid}/{action}')

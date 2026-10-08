@@ -84,6 +84,8 @@ def create_app() -> FastAPI:
     up_monitor = UpMonitorService(repository, UpVideoProvider(client, bili_auth), video_service, crawl_service,
         settings.crawl.global_risk_cooldown_seconds, settings.crawl.failure_cooldown_seconds)
     scheduler.up_monitor = up_monitor
+    scheduler.full_text = full_text
+    crawl_service.full_text = full_text
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

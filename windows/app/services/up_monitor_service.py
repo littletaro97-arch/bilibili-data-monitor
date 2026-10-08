@@ -1,4 +1,5 @@
 """New-video discovery is separate from the existing statistics task scheduler."""
+from app.services.network_retry import network_retry_delay
 import sqlite3
 from urllib.parse import urlsplit
 from app.collectors.video_info import resolve_bvid
@@ -73,7 +74,7 @@ class UpMonitorService:
             self.store.cooldown_all("平台限制，共享 UP 请求通道冷却",self.risk_seconds)
             self.repo.add_log('WARNING','UP 检测触发平台限制，停止本轮并冷却',detail=f'UID {monitor["mid"]}')
         except AppError as exc:
-            self.store.fail(identity,str(exc),self.failure_seconds,getattr(exc,"kind","provider"))
+            self.store.fail(identity,str(exc),network_retry_delay(monitor["consecutive_failures"]+1) if getattr(exc,"kind",None) in {"network","timeout"} else self.failure_seconds,getattr(exc,"kind","provider"))
             self.repo.add_log('WARNING','UP 检测未完成，待加入项和基线保留',detail=str(exc))
         except Exception:
             self.store.fail(identity,"UP 检测出现异常，已延后重试",self.failure_seconds)

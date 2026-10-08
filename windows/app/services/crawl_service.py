@@ -8,6 +8,7 @@ from app.database import Repository, local_now, parse_iso
 from app.cover import safe_cover_url
 from app.logger import logger
 from app.models import ProviderError, RiskControlError
+from app.services.network_retry import network_retry_delay
 
 
 class CrawlService:
@@ -28,6 +29,7 @@ class CrawlService:
         self._semaphore = asyncio.Semaphore(max_concurrency)
         self._batch_size = max(4,max_concurrency*4)
         self._inflight: set[str] = set()
+        self.full_text = None
 
     async def collect_once(self, bvid: str, collection_source: str = "MANUAL", *, running_only: bool = False) -> bool:
         task = self.repository.get_task_by_bvid(bvid)
@@ -62,6 +64,9 @@ class CrawlService:
                 jitter = random.randint(0, self.schedule_jitter_seconds)
                 self.repository.mark_success(bvid, int(task["interval_seconds"]), jitter)
                 self.repository.add_log("INFO", "采集成功", bvid=bvid)
+                if self.full_text:
+                    try:await self.full_text.enqueue_tick(bvid)
+                    except Exception:self.repository.add_log("ERROR","统计已保存，但正文排队失败，请检查本地数据库",bvid=bvid)
                 logger.info("collected stats for %s", bvid)
                 return True
             except RiskControlError as exc:
@@ -80,7 +85,7 @@ class CrawlService:
                 self.repository.mark_failure(
                     bvid,
                     message,
-                    cooldown_seconds=self.failure_cooldown_seconds,
+                    cooldown_seconds=(network_retry_delay(current_task["consecutive_failures"]+1) if getattr(exc,"kind",None) in {"network","timeout"} else self.failure_cooldown_seconds),
                     failure_kind=getattr(exc,"kind","provider"),
                 )
                 self.repository.add_log("ERROR", "采集失败", bvid=bvid, detail=message)

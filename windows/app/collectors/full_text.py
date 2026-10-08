@@ -62,7 +62,7 @@ def comment(row, bvid, parent=None):
     if not identity:
         raise ProviderError('评论缺少平台 ID，进度未推进')
     member = row.get('member') or {}
-    return VideoComment(bvid,identity,parent, user_name=str(member.get('uname') or ''),
+    return VideoComment(bvid,identity,parent, user_mid=int(member['mid']) if str(member.get('mid') or '').isdigit() else None, user_name=str(member.get('uname') or ''),
         message=str((row.get('content') or {}).get('message') or ''),
         like_count=int(row.get('like') or 0),reply_count=int(row.get('rcount') or 0),ctime=int(row.get('ctime') or 0))
 

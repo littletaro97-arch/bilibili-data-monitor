@@ -10,6 +10,7 @@ class TaskScheduler:
     def __init__(self, crawl_service: CrawlService):
         self.crawl_service = crawl_service
         self.up_monitor = None
+        self.full_text = None
         self.scheduler = AsyncIOScheduler(timezone=get_localzone())
 
     def start(self) -> None:
@@ -18,13 +19,15 @@ class TaskScheduler:
         self.scheduler.add_job(
             self.crawl_service.run_due_tasks,
             "interval",
-            seconds=10,
+            seconds=1,
             id="run_due_crawl_tasks",
             max_instances=1,
             coalesce=True,
         )
         if self.up_monitor:
-            self.scheduler.add_job(self.up_monitor.run_due, "interval", seconds=10, id="run_due_up_monitors", max_instances=1, coalesce=True)
+            self.scheduler.add_job(self.up_monitor.run_due, "interval", seconds=1, id="run_due_up_monitors", max_instances=1, coalesce=True)
+        if self.full_text:
+            self.scheduler.add_job(self.full_text.pump,"interval",seconds=1,id="run_text_queue",max_instances=1,coalesce=True)
         self.scheduler.start()
 
     def shutdown(self) -> None:

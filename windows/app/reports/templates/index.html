@@ -81,7 +81,7 @@ targetInput.addEventListener('input',previewTarget);previewTarget();
 window.addEventListener('pagehide',()=>{clearTimeout(previewTimer);previewRequest?.abort();},{once:true});
 const intervalDialog=document.createElement('dialog');
 intervalDialog.className='interval-dialog';intervalDialog.setAttribute('aria-label','修改采集时间');
-intervalDialog.innerHTML='<form method="post"><h2>修改采集时间</h2><label for="task-interval">视频统计采集间隔（秒）</label><input id="task-interval" name="interval_seconds" type="number" step="1" min="{{ min_interval }}" max="31536000" required><p class="muted">保存后按新间隔安排下一次采集，评论和弹幕不受此设置影响。</p><div class="actions"><button type="submit">保存</button><button type="button" class="secondary" data-interval-cancel>取消</button></div></form>';
+intervalDialog.innerHTML='<form method="post"><h2>修改采集时间</h2><label for="task-interval">视频统计采集间隔（秒）</label><input id="task-interval" name="interval_seconds" type="number" step="1" min="{{ min_interval }}" max="31536000" required><p class="muted">保存后按新间隔安排下一次采集，正文同步安排，未完成的上一轮持续采集。</p><div class="actions"><button type="submit">保存</button><button type="button" class="secondary" data-interval-cancel>取消</button></div></form>';
 document.body.append(intervalDialog);
 intervalDialog.querySelector('[data-interval-cancel]').onclick=()=>window.bllaMotion.closeDialog(intervalDialog);
 for(const button of document.querySelectorAll('[data-interval-edit]'))button.onclick=()=>{

@@ -261,6 +261,7 @@ def test_login_and_job_frontend(tmp_path):
         async def logout(self):status.update(saved=False,name='',message='尚未登录')
     current={'job':None};calls=[]
     class Service:
+        def jobs(self,bvid):return [current['job']] if current['job'] else []
         lock=asyncio.Lock()
         def idle(self):pass
         def latest(self,bvid):return current['job']

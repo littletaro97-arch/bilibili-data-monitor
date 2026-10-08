@@ -251,7 +251,9 @@ async def add_task(
 
 @router.post("/tasks/{task_id}/pause")
 async def pause_task(request: Request, task_id: int):
+    task=request.app.state.repository.get_task(task_id)
     request.app.state.video_service.pause_task(task_id)
+    if task:await request.app.state.full_text.cancel_video(task['bvid'])
     return _flash_redirect("/", "任务已暂停")
 
 
