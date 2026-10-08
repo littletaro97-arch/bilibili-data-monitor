@@ -1,0 +1,13 @@
+{
+  "result": "PASS_WITH_ANONYMOUS_API_LIMITATION",
+  "installed_version": "0.13.0.1",
+  "new_version": "0.14.0.1",
+  "updater_source": "actual registered installation frozen updater",
+  "selection_metadata": "GitHub API through gh; official metadata supplied to old checker without exposing token",
+  "selection_using_old_updater_pass": true,
+  "anonymous_api_status": 403,
+  "public_download_no_credentials_sha256_verified": true,
+  "bytes": 50971151,
+  "sha256": "197fef6dff7f59d69eb26d80f7df4f4e8312450fac7b94fc637d8dcb7c3188ea",
+  "release_url": "https://github.com/littletaro97-arch/bilibili-data-monitor/releases/tag/windows-v0.14.0-installer.1"
+}
