@@ -1,0 +1,19 @@
+{
+  "result": "PASS",
+  "checks": [
+    "fresh-install-payload-matches-scanned-staging",
+    "fresh-install",
+    "homepage-settings-plotly",
+    "packaged-server-headless",
+    "report-export-config-write",
+    "upgrade-reinstall-original-directory-payload-matches-scanned-staging",
+    "upgrade-reinstall-original-directory",
+    "uninstall",
+    "all-user-data-retained"
+  ],
+  "visual_wizard_verification": "Not performed; independent AppId and headless server validation",
+  "validation_mode": "Same payload and installer configuration; separate test AppId protects registered production installation",
+  "production_source_commit": "d2aa017a2b76a38b6c5154c84e6bcb4463e63727",
+  "unit_tests_passed": 235,
+  "gui_subsystem": 2
+}
