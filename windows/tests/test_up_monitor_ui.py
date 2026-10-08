@@ -35,8 +35,12 @@ def test_up_home_group_move_modal_motion_and_report_delete(tmp_path,monkeypatch)
   try:
    page=browser.new_page(viewport={'width':1500,'height':1000});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
    page.add_init_script('''window.motionCalls=[];const animate=Element.prototype.animate;Element.prototype.animate=function(frames,options){motionCalls.push({tag:this.tagName,options});return animate.call(this,frames,options);};''')
-   page.goto(base+'/');page.locator('#up-input').fill('123');page.locator('#up-video-interval').fill('60')
-   page.get_by_role('button',name='添加 UP',exact=True).click();expect(page.locator('.up-monitor')).to_be_visible()
+   page.goto(base+'/')
+   assert page.locator('#add-monitor-form').count()==1 and page.locator('#up-monitors form[action="/up-monitors"]').count()==0
+   page.locator('#video_input').fill('BV1xx411c7mD');expect(page.locator('#up-detect-field')).to_be_hidden()
+   page.locator('#video_input').fill('123');expect(page.locator('#up-detect-field')).to_be_visible()
+   page.locator('#interval_seconds').fill('60')
+   page.get_by_role('button',name='添加',exact=True).click();expect(page.locator('.up-monitor')).to_be_visible()
    assert not repo.list_tasks()
    assert page.locator('#up-monitors').evaluate('e=>e.previousElementSibling.querySelector("h2").textContent')=='任务列表'
    assert page.locator('#up-monitors').evaluate('e=>e.nextElementSibling.querySelector("h2").textContent')=='其它设备访问'

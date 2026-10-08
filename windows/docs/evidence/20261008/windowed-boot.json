@@ -1,0 +1,10 @@
+{
+  "console_before": false,
+  "console_after": false,
+  "streams_ready": true,
+  "uvicorn_logging_ready": true,
+  "result": "PASS",
+  "pe_subsystem": 2,
+  "launch_creationflags": 0,
+  "scope": "Temporary GUI boot probe using actual launcher stream initialization; not a product installer"
+}

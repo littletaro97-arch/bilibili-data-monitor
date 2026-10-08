@@ -8,7 +8,7 @@ import socket
 import threading
 import time
 
-from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi import APIRouter, File, Form, Request, UploadFile, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 import plotly
 import httpx
@@ -217,10 +217,20 @@ async def add_task(
     request: Request,
     video_input: str = Form(...),
     interval_seconds: int = Form(settings.crawl.default_interval),
+    detect_interval: int = Form(300),
 ):
     try:
-        bvid = await request.app.state.video_service.add_video_task(video_input, interval_seconds)
+        from app.collectors.task_target import resolve_target
+        kind,target=await resolve_target(video_input)
+        if kind=="up":
+            from app.ui.full_text_api import local
+            local(request)
+            await request.app.state.up_monitor.add(target,detect_interval,interval_seconds)
+            return _flash_redirect("/#up-monitors","已识别为 UP，首次建立基线，不补录旧视频")
+        bvid = await request.app.state.video_service.add_video_task(target, interval_seconds)
         return _flash_redirect("/", f"视频任务已添加：{bvid}")
+    except HTTPException:
+        raise
     except AppError as exc:
         return _flash_redirect("/", str(exc), "error")
     except Exception as exc:

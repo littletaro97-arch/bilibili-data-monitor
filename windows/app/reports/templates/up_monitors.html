@@ -1,13 +1,7 @@
 <section id="up-monitors" data-up-revision="{{ up_revision }}" data-monitor-count="{{ up_groups|length }}">
   <h2>UP主更新检测</h2>
   <p class="muted">复用设置中的 Bilibili 登录态。首次只建基线；随后新稿分批自动采集，数量不设硬上限。暂停 UP 检测不停止已加入的视频任务。</p>
-  <form method="post" action="/up-monitors" class="row up-add-form">
-    <div><label for="up-input">UP UID、空间链接或视频链接</label><input id="up-input" name="up_input" required placeholder="UID 或 UP 主空间链接"></div>
-    <div><label for="up-detect">UP 检测间隔（秒，最低 120）</label><input id="up-detect" name="detect_interval" type="number" min="120" max="31536000" required value="{{ up_detect_interval }}"></div>
-    <div><label for="up-video-interval">新视频采集间隔（秒）</label><input id="up-video-interval" name="video_interval" type="number" min="{{ min_interval }}" max="31536000" required value="{{ up_video_interval }}"></div>
-    <button type="submit">添加 UP</button>
-  </form>
-  <p class="muted">添加成功后，这两个间隔会作为后续新增 UP 的默认值。<a href="/settings#bili-account">登录设置</a></p>
+  <p class="muted">在首页顶部统一添加 UP 或视频。<a href="/settings#bili-account">登录设置</a></p>
   {% for group in up_groups %}{% set monitor=group.monitor %}
   <details open class="chart-panel up-monitor" data-up-monitor-id="{{ monitor.id }}" data-chart-panel="up-{{ monitor.id }}">
     <summary>{{ monitor.up_name }} · UID {{ monitor.mid }} <span class="badge {{ 'running' if group.display=='正常' else ('stopped' if group.display=='停止' else 'interrupted') }}">{{ group.display }}</span></summary>

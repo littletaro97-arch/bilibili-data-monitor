@@ -19,12 +19,15 @@ def main() -> int:
     parser.add_argument("--server", action="store_true")
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
+    _ensure_stdio()
 
     if args.server:
+        if load_settings().launcher.show_console:_ensure_visible_console()
         from app.main import main as server_main
         server_main()
         return 0
     if args.no_browser:
+        if load_settings().launcher.show_console:_ensure_visible_console()
         from app.main import main as server_main
         server_main(desktop=False)
         return 0
@@ -41,6 +44,7 @@ def main() -> int:
 
 
 def _run_visible() -> int:
+    _ensure_visible_console()
     current = load_settings()
     url = _local_url(current.app.port)
     if _port_is_open(current.app.port):
@@ -146,11 +150,39 @@ def _creationflags(*, hidden: bool = False, detached: bool = False) -> int:
     if os.name != "nt":
         return 0
     flags = 0
-    if hidden:
-        flags |= subprocess.CREATE_NO_WINDOW
     if detached:
         flags |= subprocess.DETACHED_PROCESS
+    elif hidden:
+        flags |= subprocess.CREATE_NO_WINDOW
     return flags
+
+
+def _ensure_stdio() -> None:
+    # A windowed PyInstaller executable sets Python streams to None, including
+    # child launches with redirected OS handles. Uvicorn/logging need live streams.
+    if sys.stdout is None or sys.stderr is None:
+        directory=RUNTIME_DIR / 'logs';directory.mkdir(parents=True,exist_ok=True)
+        stream=(directory / 'launcher.log').open('a',encoding='utf-8',buffering=1)
+        if sys.stdout is None:sys.stdout=stream
+        if sys.stderr is None:sys.stderr=stream
+    if sys.stdin is None:sys.stdin=open(os.devnull,'r',encoding='utf-8')
+
+
+def _ensure_visible_console() -> None:
+    if os.name!='nt':return
+    import ctypes
+    from ctypes import wintypes
+    kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+    kernel.GetConsoleWindow.restype=wintypes.HWND
+    kernel.AttachConsole.argtypes=[wintypes.DWORD]
+    kernel.AttachConsole.restype=wintypes.BOOL
+    kernel.AllocConsole.restype=wintypes.BOOL
+    if not kernel.GetConsoleWindow():
+        if not kernel.AttachConsole(ctypes.c_uint(-1)) and not kernel.AllocConsole():
+            return  # Keep file logging if Windows cannot create/attach a console.
+    sys.stdin=open('CONIN$','r',encoding='utf-8')
+    sys.stdout=open('CONOUT$','w',encoding='utf-8',buffering=1)
+    sys.stderr=sys.stdout
 
 
 def _pause() -> None:
