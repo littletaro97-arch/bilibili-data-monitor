@@ -19,3 +19,7 @@ Android data-display release using `versionName 0.12.0` / `versionCode 20`. Room
 ## v0.12.1
 
 Android hotfix release using `versionName 0.12.1` / `versionCode 21`. Room remains v4 and history exchange remains `formatVersion=1`. The selected-video history Flow now moves absolute-time ordering to `Dispatchers.Default`, so list conversion cannot run on the Compose collection thread.
+
+## Windows 0.14.0
+
+Windows-only feature release, package identity 0.14.0.1 and tag windows-v0.14.0-installer.1. Android version and history-exchange format remain unchanged. Includes the accepted UP monitoring, recovery, recycle, responsive interface and windowed-launch changes since Windows 0.13.0.
