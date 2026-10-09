@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from app.database import Repository
-from app.models import ProviderError, RiskControlError, LoginRequiredError, RequestFailure
+from app.models import ProviderError, RiskControlError, LoginRequiredError, RequestFailure, CommentUnavailableError
 
 
 RISK_STATUS_CODES = {403, 412, 429}
@@ -107,6 +107,8 @@ class BilibiliClient:
                             raise LoginRequiredError('登录已失效，请重新扫码登录')
                         if payload.get('code') in {403,412,-403,-412,-352,-111}:
                             raise RiskControlError('平台限制或登录失效，任务已停止')
+                        if payload.get('code') == 12006 and target.path == '/x/v2/reply/reply':
+                            raise CommentUnavailableError('楼中楼对应的根评论已不可见')
                         if payload.get("code") != 0:
                             raise ProviderError(f"平台接口失败：code={payload.get('code')}；任务未完成")
                         if binary:

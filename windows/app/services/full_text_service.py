@@ -7,7 +7,7 @@ import uuid
 import hashlib
 
 from app.database import iso_now
-from app.models import ProviderError, RiskControlError, LoginRequiredError, RequestFailure
+from app.models import ProviderError, RiskControlError, LoginRequiredError, RequestFailure, CommentUnavailableError
 from app.services.network_retry import network_retry_delay
 from app.collectors.full_text import comment
 
@@ -35,6 +35,16 @@ class FullTextService:
                 AND coalesce(json_extract(state,'$.manual_pause'),0)=0
                 AND coalesce(json_extract(state,'$.metadata_compat_retry'),0)=0""")
 
+            # Retry the old blocked checkpoint once; the typed endpoint result decides whether to skip.
+            c.execute("""UPDATE text_jobs SET status='queued',message='从原评论断点重试',
+                state=json_set(state,'$.failure_kind',NULL,'$.unavailable_compat_retry',1)
+                WHERE kind='comments' AND status='paused'
+                AND message='平台接口失败：code=12006；任务未完成'
+                AND json_extract(state,'$.automatic')=1
+                AND coalesce(json_extract(state,'$.manual_pause'),0)=0
+                AND json_extract(state,'$.pending') IS NOT NULL
+                AND coalesce(json_extract(state,'$.unavailable_compat_retry'),0)=0""")
+
     def load(self,identity):
         with self.db.connect() as c:
             r=c.execute('SELECT * FROM text_jobs WHERE id=?',(identity,)).fetchone()
@@ -54,7 +64,7 @@ class FullTextService:
             'scope':s.get('scope'),'parts':s.get('parts',[]),'part_index':s.get('part_index',0),
             'saved_existing':max(0,s.get('received',0)-s.get('saved_new',0)-s.get('legacy_received',s.get('received',0) if job['kind']=='comments' and not s.get('counts_version') else 0)),
             'legacy_received':s.get('legacy_received',s.get('received',0) if job['kind']=='comments' and not s.get('counts_version') else 0),
-            'automatic':s.get('automatic',False),'failure_kind':s.get('failure_kind'),
+            'automatic':s.get('automatic',False),'failure_kind':s.get('failure_kind'),'unavailable_roots':s.get('unavailable_roots',0),
             'segment':s.get('segment',1),'retry_after':max(0,math.ceil(s.get('retry_at',0)-time.time()))}
 
     def save(self,j):
@@ -90,6 +100,7 @@ class FullTextService:
                 previous=self.latest_kind(bvid,kind)
                 if previous and previous['status']!='complete':
                     state=previous['state']
+                    if state.get('queued_manual'):continue
                     if state.get('automatic') and previous['status'] in {'queued','running','retry_wait','waiting_login'}:continue
                     if state.get('manual_pause') or state.get('failure_kind') in {'parse','provider','http','account'}:continue
                     # Legacy manual network/budget/startup pauses can resume at the same checkpoint.
@@ -123,16 +134,18 @@ class FullTextService:
             try:self.check_cooldown()
             except ProviderError:return
             with self.db.connect() as c:
-                rows=c.execute("""SELECT j.id FROM text_jobs j JOIN crawl_tasks t ON t.bvid=j.bvid
-                    WHERE t.status='running' AND j.status IN ('queued','retry_wait','waiting_login','paused')
-                    AND json_extract(j.state,'$.automatic')=1
+                rows=c.execute("""SELECT j.id FROM text_jobs j LEFT JOIN crawl_tasks t ON t.bvid=j.bvid
+                    WHERE j.status IN ('queued','retry_wait','waiting_login','paused')
+                    AND ((json_extract(j.state,'$.automatic')=1 AND t.status='running')
+                        OR (json_extract(j.state,'$.queued_manual')=1 AND coalesce(t.status,'')!='stopped'))
                     AND coalesce(json_extract(j.state,'$.manual_pause'),0)=0
                     AND coalesce(json_extract(j.state,'$.failure_kind'),'') NOT IN ('parse','provider','http','account')
                     AND coalesce(json_extract(j.state,'$.retry_at'),0)<=?
                     ORDER BY j.updated,j.rowid LIMIT 1""",(time.time(),)).fetchall()
             for row in rows:
                 job=self.load(row['id']);state=job['state'];task=self.repo.get_task_by_bvid(job['bvid'])
-                if not task or task['status']!='running' or state.get('manual_pause') or state.get('failure_kind') in {'parse','provider','http','account'}:continue
+                if state.get('manual_pause') or state.get('failure_kind') in {'parse','provider','http','account'}:continue
+                if not state.get('queued_manual') and (not task or task['status']!='running'):continue
                 if job['status']=='paused' and state.get('failure_kind') not in {None,'risk','network','timeout'}:continue
                 job['status']='running';job['message']='正在从断点继续';self.save(job);self.launch(job);break
 
@@ -179,7 +192,6 @@ class FullTextService:
 
     async def start(self,bvid,kind,scope,cid,*,continuous=False):
         async with self.lock:
-            self.idle()
             self.check_cooldown()
             if kind not in {'comments','danmaku'} or scope not in {'selected','all'}: raise ProviderError('采集参数不正确')
             self.ensure_video(bvid)
@@ -202,16 +214,29 @@ class FullTextService:
             self.save(j)
             self.repo.record_text_collection(bvid,kind,{'parts':selected,'total_parts':len(parts),'scope':scope,
                 'authenticated':True,'complete':False,'interrupted':True,'job':j['id']})
-            self.launch(j); return self.public(j)
+            self.dispatch_manual(j); return self.public(j)
+
+    def dispatch_manual(self,j):
+        if self.task and not self.task.done():
+            j['state']['queued_manual']=True
+            j['status']='queued';j['message']='等待正文通道空闲后从断点采集'
+            self.save(j)
+        else:self.launch(j)
 
     def launch(self,j):
+        if j['state'].pop('queued_manual',False):
+            j['state']['verify_dispatch']=True;self.save(j)
         self.active=j['id']; self._running_job=j
         if not j['state'].get('automatic'):self.provider.keys=None
         self.task=asyncio.create_task(self.run(j))
 
     async def resume(self,identity,*,continuous=False):
         async with self.lock:
-            self.idle(); self.check_cooldown(); j=self.load(identity)
+            self.check_cooldown(); j=self.load(identity)
+            if self.task and not self.task.done() and identity==self.active:
+                return self.public(self._running_job)
+            if j['status']=='queued' and j['state'].get('queued_manual'):
+                return self.public(j)
             self.ensure_video(j['bvid'])
             if j['status']=='complete': raise ProviderError('接口遍历已经结束，可新建任务刷新')
             if j['state'].get('retry_at',0)>time.time(): raise ProviderError('平台限制冷却中，请稍后继续')
@@ -220,7 +245,7 @@ class FullTextService:
             if j['state'].get('owner') and j['state']['owner']!=self.auth.account: raise ProviderError('请使用创建该任务的 Bilibili 账户继续')
             if continuous:j['state']['continuous']=True
             j['state'].pop('manual_pause',None); j['state']['failure_kind']=None; j['state']['retry_at']=0
-            j['status']='running'; j['message']='从断点继续'; self.save(j); self.launch(j); return self.public(j)
+            j['status']='running'; j['message']='从断点继续'; self.save(j); self.dispatch_manual(j); return self.public(j)
 
     async def cancel(self,identity=None,*,shutdown=False):
         async with self.lock:
@@ -293,7 +318,17 @@ class FullTextService:
                 root=roots[pending['index']]
                 if not root['count'] or self.root_done(j['id'],root['id']):
                     pending['index']+=1; pending['page']=1; continue
-                d=await self.provider.children(s['aid'],root['id'],pending['page'])
+                try:
+                    d=await self.provider.children(s['aid'],root['id'],pending['page'])
+                except CommentUnavailableError:
+                    # An explicit missing-root response is not proof of deletion. Preserve all text.
+                    with self.db.connect() as c:
+                        c.execute("UPDATE comments SET visibility='unavailable',visibility_checked_at=? WHERE bvid=? AND rpid=?",
+                                  (iso_now(),bvid,root['id']))
+                    self.root_done(j['id'],root['id'],mark=True)
+                    s['unavailable_roots']=s.get('unavailable_roots',0)+1
+                    pending['index']+=1;pending['page']=1
+                    break
                 page=d.get('page') or {}; rows=d.get('replies') or []
                 if len(rows)>100: raise ProviderError('楼中楼单页过多，任务已暂停')
                 if 'count' not in page or int(page.get('num',0))!=pending['page'] or int(page.get('size',0))<=0:
@@ -320,7 +355,8 @@ class FullTextService:
     async def run(self,j):
         automatic=j['state'].get('automatic',False)
         try:
-            if automatic:await self.prepare_auto(j)
+            verify_dispatch=j['state'].pop('verify_dispatch',False)
+            if automatic or verify_dispatch:await self.prepare_auto(j)
             # Automatic work continues in four-response slices; explicit manual traversal stays bounded.
             limit=4 if automatic else (self.budget*40 if j['state'].get('continuous') else self.budget)
             for _ in range(limit):
@@ -375,7 +411,7 @@ class FullTextService:
             self.save(j)
             state=j['state']
             self.repo.add_log('INFO' if j['status'] in {'complete','queued'} else 'WARNING','正文采集批次结束',bvid=j['bvid'],
-                detail=f"{j['kind']} job={j['id']} status={j['status']} responses={state.get('responses',0)} received={state.get('received',0)} new={state.get('saved_new',0)} existing={self.public(j)['saved_existing']} failure={state.get('failure_kind') or '-'}")
+                detail=f"{j['kind']} job={j['id']} status={j['status']} responses={state.get('responses',0)} received={state.get('received',0)} new={state.get('saved_new',0)} existing={self.public(j)['saved_existing']} unavailable_roots={state.get('unavailable_roots',0)} failure={state.get('failure_kind') or '-'}")
 
     async def shutdown(self):
         await self.cancel(shutdown=True)

@@ -23,6 +23,11 @@ class ProviderError(AppError):
     pass
 
 
+class CommentUnavailableError(ProviderError):
+    """The child endpoint explicitly reports that its root is unavailable."""
+    pass
+
+
 class RequestFailure(ProviderError):
     def __init__(self, kind: str, message: str):
         self.kind = kind
