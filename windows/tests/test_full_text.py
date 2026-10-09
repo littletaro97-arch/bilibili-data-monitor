@@ -297,3 +297,16 @@ def test_login_and_job_frontend(tmp_path):
             assert not errors
             assert page.evaluate('document.documentElement.scrollWidth<=window.innerWidth')
         finally:browser.close()
+
+
+def test_metadata_only_segment_is_valid_but_unknown_and_closed_are_not():
+    msg=segment_message()();msg.ai_flag.SetInParent()
+    assert decode_segment(msg.SerializeToString(),BV,10)==[]
+    msg.ai_flag.dm_flags.add(dmid=123,flag=1)
+    assert decode_segment(msg.SerializeToString(),BV,10)==[]
+    msg.colorful.add()
+    assert decode_segment(msg.SerializeToString(),BV,10)==[]
+    msg.state=1
+    with pytest.raises(ProviderError,match='已关闭'):decode_segment(msg.SerializeToString(),BV,10)
+    with pytest.raises(ProviderError,match='可识别'):decode_segment(bytes([0x38,1]),BV,10)
+    with pytest.raises(ProviderError):decode_segment(bytes([0x1a,1,0xff]),BV,10)

@@ -45,3 +45,11 @@ async def test_unified_endpoint_dispatches_exact_kind_and_preserves_local_login_
  remote=TestClient(app,client=('192.168.1.2',9000),base_url='http://127.0.0.1')
  assert remote.post('/tasks',data={'video_input':'123'}).status_code==403
  assert up.await_count==1
+
+
+@pytest.mark.asyncio
+async def test_unified_link_preserves_explicit_first_page_and_short_redirect():
+    expected=('video','https://www.bilibili.com/video/BV1xx411c7mD/?p=1')
+    assert await resolve_target(expected[1])==expected
+    transport=httpx.MockTransport(lambda req:httpx.Response(302,headers={'Location':expected[1]}))
+    assert await resolve_target('https://b23.tv/Test123',transport=transport)==expected

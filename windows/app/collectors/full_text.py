@@ -31,8 +31,18 @@ def segment_message():
     elem = f.message_type.add(name='Elem')
     for name,number,kind in [('id',1,3),('progress',2,5),('mode',3,5),('fontsize',4,5),('color',5,13),('midHash',6,9),('content',7,9),('ctime',8,3),('weight',9,5),('idStr',12,9)]:
         elem.field.add(name=name,number=number,type=kind,label=1)
+    flag=f.message_type.add(name='Flag')
+    flag.field.add(name='dmid',number=1,type=3,label=1)
+    flag.field.add(name='flag',number=2,type=13,label=1)
+    ai=f.message_type.add(name='AIFlag')
+    ai.field.add(name='dm_flags',number=1,type=11,label=3,type_name='.monitor.Flag')
+    # Colorful metadata is not used for analysis, but its message envelope is recognized.
+    f.message_type.add(name='Colorful')
     reply = f.message_type.add(name='Reply')
     reply.field.add(name='elems',number=1,type=11,label=3,type_name='.monitor.Elem')
+    reply.field.add(name='state',number=2,type=5,label=1)
+    reply.field.add(name='ai_flag',number=3,type=11,label=1,type_name='.monitor.AIFlag')
+    reply.field.add(name='colorful',number=5,type=11,label=3,type_name='.monitor.Colorful')
     pool = descriptor_pool.DescriptorPool(); pool.Add(f)
     return message_factory.GetMessageClass(pool.FindMessageTypeByName('monitor.Reply'))
 
@@ -43,7 +53,10 @@ def decode_segment(content, bvid, cid):
         response = segment_message()(); response.ParseFromString(content)
     except DecodeError:
         raise ProviderError('弹幕分段解析失败，进度未推进') from None
-    if content and not response.elems and response.SerializeToString() != b'':
+    if response.state:
+        raise ProviderError('当前分 P 弹幕已关闭或返回未知状态，进度保留')
+    recognized=bool(response.ListFields())
+    if content and not response.elems and not recognized and response.SerializeToString() != b'':
         # Nonempty unknown-only messages are not evidence of a valid empty segment.
         raise ProviderError('弹幕分段缺少可识别字段，进度未推进')
     if len(response.elems) > 50000:

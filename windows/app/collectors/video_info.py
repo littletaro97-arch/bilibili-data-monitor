@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 import httpx
 
 from app.models import InvalidBvidError
@@ -22,9 +22,25 @@ def parse_bvid(text: str) -> str:
     return match.group(1)
 
 
+def selected_page(text: str) -> int | None:
+    match = re.search(r'https?://[^\s<>]+', text or '', re.I)
+    if not match:return None
+    parsed=urlsplit(match[0]);host=parsed.hostname or ''
+    if not (host=='bilibili.com' or host.endswith('.bilibili.com')) or '/video/' not in parsed.path:return None
+    values=parse_qs(parsed.query,keep_blank_values=True).get('p')
+    if values is None:return None
+    if len(values)!=1 or not values[0].isdigit() or not 1<=int(values[0])<=1000:
+        raise InvalidBvidError('视频分 P 参数应为 1 至 1000 的整数')
+    return int(values[0])
+
+
 async def resolve_bvid(text: str, *, transport=None) -> str:
+    return (await resolve_video_target(text,transport=transport))[0]
+
+
+async def resolve_video_target(text: str, *, transport=None) -> tuple[str,int | None]:
     try:
-        return parse_bvid(text)
+        return parse_bvid(text),selected_page(text)
     except InvalidBvidError:
         match = re.search(r"(?<![\w./])(?:https?://)?b23\.tv/([A-Za-z0-9]+)(?![\w/])", text or "")
         if not match:
@@ -40,7 +56,7 @@ async def resolve_bvid(text: str, *, transport=None) -> str:
                 ):
                     raise InvalidBvidError("短链跳转到不支持的地址")
                 if host != "b23.tv":
-                    return parse_bvid(url)
+                    return parse_bvid(url),selected_page(url)
                 response = await client.get(url)
                 if not response.is_redirect or response.next_request is None:
                     raise InvalidBvidError("短链没有跳转到有效视频，请使用完整视频链接")

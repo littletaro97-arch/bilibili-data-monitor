@@ -84,39 +84,56 @@ intervalDialog.className='interval-dialog';intervalDialog.setAttribute('aria-lab
 intervalDialog.innerHTML='<form method="post"><h2>修改采集时间</h2><label for="task-interval">视频统计采集间隔（秒）</label><input id="task-interval" name="interval_seconds" type="number" step="1" min="{{ min_interval }}" max="31536000" required><p class="muted">保存后按新间隔安排下一次采集，正文同步安排，未完成的上一轮持续采集。</p><div class="actions"><button type="submit">保存</button><button type="button" class="secondary" data-interval-cancel>取消</button></div></form>';
 document.body.append(intervalDialog);
 intervalDialog.querySelector('[data-interval-cancel]').onclick=()=>window.bllaMotion.closeDialog(intervalDialog);
-for(const button of document.querySelectorAll('[data-interval-edit]'))button.onclick=()=>{
+document.addEventListener('click',e=>{const button=e.target.closest('[data-interval-edit]');if(!button)return;
   intervalDialog.querySelector('form').action=`/tasks/${button.dataset.taskId}/interval`;
   const input=intervalDialog.querySelector('input');input.value=button.dataset.interval;
   window.bllaMotion.showDialog(intervalDialog);input.select();
-};
+});
 const upRoot=document.getElementById('up-monitors');
 if(Number(upRoot.dataset.monitorCount)>0){
   let upTimer;
-  const dirty=()=>[...document.querySelectorAll('main input,main textarea,main select')].some(e=>e.matches('input[type=checkbox]')?e.checked!==e.defaultChecked:e.value!==e.defaultValue && !e.matches('select'));
+  async function updateUpItems(){
+    const response=await fetch('/?up_fragment=true',{cache:'no-store'});
+    if(!response.ok)throw Error('UP 列表刷新失败');
+    const next=new DOMParser().parseFromString(await response.text(),'text/html').querySelector('#up-monitors');
+    if(!next)throw Error('UP 列表响应异常');
+    const anchor=[...document.querySelectorAll('[data-detail-url]')].find(e=>e.getBoundingClientRect().bottom>0);
+    const top=anchor?.getBoundingClientRect().top, y=scrollY, anchorUrl=anchor?.dataset.detailUrl;
+    for(const group of next.querySelectorAll('[data-up-monitor-id]')){
+      const current=upRoot.querySelector(`[data-up-monitor-id="${group.dataset.upMonitorId}"]`);
+      if(!current)continue;
+      for(const selector of ['[data-up-items]','[data-up-status]',':scope > summary .badge']){
+        const old=current.querySelector(selector),fresh=group.querySelector(selector);
+        if(old && fresh)old.replaceWith(fresh);
+      }
+    }
+    upRoot.dataset.upRevision=next.dataset.upRevision;
+    const restored=anchor?.isConnected?anchor:[...document.querySelectorAll('[data-detail-url]')].find(e=>e.dataset.detailUrl===anchorUrl);
+    scrollTo({top:restored?scrollY+restored.getBoundingClientRect().top-top:y,behavior:'instant'});
+  }
   async function refreshUp(){
     try{
       if(!document.hidden && !(typeof panelHidden==='function' && await panelHidden())){
         const response=await fetch('/api/up-monitors/status',{cache:'no-store'});
         if(response.ok){const state=await response.json();
           for(const [id,text] of Object.entries(state.checked)){const label=document.querySelector(`[data-up-checked="${id}"]`);if(label)label.textContent=text;}
-          const editing=document.activeElement?.matches('input,textarea,select')||document.querySelector('dialog[open]')||dirty()||window.getSelection().toString();
-          if(state.revision!==upRoot.dataset.upRevision && !editing){window.bllaNavigate.reload();return;}
+          if(state.revision!==upRoot.dataset.upRevision && !document.querySelector('dialog[open]'))await updateUpItems();
         }
       }
     }catch{}
-    upTimer=setTimeout(refreshUp,60000);
+    upTimer=setTimeout(refreshUp,15000);
   }
-  upTimer=setTimeout(refreshUp,60000);window.addEventListener('pagehide',()=>clearTimeout(upTimer),{once:true});
+  upTimer=setTimeout(refreshUp,15000);window.addEventListener('pagehide',()=>clearTimeout(upTimer),{once:true});
 }
-for(const card of document.querySelectorAll('[data-detail-url]')){
-  const interactive=target=>target.closest('a,button,form,input,select,textarea,label,[role="button"],.task-foot');
-  card.addEventListener('click',e=>{
-    if(interactive(e.target)||window.getSelection().toString()||e.button!==0)return;
-    window.bllaNavigate.go(window.bllaDetailUrl(new URL(card.dataset.detailUrl,location.href).href),card.querySelector('.task-title'));
-  });
-  card.addEventListener('keydown',e=>{
-    if(e.target===card && e.key==='Enter'){e.preventDefault();window.bllaNavigate.go(window.bllaDetailUrl(new URL(card.dataset.detailUrl,location.href).href),card.querySelector('.task-title'));}
-  });
-}
+const interactive=target=>target.closest('a,button,form,input,select,textarea,label,[role="button"],.task-foot');
+document.addEventListener('click',e=>{
+  const card=e.target.closest('[data-detail-url]');
+  if(!card||interactive(e.target)||window.getSelection().toString()||e.button!==0)return;
+  window.bllaNavigate.go(window.bllaDetailUrl(new URL(card.dataset.detailUrl,location.href).href),card.querySelector('.task-title'));
+});
+document.addEventListener('keydown',e=>{
+  const card=e.target.closest('[data-detail-url]');
+  if(card && e.target===card && e.key==='Enter'){e.preventDefault();window.bllaNavigate.go(window.bllaDetailUrl(new URL(card.dataset.detailUrl,location.href).href),card.querySelector('.task-title'));}
+});
 </script>
 {% endblock %}

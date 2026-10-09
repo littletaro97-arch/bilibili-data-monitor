@@ -27,6 +27,13 @@ class FullTextService:
                 CREATE INDEX IF NOT EXISTS idx_text_job_status ON text_jobs(status,updated);
                 CREATE INDEX IF NOT EXISTS idx_dm_platform ON danmaku(bvid,cid,source_id);''')
             c.execute("UPDATE text_jobs SET status='paused',message='程序退出，点击继续可恢复断点' WHERE status='running'")
+            # One compatibility retry for jobs stopped by the old metadata-only guard.
+            c.execute("""UPDATE text_jobs SET status='queued',message='解析兼容更新后，从原分段重试',
+                state=json_set(state,'$.failure_kind',NULL,'$.metadata_compat_retry',1)
+                WHERE kind='danmaku' AND status='paused' AND message='弹幕分段缺少可识别字段，进度未推进'
+                AND json_extract(state,'$.automatic')=1
+                AND coalesce(json_extract(state,'$.manual_pause'),0)=0
+                AND coalesce(json_extract(state,'$.metadata_compat_retry'),0)=0""")
 
     def load(self,identity):
         with self.db.connect() as c:
@@ -96,7 +103,7 @@ class FullTextService:
                         previous['status']='queued';previous['message']='下次调度从原断点继续'
                     self.save(previous);continue
                 state={'automatic':True,'owner':None,'aid':None,'parts':[],'total_parts':0,
-                       'scope':'all' if kind=='danmaku' else 'shared','part_index':0,'segment':1,
+                       'scope':('selected' if task['selected_page'] else 'all') if kind=='danmaku' else 'shared','selected_page':task['selected_page'] if kind=='danmaku' else None,'part_index':0,'segment':1,
                        'offset':'','pending':None,'responses':0,'received':0,'saved_new':0,
                        'continuous':True,'counts_version':1,'scheduled_at':iso_now()}
                 job={'id':uuid.uuid4().hex,'bvid':bvid,'kind':kind,'status':'queued' if self.auth.cookies else 'waiting_login',
@@ -141,7 +148,11 @@ class FullTextService:
             raise RequestFailure('account','登录账户已改变，请手动确认或新建正文任务')
         s['owner']=self.auth.account
         if not s.get('aid') or not s.get('parts'):
-            aid,parts=await self.provider.view(j['bvid']);s['aid']=aid;s['parts']=parts;s['total_parts']=len(parts)
+            aid,parts=await self.provider.view(j['bvid']);s['aid']=aid;s['total_parts']=len(parts)
+            if j['kind']=='danmaku' and s.get('selected_page'):
+                parts=[p for p in parts if p['page']==s['selected_page']]
+                if not parts:raise ProviderError('链接指定的分 P 不存在，正文任务已暂停')
+            s['parts']=parts
         self.save(j)
 
     def save_comments(self,j,rows):
@@ -178,7 +189,11 @@ class FullTextService:
             if not self.auth.cookies: raise ProviderError('请先在设置中登录 Bilibili')
             await self.auth.validate()
             aid,parts=await self.provider.view(bvid)
+            task=self.repo.get_task_by_bvid(bvid)
+            page=task['selected_page'] if task else None
             selected=parts if kind=='comments' or scope=='all' else [p for p in parts if p['cid']==cid]
+            if kind=='danmaku' and page:
+                selected=[p for p in parts if p['page']==page];scope='selected'
             if not selected: raise ProviderError('所选 P 不属于该视频，请先读取分 P 列表')
             j={'id':uuid.uuid4().hex,'bvid':bvid,'kind':kind,'status':'running','message':'正在采集',
                 'state':{'owner':self.auth.account,'aid':aid,'parts':selected,'total_parts':len(parts),

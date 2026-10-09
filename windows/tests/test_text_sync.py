@@ -177,3 +177,46 @@ async def test_new_logged_out_job_can_resume_after_login(tmp_path):
     p.roots=AsyncMock(return_value={'replies':[],'cursor':{'is_end':True}})
     await s.resume(identity);await s.task
     assert s.load(identity)['status']=='complete'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('page',[1,2])
+async def test_explicit_page_limits_auto_and_manual_danmaku_only(tmp_path,page):
+    from app.services.video_service import VideoService
+    repo,s,a,p=setup(tmp_path)
+    metadata=AsyncMock()
+    from app.models import VideoInfo
+    metadata.fetch_video_info.return_value=VideoInfo(BV,aid=123,cid=10)
+    video=VideoService(repo,metadata,60,300,10)
+    await video.add_video_task(f'https://www.bilibili.com/video/{BV}/?p={page}',60)
+    assert repo.get_task_by_bvid(BV)['selected_page']==page
+    from app.ui.pages import templates
+    controls=templates.get_template('full_text_controls.html').render(video={'bvid':BV},task=dict(repo.get_task_by_bvid(BV)))
+    assert f'仅任务 P{page}' in controls and '<option value="all">' not in controls
+    p.view.return_value=(123,[{'cid':10,'page':1,'duration':1,'name':'P1'},{'cid':11,'page':2,'duration':1,'name':'P2'}])
+    p.roots=AsyncMock(return_value={'replies':[],'cursor':{'is_end':True}})
+    await s.enqueue_tick(BV)
+    await s.pump();await s.task
+    await s.pump();await s.task
+    assert p.segment.await_count==1 and p.segment.call_args.args==(BV,9+page,1)
+    assert s.latest_kind(BV,'comments')['state']['total_parts']==2
+    await s.start(BV,'danmaku','all',10);await s.task
+    assert p.segment.await_count==2 and p.segment.call_args.args==(BV,9+page,1)
+    identity=repo.get_task_by_bvid(BV)['id'];repo.set_task_status(identity,'stopped');video.restore_task(identity)
+    assert repo.get_task_by_bvid(BV)['selected_page']==page
+
+
+def test_metadata_compatibility_retry_is_once_and_keeps_checkpoint(tmp_path):
+    import json
+    from app.services.full_text_service import FullTextService
+    repo,s,a,p=setup(tmp_path);active(repo)
+    job={'id':'metadata-old','bvid':BV,'kind':'danmaku','status':'paused','message':'弹幕分段缺少可识别字段，进度未推进',
+         'state':{'automatic':True,'failure_kind':'provider','part_index':1,'segment':1,'received':194}}
+    s.save(job)
+    restored=FullTextService(repo,p,a);current=restored.load(job['id'])
+    assert current['status']=='queued' and current['state']['part_index']==1 and current['state']['received']==194
+    current['status']='paused';current['message']=job['message'];current['state']['failure_kind']='provider';restored.save(current)
+    again=FullTextService(repo,p,a)
+    assert again.load(job['id'])['status']=='paused'
+    current['id']='manual';current['state']['manual_pause']=True;current['state'].pop('metadata_compat_retry');again.save(current)
+    assert FullTextService(repo,p,a).load('manual')['status']=='paused'

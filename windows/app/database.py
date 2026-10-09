@@ -184,6 +184,7 @@ class Database:
             conn.executescript(SCHEMA)
             _ensure_column(conn, "crawl_tasks", "failure_kind", "TEXT")
             _ensure_column(conn, "crawl_tasks", "automatic", "INTEGER NOT NULL DEFAULT 0")
+            _ensure_column(conn, "crawl_tasks", "selected_page", "INTEGER")
             _ensure_column(conn, "up_monitors", "scan_page", "INTEGER NOT NULL DEFAULT 1")
             _ensure_column(conn, "up_monitors", "scan_max_pubdate", "INTEGER")
             conn.execute("""UPDATE crawl_tasks SET automatic=1 WHERE automatic=0 AND (
@@ -235,7 +236,7 @@ class Repository:
                 ),
             )
 
-    def create_task(self, bvid: str, interval_seconds: int, min_interval: int, max_active: int | None, *, automatic: bool = False) -> int:
+    def create_task(self, bvid: str, interval_seconds: int, min_interval: int, max_active: int | None, *, automatic: bool = False, selected_page: int | None = None) -> int:
         if interval_seconds < min_interval:
             raise RateLimitError(f"采集间隔不得低于 {min_interval} 秒")
         if max_active is not None and self.count_active_tasks(manual_only=True) >= max_active:
@@ -252,10 +253,10 @@ class Repository:
                         """
                         UPDATE crawl_tasks
                         SET status='running', interval_seconds=?, next_run_at=?,
-                            last_error=NULL, cooldown_until=NULL, updated_at=?
+                            last_error=NULL, cooldown_until=NULL, updated_at=?, selected_page=coalesce(?,selected_page)
                         WHERE id=?
                         """,
-                        (interval_seconds, now, now, existing["id"]),
+                        (interval_seconds, now, now, selected_page, existing["id"]),
                     )
                     return int(existing["id"])
                 raise sqlite3.IntegrityError("该视频任务已存在")
@@ -264,10 +265,10 @@ class Repository:
                 """
                 INSERT INTO crawl_tasks (
                     bvid, status, interval_seconds, next_run_at,
-                    created_at, updated_at, automatic
-                ) VALUES (?, 'running', ?, ?, ?, ?, ?)
+                    created_at, updated_at, automatic, selected_page
+                ) VALUES (?, 'running', ?, ?, ?, ?, ?, ?)
                 """,
-                (bvid, interval_seconds, now, now, now, int(automatic)),
+                (bvid, interval_seconds, now, now, now, int(automatic), selected_page),
             )
             return int(cursor.lastrowid)
 

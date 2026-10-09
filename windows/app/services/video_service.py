@@ -4,7 +4,7 @@ import sqlite3
 import time
 
 from app.collectors.provider import VideoDataProvider
-from app.collectors.video_info import resolve_bvid
+from app.collectors.video_info import resolve_video_target
 from app.database import Repository
 from app.logger import logger
 from app.models import DuplicateTaskError, RateLimitError, ProviderError
@@ -27,7 +27,7 @@ class VideoService:
         self._last_parts_attempt = None
 
     async def add_video_task(self, text: str, interval_seconds: int | None = None, *, should_add=None, automatic=False) -> str:
-        bvid = await resolve_bvid(text)
+        bvid,selected_page = await resolve_video_target(text)
         interval = interval_seconds or self.default_interval
         if interval < self.min_interval:
             raise RateLimitError(f"采集间隔不得低于 {self.min_interval} 秒")
@@ -43,6 +43,7 @@ class VideoService:
                 min_interval=self.min_interval,
                 max_active=None if automatic else self.max_active_tasks,
                 automatic=automatic,
+                selected_page=selected_page,
             )
         except sqlite3.IntegrityError as exc:
             raise DuplicateTaskError("该视频任务已存在，不会重复创建") from exc

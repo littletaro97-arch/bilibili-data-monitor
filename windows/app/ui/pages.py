@@ -115,7 +115,7 @@ def _datetime_local_to_iso(value: str) -> str:
 
 
 @router.get("/", response_class=HTMLResponse)
-async def index(request: Request, message: str | None = None, level: str = "info"):
+async def index(request: Request, message: str | None = None, level: str = "info", up_fragment: bool = False):
     repo = request.app.state.repository
     current_settings = load_settings()
     local_ip = _local_ip()
@@ -123,7 +123,7 @@ async def index(request: Request, message: str | None = None, level: str = "info
     up_detect_interval, up_video_interval = request.app.state.up_monitor.store.defaults(settings.crawl.default_interval)
     return templates.TemplateResponse(
         request,
-        "index.html",
+        "up_monitors.html" if up_fragment else "index.html",
         {
             "tasks": tasks,
             "video_count": repo.count_monitored_videos(), "video_threshold": settings.crawl.max_active_tasks,

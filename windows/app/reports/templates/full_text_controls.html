@@ -1,6 +1,6 @@
 <details id="full-text-control" class="chart-panel"><summary>自动采集与手动续采</summary>
-  <p class="muted">先到<a href="/settings#bili-account">设置扫码登录</a>。自动任务默认遍历全部 P；手动任务按所选范围读取 6 分钟分段；评论读取稿件共用评论区及楼中楼。平台可能隐藏或截断内容，接口遍历结束不等于完整历史。</p>
-  <form id="full-text-form" class="actions"><label>内容<select id="full-text-kind"><option value="danmaku">分段弹幕</option><option value="comments">评论及楼中楼</option></select></label><label>弹幕范围<select id="full-text-scope"><option value="selected">仅下方所选 P</option><option value="all">全部 P</option></select></label><label><input id="full-text-continuous" type="checkbox">连续遍历到接口结束</label><button type="submit">开始遍历</button></form>
+  <p class="muted">先到<a href="/settings#bili-account">设置扫码登录</a>。带分 P 参数的任务仅抓指定 P，其余自动任务默认遍历全部 P；手动任务按所选范围读取 6 分钟分段；评论读取稿件共用评论区及楼中楼。平台可能隐藏或截断内容，接口遍历结束不等于完整历史。</p>
+  <form id="full-text-form" class="actions"><label>内容<select id="full-text-kind"><option value="danmaku">分段弹幕</option><option value="comments">评论及楼中楼</option></select></label><label>弹幕范围<select id="full-text-scope"><option value="selected">{% if task and task.selected_page %}仅任务 P{{ task.selected_page }}{% else %}仅下方所选 P{% endif %}</option>{% if not task or not task.selected_page %}<option value="all">全部 P</option>{% endif %}</select></label><label><input id="full-text-continuous" type="checkbox">连续遍历到接口结束</label><button type="submit">开始遍历</button></form>
   <p id="full-text-channels" class="muted" role="status"></p>
   <p id="full-text-progress" role="status">尚未开始</p>
   <div class="actions"><button type="button" class="secondary" id="full-text-pause" hidden>暂停</button><button type="button" id="full-text-resume" hidden>从断点继续</button><a class="button secondary" data-refresh-page href="/videos/{{ video.bvid }}#text-inspection">刷新本地结果</a></div>

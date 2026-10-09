@@ -2,7 +2,7 @@
 import re
 from urllib.parse import urlsplit
 import httpx
-from app.collectors.video_info import parse_bvid
+from app.collectors.video_info import parse_bvid, selected_page
 from app.models import InvalidBvidError
 
 
@@ -31,7 +31,8 @@ def classify_target(text):
         if parsed.hostname=='b23.tv':return 'short',url
         if parsed.hostname not in {'www.bilibili.com','bilibili.com','m.bilibili.com'} or not parsed.path.lower().startswith('/video/'):
             raise InvalidBvidError('请填写官方 UP 空间或视频链接')
-        return 'video',parse_bvid(url)
+        bv=parse_bvid(url);page=selected_page(url)
+        return 'video',f'https://www.bilibili.com/video/{bv}/?p={page}' if page else bv
     ids=re.findall(r'(?<![0-9A-Za-z])BV[0-9A-Za-z]{10}(?![0-9A-Za-z])',text)
     if len(set(ids))!=1:raise InvalidBvidError('请填写一个 UP UID、空间链接、BV 号或视频链接')
     return 'video',ids[0]
