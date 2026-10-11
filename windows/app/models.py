@@ -28,6 +28,10 @@ class CommentUnavailableError(ProviderError):
     pass
 
 
+class CommentCursorError(ProviderError):
+    pass
+
+
 class RequestFailure(ProviderError):
     def __init__(self, kind: str, message: str):
         self.kind = kind
@@ -39,6 +43,12 @@ class RiskControlError(ProviderError):
 
 
 class LoginRequiredError(RiskControlError):
+    def __init__(self,message,*,confirmed=True):
+        self.confirmed=confirmed
+        super().__init__(message)
+
+
+class StaleJobError(ProviderError):
     pass
 
 

@@ -21,7 +21,7 @@
   function show(value){
     job=allJobs.find(j=>j.kind===document.getElementById('full-text-kind').value)||value;
     document.getElementById('full-text-channels').textContent=allJobs.map(j=>`${j.kind==='comments'?'评论':'弹幕'}：${j.message}`).join(' · ');if(!job)return;
-    progress.textContent=`${job.kind==='comments'?'评论及楼中楼':'分段弹幕'} · 已处理 ${job.responses} 批次 · 累计读取 ${job.received} 条 · 新增 ${job.saved_new??0} 条 · 已保存/重复 ${job.saved_existing??0} 条${job.legacy_received?` · 旧任务前 ${job.legacy_received} 条未记录新增计数`:""}${job.unavailable_roots?` · 不可见根评论 ${job.unavailable_roots} 条（原文保留）`:''} · ${job.message}${job.retry_after?` · 冷却剩余 ${job.retry_after} 秒`:''}`;
+    progress.textContent=`${job.kind==='comments'?'评论及楼中楼':'分段弹幕'} · 已处理 ${job.responses} 批次 · 累计读取 ${job.received} 条 · 新增 ${job.saved_new??0} 条 · 已保存/重复 ${job.saved_existing??0} 条${job.legacy_received?` · 旧任务前 ${job.legacy_received} 条未记录新增计数`:""}${job.unavailable_roots?` · 不可见根评论 ${job.unavailable_roots} 条（原文保留）`:''}${job.owner_profile?` · ${job.owner_profile==='backup'?'备用账号':'主账号'}`:''}${job.handoffs?` · 已接管 ${job.handoffs} 次`:''} · ${job.message}${job.retry_after?` · 冷却剩余 ${job.retry_after} 秒`:''}`;
     if(job.kind==='danmaku' && job.status!=='complete')progress.textContent+=` · 第 ${Math.min(job.part_index+1,job.parts.length)} / ${job.parts.length} 个 P，第 ${job.segment} 段`;
     pause.hidden=!['running','queued','retry_wait','waiting_login'].includes(job.status);resume.hidden=!['paused','waiting_login'].includes(job.status);resume.disabled=job.retry_after>0;
     document.getElementById('full-text-form').querySelector('button').disabled=job.status!=='complete';

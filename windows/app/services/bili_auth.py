@@ -70,22 +70,26 @@ class BiliAuth:
             if not isinstance(data,dict) or data.get('isLogin') is not True or not data.get('mid'):
                 raise RequestFailure('parse','平台登录验证响应结构异常，登录态仍保留')
         except ProviderError as exc:
+            if isinstance(exc,LoginRequiredError):exc.confirmed=True
             if cookies is None and checking==self.cookies:
                 self.verification='expired' if isinstance(exc,LoginRequiredError) else 'unavailable'
                 self.verification_error=str(exc)
             raise
         if cookies is None and checking==self.cookies:
+            self._validated_data=data
             self.verification='valid';self.last_verified_at=iso_now();self.verification_error=None
         return data
 
     async def save(self,cookies):
         cookies={k:str(v) for k,v in cookies.items() if k in {'SESSDATA','bili_jct','DedeUserID','DedeUserID__ckMd5','buvid3','buvid4'} and v}
         data=await self.validate(cookies)
+        if hasattr(self,'account_validator'):self.account_validator(data)
         saved={'cookies':cookies,'name':str(data.get('uname') or ''),'account':str(data['mid'])}
         encoded=protect(json.dumps(saved,ensure_ascii=False).encode('utf-8'))
         self.path.parent.mkdir(parents=True,exist_ok=True)
         temp=self.path.with_suffix('.pending');temp.write_bytes(encoded);temp.replace(self.path)
         self.cookies=cookies;self.name=saved['name'];self.account=saved['account'];self.error=''
+        self._validated_data=data
         self.verification='valid';self.last_verified_at=iso_now();self.verification_error=None
         return self.status()
 
@@ -98,7 +102,7 @@ class BiliAuth:
 
     async def _session(self):
         if self._passport is None:
-            self._passport=httpx.AsyncClient(timeout=15,headers={'User-Agent':self.client.user_agent,'Referer':'https://www.bilibili.com/'})
+            self._passport=httpx.AsyncClient(timeout=15,**({'verify':self.client.ssl_context} if hasattr(self.client,'ssl_context') else {}),headers={'User-Agent':self.client.user_agent,'Referer':'https://www.bilibili.com/'})
         return self._passport
 
     async def qrcode(self):

@@ -7,9 +7,23 @@ from app.models import LoginRequiredError, ProviderError
 
 class UpVideoProvider:
     def __init__(self, client, auth):
-        self.client=client; self.auth=auth; self.keys=None; self.keys_at=0
+        self.client=client; self.auth=auth; self.keys=None; self.keys_at=0; self.keys_cache={}
 
-    async def page(self, mid, page=1):
+    async def page(self,mid,page=1):
+        if not (getattr(self.auth,'is_account_pool',False) is True):return await self._page(mid,page)
+        for _ in range(2):
+            key=await self.auth.choose(owner_profile=self.auth.preferred(mid));token=self.auth.bind(key)
+            try:
+                if getattr(self,'keys_owner',None)!=self.auth.account:
+                    cached=self.keys_cache.get(self.auth.account)
+                    self.keys,self.keys_at=cached if cached else (None,0);self.keys_owner=self.auth.account
+                return await self._page(mid,page)
+            except LoginRequiredError as exc:
+                await self.auth.expired(exc);self.keys=None
+            finally:self.auth.unbind(token)
+        raise LoginRequiredError('两个账号均不可用，UP分页断点保留')
+
+    async def _page(self, mid, page=1):
         if not self.auth.status()['saved']:
             raise LoginRequiredError('请先在设置中扫码登录 Bilibili')
         if not self.keys or time.monotonic()-self.keys_at>86400:
@@ -18,6 +32,7 @@ class UpVideoProvider:
             try:self.keys=tuple(urlsplit(images[k]).path.rsplit('/',1)[-1].split('.')[0] for k in ('img_url','sub_url'))
             except (KeyError,TypeError):raise ProviderError('平台未返回签名参数') from None
             self.keys_at=time.monotonic()
+            self.keys_cache[getattr(self.auth,"account",None)]=(self.keys,self.keys_at)
         params=sign({'mid':mid,'pn':page,'ps':30,'order':'pubdate'},*self.keys)
         payload=await self.client.authenticated_response('https://api.bilibili.com/x/space/wbi/arc/search',dict(self.auth.cookies),params)
         data=payload.get('data')

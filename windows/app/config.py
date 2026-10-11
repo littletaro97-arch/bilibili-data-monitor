@@ -34,7 +34,7 @@ class CrawlConfig:
     min_interval: int = 60
     max_concurrency: int = 2
     max_active_tasks: int = 10
-    global_min_request_interval: int = 3
+    global_min_request_interval: float = .75
     schedule_jitter_seconds: int = 30
     failure_cooldown_seconds: int = 600
     global_risk_cooldown_seconds: int = 1800

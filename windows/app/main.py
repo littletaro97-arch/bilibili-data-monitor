@@ -29,6 +29,7 @@ from app.collectors.up_provider import UpVideoProvider
 from app.services.video_service import VideoService
 from app.services.update_service import UpdateService
 from app.services.bili_auth import BiliAuth
+from app.services.account_pool import AccountPool,ProfileClient
 from app.collectors.full_text import FullTextProvider
 from app.services.full_text_service import FullTextService
 from app.ui.full_text_api import router as full_text_router
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
         timeout=settings.crawl.timeout,
         min_interval_seconds=settings.crawl.global_min_request_interval,
         repository=repository,
+        risk_cooldown_seconds=settings.crawl.global_risk_cooldown_seconds,
     )
     provider = BilibiliWebProvider(client, save_raw_json=settings.crawl.save_raw_json)
     video_service = VideoService(
@@ -79,9 +81,10 @@ def create_app() -> FastAPI:
     scheduler = TaskScheduler(crawl_service)
     export_service = ExportService(repository, RUNTIME_DIR / "exports")
     history_exchange_service = HistoryExchangeService(repository)
-    bili_auth = BiliAuth(RUNTIME_DIR / 'auth' / 'bilibili-auth.dat', client)
-    full_text = FullTextService(repository, FullTextProvider(client, bili_auth), bili_auth)
-    up_monitor = UpMonitorService(repository, UpVideoProvider(client, bili_auth), video_service, crawl_service,
+    bili_auth = AccountPool(BiliAuth(RUNTIME_DIR / 'auth' / 'bilibili-auth.dat', ProfileClient(client,'primary')),
+                            BiliAuth(RUNTIME_DIR / 'auth' / 'bilibili-backup-auth.dat', ProfileClient(client,'backup')))
+    full_text = FullTextService(repository, FullTextProvider(bili_auth.client, bili_auth), bili_auth)
+    up_monitor = UpMonitorService(repository, UpVideoProvider(bili_auth.client, bili_auth), video_service, crawl_service,
         settings.crawl.global_risk_cooldown_seconds, settings.crawl.failure_cooldown_seconds)
     scheduler.up_monitor = up_monitor
     scheduler.full_text = full_text
@@ -110,6 +113,7 @@ def create_app() -> FastAPI:
             scheduler.shutdown()
             await full_text.shutdown()
             await bili_auth.close()
+            await client.close()
             logger.info("application shutdown")
 
     app = FastAPI(title="Bilibili Local Analytics", lifespan=lifespan)
@@ -117,6 +121,7 @@ def create_app() -> FastAPI:
     app.state.up_monitor = up_monitor
     app.state.repository = repository
     app.state.bili_auth = bili_auth
+    app.state.request_client = client
     app.state.full_text = full_text
     app.state.cover_cache = CoverCache(RUNTIME_DIR / "cache" / "covers")
     app.state.video_service = video_service

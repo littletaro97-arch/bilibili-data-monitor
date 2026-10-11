@@ -82,7 +82,7 @@ def comment(row, bvid, parent=None):
 
 class FullTextProvider:
     def __init__(self,client,auth):
-        self.client=client; self.auth=auth; self.keys=None
+        self.client=client; self.auth=auth; self.keys=None; self.keys_owner=None; self.keys_cache={}
 
     async def request(self,path,params=None,binary=False):
         return await self.client.authenticated_response(API+path,dict(self.auth.cookies),params,binary=binary)
@@ -98,8 +98,15 @@ class FullTextProvider:
         data=await self.auth.validate()
         images=data.get('wbi_img') or {}
         self.keys=tuple(urlsplit(images[k]).path.rsplit('/',1)[-1].split('.')[0] for k in ('img_url','sub_url'))
+        self.keys_owner=getattr(self.auth,'account',None)
+        self.keys_cache[self.keys_owner]=(self.keys,time.monotonic())
 
     async def roots(self,aid,offset):
+        owner=getattr(self.auth,'account',None)
+        if self.keys_owner is not None and self.keys_owner!=owner:
+            cached=self.keys_cache.get(owner)
+            self.keys=cached[0] if cached and time.monotonic()-cached[1]<300 else None
+            self.keys_owner=owner
         if not self.keys: await self.keys_refresh()
         params={'oid':aid,'type':1,'mode':2,'pagination_str':json.dumps({'offset':offset},separators=(',',':')),'plat':1,'web_location':1315875}
         return (await self.request('/x/v2/reply/wbi/main',sign(params,*self.keys))).get('data') or {}

@@ -64,6 +64,10 @@ class UpMonitorStore:
             (message,iso_now(),(local_now()+timedelta(seconds=seconds)).isoformat(),kind,identity))
     def require_login(self):
         with self.repo.database.connect() as c:c.execute("UPDATE up_monitors SET status='needs_login',failure_kind='login',last_error='请在设置中重新扫码，然后恢复 UP 检测' WHERE status='running'")
+    def resume_login_tasks(self):
+        with self.repo.database.connect() as c:
+            c.execute("UPDATE up_monitors SET status='running',last_error=NULL,failure_kind=NULL,next_run_at=? WHERE status='needs_login' AND failure_kind='login'",(iso_now(),))
+
     def remove(self,identity):
         with self.repo.database.connect() as c:
             c.execute('DELETE FROM up_monitor_videos WHERE monitor_id=?',(identity,));c.execute('DELETE FROM up_monitors WHERE id=?',(identity,))

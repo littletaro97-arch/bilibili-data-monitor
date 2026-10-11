@@ -101,7 +101,7 @@
     for(const row of listed.slice(page*pageSize,(page+1)*pageSize)) {
       const card=make('article',undefined,'inspection-item');
       const meta = channel==='danmaku' ? `${position(row.position)} · 发送 ${time(row.sent)}` : `${row.author} · ${row.parent ? '回复' : '主评论'} · 点赞 ${number(row.likes)} · 回复数 ${number(row.replies)} · 发布 ${time(row.sent)}`;
-      const visibility=row.origin==='local'?'本地文本':row.visibility==='observed'?'上次采集可见':row.visibility==='unavailable'?'平台已不可见（原文保留）':row.visibility==='placeholder'?'疑似已删除（接口占位）':'当前可见性未核验';
+      const visibility=row.origin==='local'?'本地文本':row.visibility==='observed'?'上次采集可见':row.visibility==='unavailable'?'当前采集账号不可见（原文保留）':row.visibility==='placeholder'?'疑似已删除（接口占位）':'当前可见性未核验';
       card.append(make('div',`${visibility}${row.checked?` · 核验 ${time(row.checked)}`:''}`,'inspection-meta'));
       card.append(make('div',`${meta} · ${row.origin==='local' ? '本地导入／演示' : '公开采样'}`,'inspection-meta'));
       const body=make('p');highlight(body,row.text);card.append(body);$('text-list').append(card);

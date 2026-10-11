@@ -7,7 +7,7 @@ import uuid
 import hashlib
 
 from app.database import iso_now
-from app.models import ProviderError, RiskControlError, LoginRequiredError, RequestFailure, CommentUnavailableError
+from app.models import ProviderError, RiskControlError, LoginRequiredError, RequestFailure, CommentUnavailableError, StaleJobError, CommentCursorError
 from app.services.network_retry import network_retry_delay
 from app.collectors.full_text import comment
 
@@ -45,6 +45,10 @@ class FullTextService:
                 AND json_extract(state,'$.pending') IS NOT NULL
                 AND coalesce(json_extract(state,'$.unavailable_compat_retry'),0)=0""")
 
+            if getattr(self.auth,'is_account_pool',False) is True:
+                c.execute("""UPDATE text_jobs SET state=json_set(state,'$.owner_profile','primary')
+                    WHERE json_extract(state,'$.owner') IS NOT NULL AND json_extract(state,'$.owner_profile') IS NULL""")
+
     def load(self,identity):
         with self.db.connect() as c:
             r=c.execute('SELECT * FROM text_jobs WHERE id=?',(identity,)).fetchone()
@@ -64,16 +68,27 @@ class FullTextService:
             'scope':s.get('scope'),'parts':s.get('parts',[]),'part_index':s.get('part_index',0),
             'saved_existing':max(0,s.get('received',0)-s.get('saved_new',0)-s.get('legacy_received',s.get('received',0) if job['kind']=='comments' and not s.get('counts_version') else 0)),
             'legacy_received':s.get('legacy_received',s.get('received',0) if job['kind']=='comments' and not s.get('counts_version') else 0),
-            'automatic':s.get('automatic',False),'failure_kind':s.get('failure_kind'),'unavailable_roots':s.get('unavailable_roots',0),
+            'owner_profile':s.get('owner_profile'),'handoffs':s.get('handoffs',0),'automatic':s.get('automatic',False),'failure_kind':s.get('failure_kind'),'unavailable_roots':s.get('unavailable_roots',0),
             'segment':s.get('segment',1),'retry_after':max(0,math.ceil(s.get('retry_at',0)-time.time()))}
 
-    def save(self,j):
+    def assert_current(self,j):
+        with self.db.connect() as c:
+            row=c.execute('SELECT state FROM text_jobs WHERE id=?',(j['id'],)).fetchone()
+        if row and json.loads(row['state']).get('owner_revision',0)!=j['state'].get('owner_revision',0):
+            j['_stale']=True;raise StaleJobError('任务已接管，旧执行者不能继续提交')
+
+    def save(self,j,*,expected_revision=None):
         j['updated']=iso_now()
         with self.db.connect() as c:
+            c.execute('BEGIN IMMEDIATE')
+            row=c.execute('SELECT state FROM text_jobs WHERE id=?',(j['id'],)).fetchone()
+            expected=j['state'].get('owner_revision',0) if expected_revision is None else expected_revision
+            if row and json.loads(row['state']).get('owner_revision',0)!=expected:
+                j['_stale']=True;raise StaleJobError('任务已接管，旧执行者不能继续提交')
             c.execute('INSERT OR REPLACE INTO text_jobs VALUES(?,?,?,?,?,?,?)',
                 (j['id'],j['bvid'],j['kind'],j['status'],json.dumps(j['state'],ensure_ascii=False),j['message'],j['updated']))
             if j['kind']=='comments' and j['state'].get('offset'):
-                c.execute('INSERT OR IGNORE INTO text_job_cursors VALUES(?,?)',(j['id'],hashlib.sha256(j['state']['offset'].encode()).hexdigest()))
+                c.execute('INSERT OR IGNORE INTO text_job_cursors VALUES(?,?)',(j['id'],hashlib.sha256((j['state'].get('cursor_epoch','')+j['state']['offset']).encode()).hexdigest()))
             if j['state'].get('retry_at') and j['state'].get('failure_kind')=='risk':
                 c.execute("INSERT OR REPLACE INTO text_job_control VALUES('retry_at',?)",(j['state']['retry_at'],))
 
@@ -169,6 +184,7 @@ class FullTextService:
         self.save(j)
 
     def save_comments(self,j,rows):
+        self.assert_current(j)
         s=j['state'];ids={(r.bvid,r.rpid) for r in rows}
         if not s.get('counts_version'):
             s['legacy_received']=s.get('received',0);s['counts_version']=1
@@ -211,6 +227,7 @@ class FullTextService:
                 'state':{'owner':self.auth.account,'aid':aid,'parts':selected,'total_parts':len(parts),
                     'scope':'shared' if kind=='comments' else scope,'part_index':0,'segment':1,
                     'offset':'','pending':None,'responses':0,'received':0,'saved_new':0,'continuous':bool(continuous),'counts_version':1}}
+            if getattr(self.auth,'is_account_pool',False) is True:j['state']['owner_profile']=self.auth.current_key()
             self.save(j)
             self.repo.record_text_collection(bvid,kind,{'parts':selected,'total_parts':len(parts),'scope':scope,
                 'authenticated':True,'complete':False,'interrupted':True,'job':j['id']})
@@ -242,7 +259,8 @@ class FullTextService:
             if j['state'].get('retry_at',0)>time.time(): raise ProviderError('平台限制冷却中，请稍后继续')
             if not self.auth.cookies: raise ProviderError('请先登录')
             await self.auth.validate()
-            if j['state'].get('owner') and j['state']['owner']!=self.auth.account: raise ProviderError('请使用创建该任务的 Bilibili 账户继续')
+            if getattr(self.auth,'is_account_pool',False) is not True and j['state'].get('owner') and j['state']['owner']!=self.auth.account: raise ProviderError('请使用创建该任务的 Bilibili 账户继续')
+            if getattr(self.auth,'is_account_pool',False) is True:j['state']['allow_account_rebind']=True
             if continuous:j['state']['continuous']=True
             j['state'].pop('manual_pause',None); j['state']['failure_kind']=None; j['state']['retry_at']=0
             j['status']='running'; j['message']='从断点继续'; self.save(j); self.dispatch_manual(j); return self.public(j)
@@ -281,6 +299,7 @@ class FullTextService:
         p=parts[s['part_index']]; count=max(1,math.ceil(p['duration']/360))
         if count>10000: raise ProviderError('视频时长异常，无法计算分段范围')
         rows=await self.provider.segment(j['bvid'],p['cid'],s['segment'])
+        self.assert_current(j)
         s['saved_new']+=self.save_dm(rows); s['received']+=len(rows)
         s['segment']+=1
         if s['segment']>count: s['part_index']+=1; s['segment']=1
@@ -305,7 +324,7 @@ class FullTextService:
             if not end and (not isinstance(next_offset,str) or not next_offset or next_offset==s['offset']):
                 raise ProviderError('评论游标未前进，已保存本页，任务未完成')
             if not end:
-                digest=hashlib.sha256(next_offset.encode()).hexdigest()
+                digest=hashlib.sha256((s.get('cursor_epoch','')+next_offset).encode()).hexdigest()
                 with self.db.connect() as c:
                     if c.execute('SELECT 1 FROM text_job_cursors WHERE job=? AND cursor=?',(j['id'],digest)).fetchone():
                         raise ProviderError('评论游标形成循环，任务未完成')
@@ -321,6 +340,7 @@ class FullTextService:
                 try:
                     d=await self.provider.children(s['aid'],root['id'],pending['page'])
                 except CommentUnavailableError:
+                    self.assert_current(j)
                     # An explicit missing-root response is not proof of deletion. Preserve all text.
                     with self.db.connect() as c:
                         c.execute("UPDATE comments SET visibility='unavailable',visibility_checked_at=? WHERE bvid=? AND rpid=?",
@@ -329,6 +349,7 @@ class FullTextService:
                     s['unavailable_roots']=s.get('unavailable_roots',0)+1
                     pending['index']+=1;pending['page']=1
                     break
+                self.assert_current(j)
                 page=d.get('page') or {}; rows=d.get('replies') or []
                 if len(rows)>100: raise ProviderError('楼中楼单页过多，任务已暂停')
                 if 'count' not in page or int(page.get('num',0))!=pending['page'] or int(page.get('size',0))<=0:
@@ -353,8 +374,23 @@ class FullTextService:
         return False
 
     async def run(self,j):
+        token=None
         automatic=j['state'].get('automatic',False)
         try:
+            if getattr(self.auth,'is_account_pool',False) is True:
+                state=j['state'];old_owner=state.get('owner');old_revision=state.get('owner_revision',0)
+                preferred=state.get('owner_profile') or (self.auth.preferred(j['bvid']) if not old_owner else None)
+                key=await self.auth.choose(old_owner,preferred,allow_rebind=state.pop('allow_account_rebind',False))
+                token=self.auth.bind(key)
+                if old_owner and (old_owner!=self.auth.account or (state.get('owner_profile') and state['owner_profile']!=key)):
+                    state.setdefault('created_owner',old_owner)
+                    state['owner_revision']=old_revision+1;state['handoff_pending']=True;state['handoffs']=state.get('handoffs',0)+1
+                    self.provider.keys=None
+                    state['owner']=self.auth.account;state['owner_profile']=key
+                    self.save(j,expected_revision=old_revision)
+                    self.repo.add_log('INFO','正文任务已切换可用账号，原断点保留',bvid=j['bvid'],detail=f"job={j['id']} profile={key}")
+                else:
+                    state['owner']=self.auth.account;state['owner_profile']=key;self.save(j)
             verify_dispatch=j['state'].pop('verify_dispatch',False)
             if automatic or verify_dispatch:await self.prepare_auto(j)
             # Automatic work continues in four-response slices; explicit manual traversal stays bounded.
@@ -368,6 +404,7 @@ class FullTextService:
                 if not complete:
                     complete=await (self.dm_step(j) if j['kind']=='danmaku' else self.comments_step(j))
                     j['state']['responses']+=1
+                j['state']['handoff_pending']=False
                 j['state']['traversed']=complete
                 j['state']['network_failures']=0;j['state']['retry_at']=0;j['state']['failure_kind']=None
                 j['message']='正在逐段读取' if j['kind']=='danmaku' else '正在读取评论及楼中楼'
@@ -383,17 +420,39 @@ class FullTextService:
             else:
                 j['status']='queued' if automatic else 'paused'
                 j['message']='本轮分批保存，继续同一断点' if automatic else f'本轮已处理 {limit} 个批次，点击继续读取后续数据'
+        except StaleJobError:
+            j['_stale']=True
         except asyncio.CancelledError:
+            account_exit=getattr(self,'_account_exit_cancel',False);self._account_exit_cancel=False
             interrupted=getattr(self,'_shutdown_cancel',False);self._shutdown_cancel=False
             j['status']='queued' if automatic and interrupted else 'paused'
-            j['state']['manual_pause']=not interrupted
-            j['message']='程序退出，正文断点已保留' if interrupted else '已暂停，已保存的数据和断点保留'
-        except LoginRequiredError:
-            j['status']='waiting_login';j['state']['failure_kind']='login';j['state']['retry_at']=0;j['message']='登录已失效或未登录，断点保留，重新登录后继续'
+            j['state']['manual_pause']=not interrupted and not account_exit
+            if account_exit:
+                j['status']='waiting_login';j['state']['failure_kind']='login'
+                if not automatic:j['state']['queued_manual']=True
+            j['message']='账号退出，断点等待可用账号接管' if account_exit else ('程序退出，正文断点已保留' if interrupted else '已暂停，已保存的数据和断点保留')
+        except LoginRequiredError as exc:
+            if getattr(self.auth,'is_account_pool',False) is True and token is not None:
+                try:await self.auth.expired(exc)
+                except RequestFailure as denied:
+                    j['status']='paused';j['state']['failure_kind']=denied.kind;j['message']=str(denied)
+                    if denied.kind in {'network','timeout'}:
+                        failures=j['state'].get('network_failures',0)+1;j['state']['network_failures']=failures
+                        j['status']='retry_wait';j['state']['automatic']=True;j['state']['retry_at']=time.time()+network_retry_delay(failures)
+                except RiskControlError:
+                    self.provider.keys=None;j['status']='paused';j['state']['failure_kind']='risk';j['state']['retry_at']=time.time()+max(600,self.auth.cooldown_seconds if getattr(self.auth,'is_account_pool',False) is True else 600)
+                    j['message']='平台限制，共享通道冷却，断点保留'
+                else:
+                    j['status']='waiting_login';j['state']['failure_kind']='login';j['state']['retry_at']=0
+                    j['message']='该账号登录失效，断点保留；有备用账号时自动接管'
+                    if not automatic:j['state']['queued_manual']=True
+            else:
+                j['status']='waiting_login';j['state']['failure_kind']='login';j['state']['retry_at']=0;j['message']='登录已失效或未登录，断点保留，重新登录后继续'
+                if getattr(self.auth,'is_account_pool',False) is True and not automatic:j['state']['queued_manual']=True
         except RiskControlError:
             self.provider.keys=None
-            j['status']='paused';j['state']['failure_kind']='risk';j['state']['retry_at']=time.time()+600
-            j['message']='平台明确限制请求，通道冷却 10 分钟，断点保留'
+            j['status']='paused';j['state']['failure_kind']='risk';j['state']['retry_at']=time.time()+max(600,self.auth.cooldown_seconds if getattr(self.auth,'is_account_pool',False) is True else 600)
+            j['message']='平台明确限制请求，共享通道冷却，断点保留'
         except RequestFailure as exc:
             kind=exc.kind;j['state']['failure_kind']=kind
             if kind in {'timeout','network'}:
@@ -402,16 +461,32 @@ class FullTextService:
                 j['status']='retry_wait';j['state']['automatic']=True
                 j['message']=f'{str(exc)}；{delay} 秒后从断点重试（超时不能直接判定限流）'
             else:j['status']='paused';j['message']=str(exc)
+        except CommentCursorError as exc:
+            state=j['state'];revision=state.get('owner_revision',0)
+            if j['kind']=='comments' and state.get('handoff_pending') and state.get('offset') and state.get('pending') is None and state.get('cursor_fallback_revision')!=revision:
+                state['offset']='';state['cursor_epoch']=f'handoff-{revision}:';state['cursor_fallback_revision']=revision
+                state['failure_kind']=None;state['handoff_pending']=False;j['status']='queued'
+                if not automatic:state['queued_manual']=True
+                j['message']='备用账号不能复用旧游标，保留原文，从首页去重续查'
+            else:j['status']='paused';state['failure_kind']='provider';j['message']=str(exc)
         except ProviderError as exc:
             j['status']='paused';j['state']['failure_kind']='provider';j['message']=str(exc)
         except Exception:
             j['status']='paused';j['state']['failure_kind']='parse'
             j['message']='响应结构或本地保存异常，进度已保留，请检查后继续'
         finally:
-            self.save(j)
+            if token is not None:self.auth.unbind(token)
+            if j.get('_stale'):return
+            try:self.save(j)
+            except StaleJobError:return
             state=j['state']
             self.repo.add_log('INFO' if j['status'] in {'complete','queued'} else 'WARNING','正文采集批次结束',bvid=j['bvid'],
                 detail=f"{j['kind']} job={j['id']} status={j['status']} responses={state.get('responses',0)} received={state.get('received',0)} new={state.get('saved_new',0)} existing={self.public(j)['saved_existing']} unavailable_roots={state.get('unavailable_roots',0)} failure={state.get('failure_kind') or '-'}")
+
+    async def account_exit(self,profile):
+        if self.task and not self.task.done() and self._running_job['state'].get('owner_profile','primary')==profile:
+            self._account_exit_cancel=True
+            await self.cancel(self.active)
 
     async def shutdown(self):
         await self.cancel(shutdown=True)

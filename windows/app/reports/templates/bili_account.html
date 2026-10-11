@@ -1,6 +1,6 @@
 <style>.manual-session{margin-top:16px}.manual-session>summary{margin-bottom:12px}#bili-session-form{display:grid;gap:10px}#bili-session-form label{margin:0}#bili-session-form input{box-sizing:border-box;width:100%}#bili-session-form button{justify-self:start}</style>
 <section id="bili-account">
-  <h2>Bilibili 登录采集</h2>
+  <h2>Bilibili 登录采集</h2><p class="muted">登录一个账号即可采集。备用账号推荐登录，用于账号失效或退出后的断点接管。</p><div class="account-profile-tabs actions"><button type="button" class="secondary" id="bili-profile-primary">主账号</button><button type="button" class="secondary" id="bili-profile-backup">备用账号（推荐）</button></div><p id="bili-profile-summary" class="muted" aria-live="polite"></p>
   <p class="muted">扫码后可按时间分段读取弹幕、翻页读取评论及楼中楼。登录态仅在本机由 Windows 当前用户加密保存，退出登录会删除。</p>
   <p id="bili-auth-status" aria-live="polite">正在读取登录状态…</p>
   <div class="actions"><button type="button" id="bili-qr">扫码登录</button><button type="button" class="secondary" id="bili-logout">退出登录</button><button type="button" class="secondary" id="bili-verify">验证登录态</button></div>
@@ -10,22 +10,22 @@
 <script>
 (() => {
   const status=document.getElementById('bili-auth-status'), image=document.getElementById('bili-qr-image');
-  let timer=null, pending=false;
+  let timer=null,pending=false,profile='primary',generation=0;
   const visible=async()=>!document.hidden && !(typeof panelHidden==='function' && await panelHidden());
-  const stop=()=>{pending=false;clearTimeout(timer);image.hidden=true;image.removeAttribute('src');};
+  const stop=()=>{generation++;pending=false;clearTimeout(timer);image.hidden=true;image.removeAttribute('src');};
   async function request(action,body) {
     const finish=action && action!=='poll'?window.bllaLoading?.start(document.activeElement):null;
     try{
-    const response=await fetch('/api/text/auth'+(action?'/'+action:''),{method:action?'POST':'GET',headers:{'Content-Type':'application/json'},body:action?JSON.stringify(body||{}):undefined});
+    const response=await fetch('/api/text/auth'+(action?'/'+action:''),{method:action?'POST':'GET',headers:{'Content-Type':'application/json'},body:action?JSON.stringify({...body,profile}):undefined});
     const data=await response.json();if(!response.ok) throw Error(data.error||data.detail||'登录操作失败');return data;
     }finally{finish?.();}
   }
-  function show(data){status.textContent=(data.saved?`${data.name} · `:'')+data.message+(data.last_verified_at?` · 上次有效验证：${new Date(data.last_verified_at).toLocaleString()}`:'');}
+  function show(data){if(data.profiles){document.getElementById('bili-profile-summary').textContent=Object.entries(data.profiles).map(([key,v])=>`${key==='primary'?'主账号':'备用账号'}：${v.saved?v.verification==='expired'?'需重新登录':'已保存':'未登录'}`).join(' · ');data=data.profiles[profile];}status.textContent=(data.saved?`${data.name} · `:'')+data.message+(data.last_verified_at?` · 上次有效验证：${new Date(data.last_verified_at).toLocaleString()}`:'');}
   async function poll(){
-    if(!pending)return;
+    if(!pending)return;const expected=generation;
     try{
       if(await visible()){
-        const data=await request('poll');
+        const data=await request('poll');if(expected!==generation)return;
         if(data.status==='ok'){stop();show(data);return;}
         if(['expired','error'].includes(data.status)){stop();status.textContent='二维码过期或登录失败，请重新申请。';return;}
         status.textContent=data.status==='scanned'?'已扫码，请在手机确认。':'请用 Bilibili 客户端扫码。';
@@ -33,8 +33,9 @@
       timer=setTimeout(poll,3000);
     }catch(e){stop();status.textContent=e.message;}
   }
+  for(const key of ['primary','backup'])document.getElementById('bili-profile-'+key).onclick=()=>{stop();profile=key;request().then(show).catch(e=>status.textContent=e.message);};
   document.getElementById('bili-qr').onclick=async()=>{
-    stop();try{const data=await request('qr');image.src=data.image;image.hidden=false;window.bllaMotion?.enter(image);pending=true;poll();}catch(e){status.textContent=e.message;}
+    stop();const expected=generation;try{const data=await request('qr');if(expected!==generation)return;image.src=data.image;image.hidden=false;window.bllaMotion?.enter(image);pending=true;poll();}catch(e){status.textContent=e.message;}
   };
   document.getElementById('bili-verify').onclick=async e=>{const button=e.currentTarget;button.disabled=true;try{show(await request('verify'));}catch(error){status.textContent=error.message;}finally{button.disabled=false;}};
   document.getElementById('bili-logout').onclick=async()=>{stop();try{show(await request('logout'));}catch(e){status.textContent=e.message;}};

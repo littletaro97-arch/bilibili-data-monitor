@@ -37,26 +37,39 @@ async def status(request:Request):
 
 @router.post('/auth/{action}')
 async def account(action:str,request:Request):
-    local(request); auth=request.app.state.bili_auth; service=request.app.state.full_text
+    local(request); pool=request.app.state.bili_auth;service=request.app.state.full_text
+    value=await body(request);profile=str(value.get('profile','primary'))
+    is_pool=getattr(pool,'is_account_pool',False) is True
+    if profile not in {'primary','backup'} or (not is_pool and profile!='primary'):raise HTTPException(400,'账号位置不正确')
+    auth=pool.profiles[profile] if is_pool else pool
+    def decorate(result):
+        return result | {'profiles':pool.status()['profiles']} if is_pool and 'saved' in result else result
     try:
         if action=='verify':
-            try: await auth.validate()
-            except ProviderError: pass
-            return auth.status()
+            try:await auth.validate()
+            except ProviderError:pass
+            return decorate(auth.status())
         if action=='logout':
-            await service.cancel()
+            if is_pool:await service.account_exit(profile)
+            else:await service.cancel()
         async with service.lock:
-            service.idle()
-            if action=='qr': return await auth.qrcode()
-            if action=='poll': return await auth.poll()
-            if action=='save': return await auth.save_sessdata(str((await body(request)).get('sessdata','')))
+            if not is_pool:service.idle()
+            elif service.task and not service.task.done() and service._running_job['state'].get('owner_profile','primary')==profile:
+                raise ProviderError('该账号正在采集，请等待当前批次完成或先暂停')
+            if action=='qr':return await auth.qrcode()
+            if action in {'poll','save'}:
+                result=await auth.poll() if action=='poll' else await auth.save_sessdata(str(value.get('sessdata','')))
+                if is_pool and (result.get('status')=='ok' or action=='save') and hasattr(request.app.state,'up_monitor'):
+                    request.app.state.up_monitor.store.resume_login_tasks()
+                return decorate(result)
             if action=='logout':
                 await auth.logout()
-                if hasattr(request.app.state,"up_monitor"):
-                    request.app.state.up_monitor.store.require_login()
-                return auth.status()
+                if is_pool:await auth.client.engine.close_profile('account:'+profile)
+                if hasattr(request.app.state,'up_monitor') and (not is_pool or not pool.available()):request.app.state.up_monitor.store.require_login()
+                return decorate(auth.status())
             raise HTTPException(404)
-    except ProviderError as e: return JSONResponse({'error':str(e)},status_code=400)
+    except ProviderError as e:return JSONResponse({'error':str(e)},status_code=400)
+
 
 
 @router.get('/jobs/{bvid}')
