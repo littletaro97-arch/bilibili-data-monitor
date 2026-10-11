@@ -20,7 +20,7 @@ def test_auto_settings_json_saves_and_reports_validation(monkeypatch):
     assert r.status_code==200 and '重启' in r.json()['message']
     settings=client.get('/settings').text
     assert '保存启动设置' not in settings and '保存局域网设置' not in settings
-    assert '<details open class="manual-session">' in settings
+    assert '<details class="manual-session">' in settings
 
 import os
 import pytest
@@ -49,7 +49,12 @@ def test_settings_autosave_and_overview_geometry(monkeypatch,tmp_path):
         try:
             page=browser.new_page(viewport={'width':1600,'height':1000});page.route('**/*',serve)
             page.goto('http://127.0.0.1/settings')
-            assert page.locator('.manual-session').get_attribute('open') is not None
+            expect(page.locator('.manual-session')).to_be_visible()
+            if not page.locator('.manual-session').evaluate('e=>e.open'):
+                page.locator('.manual-session > summary').click()
+            expect(page.locator('#bili-session')).to_be_visible()
+            page.wait_for_function('!document.querySelector(".manual-session > .details-body").getAnimations().length')
+            assert abs(page.locator('#runtime-settings').bounding_box()['height']-page.locator('#bili-account').bounding_box()['height'])<2
             enabled=not page.locator('#show-console').is_checked()
             page.locator('#show-console').set_checked(enabled)
             expect(page.locator('[data-save-status]').first).to_contain_text('已自动保存')
