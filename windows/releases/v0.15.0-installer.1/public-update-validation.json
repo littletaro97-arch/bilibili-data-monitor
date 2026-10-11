@@ -1,0 +1,38 @@
+{
+  "installed_baseline": "0.14.0.1",
+  "selected_version": [
+    0,
+    15,
+    0,
+    1
+  ],
+  "update_available": true,
+  "metadata_source": "Actual public GitHub release via gh; injected into frozen installed updater",
+  "public_release_url": "https://github.com/littletaro97-arch/bilibili-data-monitor/releases/tag/windows-v0.15.0-installer.1",
+  "tag": "windows-v0.15.0-installer.1",
+  "sha256": "d0d65b72c5475c2aa762324637ce76627ea699944ae569cc1d891287837fdcfd",
+  "bytes": 51004432,
+  "anonymous_live_api": {
+    "available": false,
+    "status": "GitHub 暂时限制请求，请稍后重试或打开发布页。",
+    "selected_version": null
+  },
+  "github_uploaded_assets": {
+    "result": "PASS",
+    "count": 5,
+    "checks": [
+      "uploaded state",
+      "byte size",
+      "sha256 digest"
+    ]
+  },
+  "anonymous_asset_download": {
+    "result": "INCOMPLETE",
+    "partial_bytes": 14073856,
+    "reason": "Single connection timed out after 120 seconds; subsequent range body transfers stalled and were stopped. Full anonymous download SHA-256 was not verified."
+  },
+  "repository_visibility": "PUBLIC",
+  "draft": false,
+  "prerelease": false,
+  "release_target_commit": "5cad77784501116e8a3e66e330f9dce7ceb7d6e6"
+}
