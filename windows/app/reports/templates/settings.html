@@ -3,7 +3,10 @@
 {% block page_styles %}{% include "switch_styles.html" %}
 <style>
   .settings-overview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:stretch;margin-bottom:18px}
-  .settings-overview>section{min-width:0;margin-bottom:0;overflow-wrap:anywhere}
+  .settings-overview>section{min-width:0;margin-bottom:0;overflow-wrap:anywhere;display:flex;flex-direction:column}
+  #runtime-settings .runtime-table{flex:1;min-height:396px;width:100%}
+  .runtime-table tbody tr{height:44px}
+  #lan-access{scroll-margin-top:24px}
   .runtime-table{min-width:0;table-layout:fixed;font-size:13px}
   .runtime-table th{width:38%}.runtime-table th,.runtime-table td{padding:7px 8px}
   .runtime-table code{display:block;max-width:100%;white-space:nowrap;overflow-x:auto}
@@ -72,7 +75,7 @@
   <details style="margin-top:14px"><summary>启动排错</summary><p class="muted">隐藏 CMD 时，可查看 <code>runtime-data/logs/launcher.log</code> 和 <code>runtime-data/logs/app.log</code>。</p></details>
 </section>
 
-<section>
+<section id="lan-access">
   <h2>局域网访问</h2>
   <div class="grid">
     <div class="metric"><span>本机电脑打开</span><strong>{{ local_url }}</strong></div>

@@ -51,7 +51,7 @@
         {% endif %}
       </p>
     </div>
-    <a class="button secondary" href="/settings">访问设置</a>
+    <a class="button secondary" href="/settings#lan-access">访问设置</a>
   </div>
 </section>
 
@@ -102,7 +102,7 @@ if(Number(upRoot.dataset.monitorCount)>0){
     for(const group of next.querySelectorAll('[data-up-monitor-id]')){
       const current=upRoot.querySelector(`[data-up-monitor-id="${group.dataset.upMonitorId}"]`);
       if(!current)continue;
-      for(const selector of ['[data-up-items]','[data-up-status]',':scope > summary .badge']){
+      for(const selector of ['[data-up-items]','[data-up-status]','[data-up-actions]',':scope > summary .badge']){
         const old=current.querySelector(selector),fresh=group.querySelector(selector);
         if(old && fresh)old.replaceWith(fresh);
       }

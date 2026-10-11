@@ -117,3 +117,31 @@ async def test_collaboration_belongs_to_monitored_up_but_keeps_actual_video_auth
  assert repo.get_task_by_bvid(BV2)
  assert repo.get_video(BV2)['owner_mid']==456
  regular,groups=service.layout(repo.list_tasks());assert not regular and groups[0]['tasks'][0]['bvid']==BV2
+
+
+@pytest.mark.asyncio
+async def test_inflight_state_supersedes_previous_timeout_and_releases_lock(tmp_path):
+ from app.models import RequestFailure
+ service,repo,space,crawl=setup(tmp_path)
+ identity=await service.add('123',300,60)
+ space.page.side_effect=RequestFailure('timeout','network timeout')
+ await service.poll(identity)
+ assert identity not in service.inflight
+ before=service.state_snapshot()['revision']
+ with repo.database.connect() as c:c.execute('UPDATE up_monitors SET cooldown_until=NULL WHERE id=?',(identity,))
+ entered=asyncio.Event();release=asyncio.Event()
+ async def page(*args):
+  entered.set();await release.wait();return ([row(BV1,100)],1)
+ space.page.side_effect=page
+ running=asyncio.create_task(service.poll(identity));await entered.wait()
+ try:
+  group=service.layout([])[1][0]
+  assert group['busy'] and group['display']=='检测中'
+  assert service.state_snapshot()['revision']!=before
+  assert 'skipped' in await service.poll(identity)
+  assert space.page.await_count==3  # Baseline, failed poll, and active poll only.
+ finally:
+  release.set();await running
+ assert identity not in service.inflight
+ assert not service.store.get(identity)['last_error']
+ assert not service.layout([])[1][0]['busy']

@@ -6,11 +6,11 @@
   <details open class="chart-panel up-monitor" data-up-monitor-id="{{ monitor.id }}" data-chart-panel="up-{{ monitor.id }}">
     <summary>{{ monitor.up_name }} · UID {{ monitor.mid }} <span class="badge {{ 'running' if group.display=='正常' else ('stopped' if group.display=='停止' else 'interrupted') }}">{{ group.display }}</span></summary>
     <div data-up-status><p class="muted">上次检测：<span data-up-checked="{{ monitor.id }}">{{ monitor.last_checked_at|local_time }}</span> · 每 {{ monitor.interval_seconds }} 秒检测 · 新视频每 {{ monitor.video_interval_seconds }} 秒采集{% if monitor.scan_page>1 %} · 继续遍历第 {{ monitor.scan_page }} 页{% endif %}</p>
-    {% if monitor.last_error %}<p class="muted" role="status">{{ monitor.last_error }}</p>{% endif %}
-        {% if monitor.cooldown_until %}<p class="muted" data-cooldown-until="{{ monitor.cooldown_until }}">冷却至 {{ monitor.cooldown_until|local_time }}，届时按任务状态重试</p>{% endif %}
+    {% if monitor.last_error and not group.busy %}<p class="muted" role="status">{{ monitor.last_error }}</p>{% endif %}
+        {% if monitor.cooldown_until and not group.busy %}<p class="muted" data-cooldown-until="{{ monitor.cooldown_until }}">冷却至 {{ monitor.cooldown_until|local_time }}，届时按任务状态重试</p>{% endif %}
     </div>
-    <div class="actions">
-      {% if monitor.status=='running' %}<form method="post" action="/up-monitors/{{ monitor.id }}/check"><button type="submit">立即检测</button></form><form method="post" action="/up-monitors/{{ monitor.id }}/pause"><button class="secondary" type="submit">暂停检测</button></form>
+    <div class="actions" data-up-actions>
+      {% if monitor.status=='running' %}<form method="post" action="/up-monitors/{{ monitor.id }}/check"><button type="submit" {% if group.busy %}disabled aria-busy="true"{% endif %}>{% if group.busy %}<span class="loading-mark" aria-hidden="true"></span>检测中…{% else %}立即检测{% endif %}</button></form><form method="post" action="/up-monitors/{{ monitor.id }}/pause"><button class="secondary" type="submit">暂停检测</button></form>
       {% else %}<form method="post" action="/up-monitors/{{ monitor.id }}/resume"><button type="submit">恢复检测</button></form>{% endif %}
       <form method="post" action="/up-monitors/{{ monitor.id }}/remove" data-confirm="移除这个 UP 的更新检测？已加入的视频保留在任务列表。"><button class="danger" type="submit">移除 UP</button></form>
     </div>

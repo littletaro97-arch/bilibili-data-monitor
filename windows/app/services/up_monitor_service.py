@@ -106,7 +106,9 @@ class UpMonitorService:
         for m in self.store.list():
             status={'running':'正常','paused':'停止','needs_login':'待登录'}.get(m['status'],'异常')
             if m['status']=='running' and parse_iso(m['cooldown_until']) and parse_iso(m['cooldown_until'])>local_now(): status='中断'
-            grouped[m['id']]={'monitor':m,'display':status,'tasks':[],'pending':[]}
+            busy=m['id'] in self.inflight
+            if busy:status='检测中'
+            grouped[m['id']]={'monitor':m,'busy':busy,'display':status,'tasks':[],'pending':[]}
         by_bvid={t['bvid']:t for t in tasks};hidden=set()
         for row in self.store.items():
             if row['monitor_id'] not in grouped:continue
@@ -118,7 +120,7 @@ class UpMonitorService:
     def state_snapshot(self):
         import hashlib,json
         monitors=self.store.list();items=self.store.items()
-        state=[[(m['id'],m['status'],m['last_error'],m['interval_seconds'],m['video_interval_seconds'],m['scan_page'],
+        state=[[(m['id'],m['status'],m['last_error'],m['interval_seconds'],m['video_interval_seconds'],m['scan_page'],m['id'] in self.inflight,
                  bool(parse_iso(m['cooldown_until']) and parse_iso(m['cooldown_until'])>local_now())) for m in monitors],
                [(r['monitor_id'],r['bvid'],r['state'],r['promoted']) for r in items]]
         return {'revision':hashlib.sha256(json.dumps(state,sort_keys=True).encode()).hexdigest(),

@@ -179,11 +179,18 @@ def test_two_profile_login_ui_backup_is_optional(tmp_path):
     with sync_playwright() as pw:
         browser=pw.chromium.launch(headless=True)
         try:
-            page=browser.new_page(viewport={'width':600,'height':900});page.route('**/*',serve);errors=[]
+            page=browser.new_page(viewport={'width':1500,'height':900});page.route('**/*',serve);errors=[]
             page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto('http://127.0.0.1/settings')
             expect(page.locator('#bili-auth-status')).to_contain_text('测试主账号')
             expect(page.locator('#bili-profile-summary')).to_contain_text('备用账号：未登录')
+            left=page.locator('#runtime-settings').bounding_box();right=page.locator('#bili-account').bounding_box()
+            assert abs(left['height']-right['height'])<2
+            assert page.locator('.runtime-table').bounding_box()['height']>380
+            page.locator('.manual-session > summary').click()
+            page.wait_for_function('!document.querySelector(".manual-session > .details-body").getAnimations().length')
+            assert abs(page.locator('#runtime-settings').bounding_box()['height']-page.locator('#bili-account').bounding_box()['height'])<2
+            page.set_viewport_size({'width':600,'height':900})
             page.locator('#bili-profile-backup').click()
             expect(page.locator('#bili-auth-status')).to_contain_text('尚未登录')
             page.locator('#bili-qr').click()
@@ -193,6 +200,12 @@ def test_two_profile_login_ui_backup_is_optional(tmp_path):
             expect(page.locator('#bili-auth-status')).to_contain_text('尚未登录')
             assert pool.profiles['primary'].cookies
             assert app.state.full_text.account_exit.call_args.args==('backup',)
+            page.goto('http://127.0.0.1/')
+            page.get_by_role('link',name='访问设置',exact=True).click()
+            expect(page).to_have_url('http://127.0.0.1/settings#lan-access')
+            page.wait_for_load_state('load')
+            page.wait_for_function('document.querySelector("main").getAnimations().length===0')
+            assert -2<=page.locator('#lan-access').bounding_box()['y']<900
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth') and not errors
         finally:browser.close()
 

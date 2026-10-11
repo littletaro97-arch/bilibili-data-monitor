@@ -662,7 +662,7 @@ async def update_up_monitor(request: Request, identity: int, action: str, detect
         elif action=='check':
             result=await service.poll(identity)
             if result and (result.get('skipped') or result.get('error')):
-                return _flash_redirect('/#up-monitors',result.get('skipped') or result['error'],'error')
+                return _flash_redirect('/#up-monitors',result.get('skipped') or result['error'],'info' if result.get('skipped') else 'error')
         elif action=='promote':service.store.promote(identity,bvid)
         elif action=='interval':
             service.validate_intervals(detect_interval,video_interval);service.store.intervals(identity,detect_interval,video_interval)
