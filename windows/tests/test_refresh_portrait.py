@@ -27,12 +27,14 @@ def test_slow_submit_keeps_content_loader_anchor_and_narrow_layout(tmp_path,monk
   browser=pw.chromium.launch(headless=True)
   try:
    page=browser.new_page(viewport={'width':1400,'height':900});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+   page.add_init_script('window.mainMotion=[];const animate=Element.prototype.animate;Element.prototype.animate=function(frames,options){if(this.tagName==="MAIN")mainMotion.push(frames);return animate.call(this,frames,options);};')
    page.goto(base+'/');expect(page.locator('.message.warning')).to_contain_text('数量提醒阈值')
    card=page.locator('.task-card').nth(12);card.scroll_into_view_if_needed();page.wait_for_timeout(200)
    url=card.get_attribute('data-detail-url');old_top=card.bounding_box()['y']
    button=card.get_by_role('button',name='立即采集',exact=True)
    page.evaluate("""document.addEventListener('submit',e=>{const button=e.submitter;setTimeout(()=>sessionStorage.setItem('loading-test',JSON.stringify({busy:button.getAttribute('aria-busy'),opacity:Number(getComputedStyle(document.querySelector('main')).opacity),marks:button.querySelectorAll('.loading-mark').length})),50);setTimeout(()=>scrollBy(0,20),150);},{once:true});""")
    with page.expect_navigation(wait_until='load'):button.click()
+   assert page.evaluate('mainMotion.length')==0  # Same-page submission must not fade.
    state=page.evaluate("JSON.parse(sessionStorage.getItem('loading-test'))")
    assert state['busy']=='true' and state['opacity']>.9 and state['marks']==1
    old_top-=20  # Preserve the user's scroll during the slow request as well.
@@ -40,6 +42,7 @@ def test_slow_submit_keeps_content_loader_anchor_and_narrow_layout(tmp_path,monk
    page.wait_for_function('(arg)=>Math.abs(document.querySelector(`[data-detail-url="${arg.url}"]`).getBoundingClientRect().top-arg.top)<4',arg={'url':url,'top':old_top})
    assert page.evaluate('scrollY')>0
    page.reload()
+   assert page.evaluate('mainMotion.length')==0  # Browser refresh must not fade either.
    page.wait_for_function('(arg)=>Math.abs(document.querySelector(`[data-detail-url="${arg.url}"]`).getBoundingClientRect().top-arg.top)<4',arg={'url':url,'top':old_top})
    page.set_viewport_size({'width':980,'height':1500});page.goto(base+'/videos/BV0000000000')
    expect(page.locator('#floating-nav')).to_be_visible()

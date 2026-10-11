@@ -24,7 +24,8 @@
     }
   };
   if (!Element.prototype.animate) return;
-  if (!reduced.matches && main && !window.bllaNavigationIntent?.preserve && performance.getEntriesByType('navigation')[0]?.type!=='reload') main.animate([{opacity:.96, transform:'translateY(4px)'}, {opacity:1, transform:'none'}], {duration:160, easing:'ease-out'});
+  // Fade ordinary page entries; refreshes keep their content and scroll position.
+  if (!reduced.matches && main && !window.bllaNavigationIntent?.preserve && performance.getEntriesByType('navigation')[0]?.type!=='reload') main.animate([{opacity:0, transform:'translateY(4px)'}, {opacity:1, transform:'none'}], {duration:160, easing:'ease-out'});
   for (const detail of document.querySelectorAll('details')) {
     const summary = detail.querySelector(':scope > summary');
     if (!summary) continue;
